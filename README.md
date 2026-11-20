@@ -1,4 +1,4 @@
-# Gearwise
+# Gearwise: Upgrade Advisor
 
 **Which gear is better for you, at a glance.**
 
