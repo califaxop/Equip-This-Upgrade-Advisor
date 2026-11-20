@@ -1,0 +1,16 @@
+## Interface: 16001
+## Title: Gearwise
+## Notes: Shows which gear is an upgrade for your class and spec, on tooltips and on quest rewards.
+## IconTexture: Interface\AddOns\Gearwise\media\Logo
+## Author: You
+## Version: 0.1.0
+## SavedVariables: GearwiseDB
+## OptionalDeps: FlareUI
+
+Core.lua
+Weights.lua
+Score.lua
+UI.lua
+Display.lua
+Options.lua
+Init.lua
