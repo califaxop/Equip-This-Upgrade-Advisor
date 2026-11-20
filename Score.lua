@@ -133,6 +133,16 @@ function S.Compare(link, weights)
     end
   else
     local list = slots
+    -- wearing a two-hander: the off hand isn't free. Off-hand items can't go with it; a
+    -- one-hander would have to replace the two-hander
+    local mh = worn(16)
+    local mhLoc = mh and C_Item and C_Item.GetItemInfoInstant and select(4, C_Item.GetItemInfoInstant(mh))
+    if mhLoc == "INVTYPE_2HWEAPON" then
+      if f.equipLoc == "INVTYPE_SHIELD" or f.equipLoc == "INVTYPE_HOLDABLE" or f.equipLoc == "INVTYPE_WEAPONOFFHAND" then
+        return { kind = "twohand", value = value }
+      end
+      if f.equipLoc == "INVTYPE_WEAPON" then list = { 16 } end
+    end
     if f.equipLoc == "INVTYPE_WEAPON" and not DualWields() then list = { 16 } end
     for _, slot in ipairs(list) do
       local cur = worn(slot)

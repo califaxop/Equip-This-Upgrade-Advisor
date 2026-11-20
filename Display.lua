@@ -14,6 +14,7 @@ function D.Verdict(link)
   local spec = ns.SpecName(key)
   if c.kind == "unusable" then return GREY .. "Can't use it|r" end
   if c.kind == "equipped" then return GREY .. "Equipped|r" end
+  if c.kind == "twohand" then return GREY .. "Off-hand: you use a two-hander|r" end
   if c.kind == "new" then return GREEN .. "Upgrade (empty slot)|r " .. GREY .. "(" .. spec .. ")|r" end
   if c.kind == "same" then return GREY .. "About the same|r " .. GREY .. "(" .. spec .. ")|r" end
   local col = c.kind == "upgrade" and GREEN or RED
