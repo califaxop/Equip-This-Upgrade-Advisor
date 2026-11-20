@@ -29,4 +29,4 @@ Gearwise scores gear for your class and spec, marks upgrades on item tooltips, a
 Found a bug or have an idea? [Open an issue](https://github.com/califaxop/gearwise/issues/new/choose): there's a short form for each. The settings window has a "Report a bug / suggest" button with this link too.
 
 ## Recent changes
-- **0.1.0:** First test version: tooltip upgrades and quest reward highlight.
+- **1.0.0:** First release: upgrade verdicts on item tooltips and the best quest reward highlighted, for every class and spec.

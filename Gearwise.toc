@@ -3,7 +3,7 @@
 ## Notes: Shows which gear is an upgrade for your class and spec, on tooltips and on quest rewards.
 ## IconTexture: Interface\AddOns\Gearwise\media\Logo
 ## Author: You
-## Version: 0.1.0
+## Version: 1.0.0
 ## X-Curse-Project-ID: 1819482
 ## SavedVariables: GearwiseDB
 ## OptionalDeps: FlareUI
