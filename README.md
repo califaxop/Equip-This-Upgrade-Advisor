@@ -29,5 +29,6 @@ Gearsight scores gear for your class and spec, marks upgrades on item tooltips, 
 Found a bug or have an idea? [Open an issue](https://github.com/califaxop/gearsight/issues/new/choose): there's a short form for each. The settings window has a "Report a bug / suggest" button with this link too.
 
 ## Recent changes
+- **1.1.1:** Says hello on login ("Type /gsight to check your spec and weights").
 - **1.1.0:** Gearwise is now **Gearsight** (another addon shared the old name and folder). New folder and commands (`/gsight`).
 - **1.0.0:** First release: upgrade verdicts on item tooltips and the best quest reward highlighted, for every class and spec.

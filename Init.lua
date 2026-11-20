@@ -12,6 +12,7 @@ ev:SetScript("OnEvent", function(_, event, arg1)
     ns.LoadDB()
     ns.CreateOptions()
   elseif event == "PLAYER_LOGIN" then
+    ns.Print("loaded. Type |cffffff00/gsight|r to check your spec and weights.")
     ns.Display.HookTooltips()
     ns.Display.HookRewards()
   elseif event ~= "ADDON_LOADED" then
