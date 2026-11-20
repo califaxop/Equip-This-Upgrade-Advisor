@@ -1,4 +1,4 @@
--- Settings window (/gw), in the same style as the other addons.
+-- Settings window (/gsight), in the same style as the other addons.
 local _, ns = ...
 local UI = ns.UI
 local W_ = 470 -- content width
@@ -15,7 +15,7 @@ local function BuildPanel(panel)
   local function track(w) refreshers[#refreshers + 1] = w; return w end
   local function at(w, x, y) w:SetPoint("TOPLEFT", x, y); return w end
 
-  local title = at(UI.Text(panel, "title", "Gearwise"), 26, -20)
+  local title = at(UI.Text(panel, "title", "Gearsight"), 26, -20)
   UI.Text(panel, "note", "Which gear is better for you."):SetPoint("LEFT", title, "RIGHT", 10, -1)
 
   -- Spec ---------------------------------------------------------------------
@@ -65,10 +65,10 @@ local function BuildPanel(panel)
     ns.db.weights[ns.SpecKey()] = nil; Changed(); refreshWeights()
   end), 26, yEnd)
   local fb = UI.Button(panel, "Report a bug / suggest", 170, function()
-    UI.ShowLink("GearwiseLinkWindow", "Gearwise: bugs and ideas", "https://github.com/califaxop/gearwise/issues/new/choose")
+    UI.ShowLink("GearsightLinkWindow", "Gearsight: bugs and ideas", "https://github.com/califaxop/gearsight/issues/new/choose")
   end)
   fb:SetPoint("LEFT", reset, "RIGHT", 8, 0)
-  local hint = UI.Text(panel, "note", "/gw item: how scored")
+  local hint = UI.Text(panel, "note", "/gsight item: how scored")
   hint:SetPoint("LEFT", fb, "RIGHT", 10, 0)
 
   panel:HookScript("OnShow", function() for _, w in ipairs(refreshers) do w.Refresh() end end)
@@ -76,12 +76,12 @@ local function BuildPanel(panel)
 end
 
 function ns.CreateOptions()
-  local p = CreateFrame("Frame"); p.name = "Gearwise"
+  local p = CreateFrame("Frame"); p.name = "Gearsight"
   pcall(function()
     local t = p:CreateFontString(nil, "ARTWORK", "GameFontNormalLarge")
-    t:SetPoint("TOPLEFT", 16, -16); t:SetText("Gearwise")
+    t:SetPoint("TOPLEFT", 16, -16); t:SetText("Gearsight")
     local b = CreateFrame("Button", nil, p, "UIPanelButtonTemplate")
-    b:SetSize(200, 24); b:SetPoint("TOPLEFT", t, "BOTTOMLEFT", 0, -12); b:SetText("Open Gearwise settings")
+    b:SetSize(200, 24); b:SetPoint("TOPLEFT", t, "BOTTOMLEFT", 0, -12); b:SetText("Open Gearsight settings")
     b:SetScript("OnClick", function()
       if SettingsPanel and SettingsPanel.Close then pcall(SettingsPanel.Close, SettingsPanel, true) end
       if not (window and window:IsShown()) then ns.OpenOptions() end
@@ -96,7 +96,7 @@ end
 
 function ns.OpenOptions()
   if not window then
-    window = UI.Window("GearwiseOptionsWindow", 522, 640)
+    window = UI.Window("GearsightOptionsWindow", 522, 640)
     window:SetPoint("CENTER")
     local ok, e = pcall(BuildPanel, window)
     if not ok then window:Hide(); window = nil; ns.Print("settings failed: " .. tostring(e)); return end

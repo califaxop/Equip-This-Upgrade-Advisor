@@ -1,4 +1,4 @@
--- Where Gearwise shows up: a line on item tooltips, and a glow on the best quest reward.
+-- Where Gearsight shows up: a line on item tooltips, and a glow on the best quest reward.
 local _, ns = ...
 local S = ns.Score
 local D = {}
@@ -31,7 +31,7 @@ local function OnItemTooltip(tip)
   if not (ok and type(link) == "string") then return end
   local v = D.Verdict(link)
   if v then
-    tip:AddLine(GOLD .. "Gearwise:|r " .. v)
+    tip:AddLine(GOLD .. "Gearsight:|r " .. v)
     tip:Show()
   end
 end

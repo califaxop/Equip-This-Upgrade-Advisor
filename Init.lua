@@ -19,7 +19,7 @@ ev:SetScript("OnEvent", function(_, event, arg1)
   end
 end)
 
--- /gw item <link>: everything Gearwise read from an item and how it scored it
+-- /gsight item <link>: everything Gearsight read from an item and how it scored it
 local function Explain(link)
   local f = ns.Score.Facts(link)
   if not f then ns.Print("couldn't read that item yet (try again in a moment), or it isn't gear.") return end
@@ -36,17 +36,17 @@ local function Explain(link)
   ns.Print(format("score %.1f for %s%s", v or 0, ns.SpecName(key), verdict and (" - " .. verdict) or ""))
 end
 
-SLASH_GEARWISE1, SLASH_GEARWISE2 = "/gw", "/gearwise"
-SlashCmdList.GEARWISE = function(msg)
+SLASH_GEARSIGHT1, SLASH_GEARSIGHT2 = "/gsight", "/gearsight"
+SlashCmdList.GEARSIGHT = function(msg)
   msg = msg or ""
   local cmd, rest = msg:match("^%s*(%S*)%s*(.-)%s*$")
   cmd = (cmd or ""):lower()
   if cmd == "item" then
     local link = rest:match("|H(item:[^|]+)|h") and rest or nil
-    if not link then ns.Print("usage: /gw item <shift-click an item>") return end
+    if not link then ns.Print("usage: /gsight item <shift-click an item>") return end
     Explain(rest:match("(|c%x+|Hitem:.-|h.-|h|r)") or rest)
   elseif cmd == "spec" then
-    ns.Print("scoring gear for " .. ns.SpecName(ns.SpecKey()) .. (ns.db.spec == "auto" and " (from your talents)" or " (set in /gw)"))
+    ns.Print("scoring gear for " .. ns.SpecName(ns.SpecKey()) .. (ns.db.spec == "auto" and " (from your talents)" or " (set in /gsight)"))
   else
     local ok, e = pcall(ns.OpenOptions)
     if not ok then ns.Print("settings error: " .. tostring(e)) end

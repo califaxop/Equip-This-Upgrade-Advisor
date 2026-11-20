@@ -1,5 +1,5 @@
 name: Feature request
-description: An idea to make Gearwise better
+description: An idea to make Gearsight better
 labels: ["enhancement"]
 body:
   - type: textarea
