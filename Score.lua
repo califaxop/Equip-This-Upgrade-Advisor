@@ -113,8 +113,11 @@ local function DualWields()
   return false
 end
 
+local PAIRED = { [11] = 12, [12] = 11, [13] = 14, [14] = 13 }
+
 -- How an item compares with what you wear, for a spec:
--- { kind = "upgrade" | "downgrade" | "same" | "new" | "unusable" | "equipped", pct, delta, value, vs = link }
+-- { kind = "upgrade" | "downgrade" | "same" | "new" | "unusable" | "equipped", pct, delta, value, vs = link,
+--   pair = "weaker" | "stronger" | "equal" (equipped rings / trinkets, when you wear two) }
 -- or nil (not gear, or not loaded yet)
 function S.Compare(link, weights)
   weights = weights or ns.Weights()
@@ -129,6 +132,7 @@ function S.Compare(link, weights)
   if f.equipLoc == "INVTYPE_2HWEAPON" then
     -- a two-hander replaces main hand + off hand
     local mh, oh = worn(16), worn(17)
+    if mh and (mh == link or mh:match("item:(%d+)") == link:match("item:(%d+)")) then wearing = 16 end
     if mh or oh then
       oldValue = (mh and S.Value(mh, weights) or 0) + (oh and S.Value(oh, weights) or 0); vs = mh or oh
     end
@@ -145,15 +149,32 @@ function S.Compare(link, weights)
       if f.equipLoc == "INVTYPE_WEAPON" then list = { 16 } end
     end
     if f.equipLoc == "INVTYPE_WEAPON" and not DualWields() then list = { 16 } end
+    local id = link:match("item:(%d+)")
     for _, slot in ipairs(list) do
       local cur = worn(slot)
-      if cur and (cur == link or cur:match("item:(%d+)") == link:match("item:(%d+)")) then wearing = true end
+      if cur and (cur == link or cur:match("item:(%d+)") == id) then wearing = slot end
+    end
+    for _, slot in ipairs(list) do
+      local cur = worn(slot)
       local v = cur and S.Value(cur, weights) or 0
       if not cur then oldValue, vs = 0, nil; break end -- an empty slot: it's an upgrade
       if oldValue == nil or v < oldValue then oldValue, vs = v, cur end -- the weaker ring / trinket
     end
   end
-  if wearing then return { kind = "equipped", value = value } end
+  if wearing then
+    -- a ring or trinket you wear: is it the weaker of your two (the one a new one replaces)?
+    local pair
+    local other = PAIRED[wearing]
+    if other and (f.equipLoc == "INVTYPE_FINGER" or f.equipLoc == "INVTYPE_TRINKET") then
+      local o = worn(other)
+      local mine = worn(wearing)
+      if o and mine then
+        local a, b = S.Value(mine, weights) or 0, S.Value(o, weights) or 0
+        pair = (math.abs(a - b) < 0.01) and "equal" or (a < b and "weaker" or "stronger")
+      end
+    end
+    return { kind = "equipped", value = value, pair = pair, equipLoc = f.equipLoc }
+  end
   if not oldValue or oldValue <= 0 then return { kind = "new", value = value, delta = value } end
   local delta = value - oldValue
   local pct = delta / oldValue * 100

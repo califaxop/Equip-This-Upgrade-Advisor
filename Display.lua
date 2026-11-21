@@ -6,28 +6,61 @@ ns.Display = D
 
 local GREEN, RED, GREY, GOLD = "|cff40ff40", "|cffff5050", "|cff9d9d9d", "|cffffd200"
 
--- "Upgrade +12% (Elemental)" etc., or nil
+local ORANGE = "|cffff9933"
+
+-- " vs [Item]" in the item's quality color: what it's measured against
+local function Versus(vs)
+  if type(vs) ~= "string" then return "" end
+  local name = vs:match("%[(.-)%]")
+  if not name then return "" end
+  local color = vs:match("^(|c%x%x%x%x%x%x%x%x)") or "|cffffffff"
+  return " " .. GREY .. "vs|r " .. color .. name .. "|r"
+end
+
+-- "Upgrade +12% vs [Item] (Elemental)" etc., or nil
 function D.Verdict(link)
   local c = S.Compare(link, ns.CurrentWeights())
   if not c then return nil end
   local spec = ns.ScoringLabel()
   if c.kind == "unusable" then return GREY .. "Can't use it|r" end
-  if c.kind == "equipped" then return GREY .. "Equipped|r" end
+  if c.kind == "equipped" then
+    local what = c.equipLoc == "INVTYPE_TRINKET" and "trinket" or "ring"
+    if c.pair == "weaker" then
+      return GREY .. "Equipped|r " .. ORANGE .. "- your weaker " .. what .. " (replaced first)|r " .. GREY .. "(" .. spec .. ")|r"
+    elseif c.pair == "stronger" then
+      return GREY .. "Equipped - your stronger " .. what .. " (" .. spec .. ")|r"
+    elseif c.pair == "equal" then
+      return GREY .. "Equipped - your " .. what .. "s score the same (" .. spec .. ")|r"
+    end
+    return GREY .. "Equipped|r"
+  end
   if c.kind == "twohand" then return GREY .. "Off-hand: you use a two-hander|r" end
   if c.kind == "new" then return GREEN .. "Upgrade (empty slot)|r " .. GREY .. "(" .. spec .. ")|r" end
-  if c.kind == "same" then return GREY .. "About the same|r " .. GREY .. "(" .. spec .. ")|r" end
+  if c.kind == "same" then return GREY .. "About the same|r" .. Versus(c.vs) .. " " .. GREY .. "(" .. spec .. ")|r" end
   local col = c.kind == "upgrade" and GREEN or RED
   local word = c.kind == "upgrade" and "Upgrade" or "Downgrade"
-  return format("%s%s %+d%%|r %s(%s)|r", col, word, math.floor(c.pct + (c.pct > 0 and 0.5 or -0.5)), GREY, spec)
+  return format("%s%s %+d%%|r%s %s(%s)|r", col, word, math.floor(c.pct + (c.pct > 0 and 0.5 or -0.5)), Versus(c.vs), GREY, spec)
 end
 
 ---------------------------------------------------------------------------
 -- Item tooltips
 ---------------------------------------------------------------------------
-local function OnItemTooltip(tip)
-  if not (ns.db and ns.db.tooltip) or not tip.GetItem then return end
-  local ok, _, link = pcall(tip.GetItem, tip)
-  if not (ok and type(link) == "string") then return end
+local function OnItemTooltip(tip, data)
+  if not (ns.db and ns.db.tooltip) then return end
+  local link
+  if tip.GetItem then
+    local ok, _, l = pcall(tip.GetItem, tip)
+    if ok and type(l) == "string" then link = l end
+  end
+  -- comparison tooltips may not answer GetItem: use what the tooltip was built from
+  if not link and type(data) == "table" then
+    if type(data.hyperlink) == "string" then link = data.hyperlink
+    elseif data.guid and C_Item and C_Item.GetItemLinkByGUID then
+      local ok, l = pcall(C_Item.GetItemLinkByGUID, data.guid)
+      if ok and type(l) == "string" then link = l end
+    end
+  end
+  if not link then return end
   local v = D.Verdict(link)
   if v then
     tip:AddLine(GOLD .. "Equip This!:|r " .. v)
@@ -37,9 +70,9 @@ end
 
 function D.HookTooltips()
   if TooltipDataProcessor and TooltipDataProcessor.AddTooltipPostCall and Enum and Enum.TooltipDataType then
-    TooltipDataProcessor.AddTooltipPostCall(Enum.TooltipDataType.Item, function(tip)
+    TooltipDataProcessor.AddTooltipPostCall(Enum.TooltipDataType.Item, function(tip, data)
       if tip == GameTooltip or tip == ItemRefTooltip or (tip.GetName and (tip:GetName() or ""):find("ShoppingTooltip")) then
-        OnItemTooltip(tip)
+        OnItemTooltip(tip, data)
       end
     end)
   elseif GameTooltip and GameTooltip.HookScript then
