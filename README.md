@@ -26,7 +26,7 @@ Equip This! scores gear for your class and spec, marks upgrades on item tooltips
 - Equip-line stats (crit, hit, spell damage, mp5) are read from English item tooltips.
 
 ## Feedback
-Found a bug or have an idea? [Open an issue](https://github.com/califaxop/Equip-This-Leveling-Upgrade-Advisor/issues/new/choose): there's a short form for each. The settings window has a "Report a bug / suggest" button with this link too.
+Found a bug or have an idea? [Open an issue](https://github.com/califaxop/Equip-This-Upgrade-Advisor/issues/new/choose): there's a short form for each. The settings window has a "Report a bug / suggest" button with this link too.
 
 ## Recent changes
 - **2.0.0:** Gearsight is now **Equip This!**, the leveling upgrade advisor (from the makers of Proc This!). New folder and commands (`/eqt`); remove the old Gearsight folder. Your stat weights start fresh once.
