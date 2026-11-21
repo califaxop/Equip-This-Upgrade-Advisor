@@ -24,36 +24,104 @@ local function BuildPanel(panel)
   local opts = { { "auto", "Auto: from my talents" } }
   for i, p in ipairs(ns.PRESETS[class] or {}) do opts[#opts + 1] = { class .. ":" .. i, p[1] } end
   local weightRows = {}
+  local now
   local function refreshWeights() for _, r in ipairs(weightRows) do r.Refresh() end end
-  track(at(UI.Selector(panel, 300, opts, S("spec"), function() Changed(); refreshWeights() end,
+  track(at(UI.Selector(panel, 300, opts, S("spec"), function() Changed(); refreshWeights(); if now then now.Refresh() end end,
     "Auto picks the talent tree you've put the most points in (before any talents: the one most players level in)."), 26, -84))
-  local now = at(UI.Text(panel, "note", ""), 26, -112)
-  now.Refresh = function() now:SetText("Scoring gear for: " .. ns.SpecName(ns.SpecKey())) end
+  now = at(UI.Text(panel, "note", ""), 26, -112)
+  now.Refresh = function()
+    local scale = ns.Scales.Active()
+    now:SetText("Your spec: " .. ns.SpecName(ns.SpecKey()) .. (scale and ("  -  scoring with your scale \"" .. scale .. "\"") or ""))
+  end
   track(now)
 
+  -- Scale ----------------------------------------------------------------------
+  -- your own named stat weights (theorycrafting), shared as Pawn-style strings
+  at(UI.Section(panel, "Your scale", W_), 26, -140)
+  local scaleOpts = {}
+  local function fillScales()
+    wipe(scaleOpts)
+    scaleOpts[1] = { "", "Spec preset: " .. ns.SpecName(ns.SpecKey()) }
+    for _, name in ipairs(ns.Scales.Names()) do scaleOpts[#scaleOpts + 1] = { name, name } end
+  end
+  fillScales()
+  local scaleSel
+  local function scalesChanged()
+    fillScales(); Changed(); refreshWeights()
+    if scaleSel then scaleSel.Refresh() end
+    now.Refresh()
+  end
+  scaleSel = track(at(UI.Selector(panel, 300, scaleOpts,
+    { function() return ns.db.scale or "" end, function(v) ns.db.scale = (v ~= "") and v or nil end },
+    scalesChanged, "What gear is scored with: your spec's preset, or one of your own scales."), 26, -170))
+  local sr = scaleSel.Refresh
+  scaleSel.Refresh = function() fillScales(); sr() end
+  local function bar(label, w, x, fn) local b = UI.Button(panel, label, w, fn); b:SetPoint("TOPLEFT", x, -200); return b end
+  bar("New", 70, 26, function()
+    UI.Prompt("EquipThisPrompt", "New scale", "Starts from the weights in use now. Name it:", "My scale", function(text)
+      local name = ns.Scales.Create(text, ns.CurrentWeights())
+      ns.Print("made scale \"" .. name .. "\". Tune it under Stat weights.")
+      scalesChanged()
+    end)
+  end)
+  bar("Import", 80, 102, function()
+    UI.Prompt("EquipThisPrompt", "Import a scale", "Paste a Pawn-style scale string: ( Pawn: v1: \"Name\": Strength=1, ... )", "", function(text)
+      local name, weights, ignored = ns.Scales.Parse(text)
+      if not name then ns.Print("couldn't import: " .. tostring(weights) .. "."); return end
+      name = ns.Scales.Create(name, weights)
+      ns.Print("imported scale \"" .. name .. "\"" .. ((ignored and #ignored > 0) and (" (skipped stats it doesn't use: " .. table.concat(ignored, ", ") .. ")") or "") .. ".")
+      scalesChanged()
+    end)
+  end)
+  bar("Export", 80, 188, function()
+    local name = ns.Scales.Active() or ns.SpecName(ns.SpecKey())
+    UI.ShowLink("EquipThisLinkWindow", "Export: " .. name, ns.Scales.Export(name, ns.CurrentWeights()))
+  end)
+  bar("Delete", 80, 274, function()
+    local name = ns.Scales.Active()
+    if not name then ns.Print("the spec preset can't be deleted: pick one of your scales first.") return end
+    -- a second click within 5 seconds confirms (it can't be undone)
+    local now_ = GetTime and GetTime() or 0
+    if panel.pendingDelete ~= name or now_ - (panel.pendingAt or 0) > 5 then
+      panel.pendingDelete, panel.pendingAt = name, now_
+      ns.Print("click Delete again to delete your scale \"" .. name .. "\" (can't be undone).")
+      return
+    end
+    panel.pendingDelete = nil
+    ns.Scales.Delete(name); ns.Print("deleted scale \"" .. name .. "\".")
+    scalesChanged()
+  end)
+  local sn = at(UI.Text(panel, "note", "Import Pawn-style strings from theorycrafting guides, or export yours to share. Crit and hit are per 1%."), 26, -228)
+  sn:SetWidth(W_)
+
   -- Show ---------------------------------------------------------------------
-  at(UI.Section(panel, "Show", W_), 26, -140)
-  track(at(UI.Check(panel, "Upgrade or downgrade on item tooltips", S("tooltip"), W_, Changed), 26, -170))
-  track(at(UI.Check(panel, "Glow the best quest reward", S("rewards"), W_, Changed), 26, -194))
-  track(at(UI.Check(panel, "No upgrade among the rewards: mark the one that sells for most", S("sellFallback"), W_, Changed), 26, -218))
+  at(UI.Section(panel, "Show", W_), 26, -256)
+  track(at(UI.Check(panel, "Upgrade or downgrade on item tooltips", S("tooltip"), W_, Changed), 26, -286))
+  track(at(UI.Check(panel, "Glow the best quest reward", S("rewards"), W_, Changed), 26, -310))
+  track(at(UI.Check(panel, "No upgrade among the rewards: mark the one that sells for most", S("sellFallback"), W_, Changed), 26, -334))
 
   -- Weights ------------------------------------------------------------------
-  at(UI.Section(panel, "Stat weights", W_), 26, -254)
-  local n = at(UI.Text(panel, "note", "How much each stat is worth to your spec, the main stat being 1. Crit and hit are per 1%; weapon DPS only counts on weapons. 0 = ignore."), 26, -282)
+  at(UI.Section(panel, "Stat weights", W_), 26, -370)
+  local n = at(UI.Text(panel, "note", "The weights of the scale in use (above), the main stat being 1. Crit and hit are per 1%; weapon DPS only counts on weapons. 0 = ignore."), 26, -398)
   n:SetWidth(W_)
-  local y0 = -318
+  local y0 = -434
   for i, key in ipairs(ns.STAT_ORDER) do
     local col, row = (i - 1) % 2, math.floor((i - 1) / 2)
     local x, y = 26 + col * 240, y0 - row * 26
     at(UI.Text(panel, "line", ns.STAT_NAMES[key]), x, y - 3)
     local e = UI.Edit(panel, 56, {
-      function() local w = ns.Weights(); return w[key] and tostring(w[key]) or "0" end,
+      function() local w = ns.CurrentWeights(); return w[key] and tostring(w[key]) or "0" end,
       function(v)
         local num = tonumber(v)
         if not num then return end
-        local k = ns.SpecKey()
-        ns.db.weights[k] = ns.db.weights[k] or {}
-        ns.db.weights[k][key] = num
+        local name, scale = ns.Scales.Active()
+        if scale then
+          scale[key] = num -- your own scale
+        else
+          local k = ns.SpecKey() -- the spec preset, with your edits
+          ns.db.weights[k] = ns.db.weights[k] or {}
+          ns.db.weights[k][key] = num
+        end
         Changed()
       end }, "0", false, true)
     e:SetPoint("TOPLEFT", x + 160, y)
@@ -62,7 +130,10 @@ local function BuildPanel(panel)
   end
   local yEnd = y0 - math.ceil(#ns.STAT_ORDER / 2) * 26 - 10
   local reset = at(UI.Button(panel, "Reset weights", 130, function()
-    ns.db.weights[ns.SpecKey()] = nil; Changed(); refreshWeights()
+    local name = ns.Scales.Active()
+    if name then ns.db.scales[name] = ns.Weights() -- your scale back to the spec preset's numbers
+    else ns.db.weights[ns.SpecKey()] = nil end
+    Changed(); refreshWeights()
   end), 26, yEnd)
   local fb = UI.Button(panel, "Report a bug / suggest", 170, function()
     UI.ShowLink("EquipThisLinkWindow", "Equip This!: bugs and ideas", "https://github.com/califaxop/Equip-This-Upgrade-Advisor/issues/new/choose")

@@ -12,6 +12,8 @@ ns.DEFAULTS = {
   rewards = true,         -- glow the best quest reward
   sellFallback = true,    -- no upgrade among the rewards: mark the one that sells for most
   weights = {},           -- your edits: [specKey] = { STAT = weight, ... } (unset = preset)
+  scales = {},            -- your own scales: [name] = { STAT = weight, ... }
+  scale = nil,            -- the custom scale in use (nil = the spec preset)
   flareStyle = true,
 }
 

@@ -8,10 +8,9 @@ local GREEN, RED, GREY, GOLD = "|cff40ff40", "|cffff5050", "|cff9d9d9d", "|cffff
 
 -- "Upgrade +12% (Elemental)" etc., or nil
 function D.Verdict(link)
-  local key = ns.SpecKey()
-  local c = S.Compare(link, ns.Weights(key))
+  local c = S.Compare(link, ns.CurrentWeights())
   if not c then return nil end
-  local spec = ns.SpecName(key)
+  local spec = ns.ScoringLabel()
   if c.kind == "unusable" then return GREY .. "Can't use it|r" end
   if c.kind == "equipped" then return GREY .. "Equipped|r" end
   if c.kind == "twohand" then return GREY .. "Off-hand: you use a two-hander|r" end
@@ -115,7 +114,7 @@ function D.MarkRewards()
   if not (ns.db and ns.db.rewards) then return end
   local n = GetNumQuestChoices and GetNumQuestChoices() or 0
   if n < 2 then return end -- one reward (or none): nothing to choose
-  local weights = ns.Weights()
+  local weights = ns.CurrentWeights()
   local best, bestDelta, rich, richSell, missing = nil, 0, nil, 0, false
   for i = 1, n do
     local link = GetQuestItemLink and GetQuestItemLink("choice", i)
@@ -131,7 +130,7 @@ function D.MarkRewards()
   end
   local buttons = ChoiceButtons()
   if best and buttons[best] then
-    Mark(buttons[best], "best", "|cff40ff40Best for " .. ns.SpecName(ns.SpecKey()) .. "|r")
+    Mark(buttons[best], "best", "|cff40ff40Best for " .. ns.ScoringLabel() .. "|r")
   elseif rich and ns.db.sellFallback and buttons[rich] then
     Mark(buttons[rich], "sell", "|cffffd200Sells for most|r")
   end

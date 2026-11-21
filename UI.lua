@@ -432,3 +432,36 @@ function UI.ShowLink(name, title, url)
   win.edit:SetFocus()
   win.edit:HighlightText()
 end
+
+-- A small window asking for a line of text (a name, or a pasted string), with OK / Cancel.
+function UI.Prompt(name, title, note, default, onOK)
+  local win = _G[name]
+  if not win then
+    win = UI.Window(name, 420, 150)
+    win:SetPoint("CENTER", 0, 120)
+    win.title = UI.Text(win, "title", "")
+    win.title:SetPoint("TOPLEFT", 20, -18)
+    win.note = UI.Text(win, "note", "")
+    win.note:SetPoint("TOPLEFT", 20, -44); win.note:SetWidth(380)
+    win.edit = UI.Edit(win, 380, { function() return win.value or "" end, function(v) win.value = v end })
+    win.edit:SetPoint("TOPLEFT", 20, -78)
+    win.edit:HookScript("OnEscapePressed", function() win:Hide() end)
+    win.edit:HookScript("OnEnterPressed", function() if win.ok then win.ok() end end)
+    local ok = UI.Button(win, "OK", 90, function() if win.ok then win.ok() end end)
+    ok:SetPoint("TOPLEFT", 20, -110)
+    local cancel = UI.Button(win, "Cancel", 90, function() win:Hide() end)
+    cancel:SetPoint("LEFT", ok, "RIGHT", 8, 0)
+  end
+  win.title:SetText(title)
+  win.note:SetText(note or "")
+  win.value = default or ""
+  win.edit:SetText(win.value)
+  win.ok = function()
+    local text = win.edit:GetText() or ""
+    win:Hide()
+    onOK(text)
+  end
+  win:Show()
+  win.edit:SetFocus()
+  win.edit:HighlightText()
+end

@@ -58,6 +58,18 @@ function ns.SpecName(key)
   return p and p[1] or key
 end
 
+-- What gear is scored with: your active custom scale, else your spec's preset (with your edits)
+function ns.CurrentWeights()
+  local _, w = ns.Scales.Active()
+  if w then return ns.Copy(w) end
+  return ns.Weights()
+end
+-- the label shown with verdicts: the custom scale's name, else the spec's
+function ns.ScoringLabel()
+  local name = ns.Scales.Active()
+  return name or ns.SpecName(ns.SpecKey())
+end
+
 -- the weights in use for a spec: your edits over the preset
 function ns.Weights(key)
   key = key or ns.SpecKey()
