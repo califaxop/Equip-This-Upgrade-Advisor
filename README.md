@@ -26,6 +26,9 @@ Equip This! scores gear for your class and spec, marks upgrades on item tooltips
 - Stat weights are a starting point, not a simulation: tune them in `/eqt` to taste.
 - Equip-line stats (crit, hit, spell damage, mp5) are read from English item tooltips.
 
+## Updates
+New versions come out every **Wednesday at 12:00 UTC** (8 PM Philippine time, 8 AM US Eastern). Urgent fixes ship sooner.
+
 ## Feedback
 Found a bug or have an idea? [Open an issue](https://github.com/califaxop/Equip-This-Upgrade-Advisor/issues/new/choose): there's a short form for each. The settings window has a "Report a bug / suggest" button with this link too.
 
