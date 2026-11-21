@@ -434,6 +434,24 @@ function UI.ShowLink(name, title, url)
 end
 
 -- A small window asking for a line of text (a name, or a pasted string), with OK / Cancel.
+-- a small Yes / No box
+function UI.Confirm(name, text, onYes)
+  local win = _G[name]
+  if not win then
+    win = UI.Window(name, 320, 110)
+    win:SetPoint("CENTER", 0, 120)
+    win.text = UI.Text(win, "line", "")
+    win.text:SetPoint("TOPLEFT", 20, -20); win.text:SetWidth(280)
+    local yes = UI.Button(win, "Yes", 90, function() win:Hide(); if win.yes then win.yes() end end)
+    yes:SetPoint("BOTTOMLEFT", 20, 18)
+    local no = UI.Button(win, "No", 90, function() win:Hide() end)
+    no:SetPoint("LEFT", yes, "RIGHT", 8, 0)
+  end
+  win.text:SetText(text)
+  win.yes = onYes
+  win:Show()
+end
+
 function UI.Prompt(name, title, note, default, onOK)
   local win = _G[name]
   if not win then

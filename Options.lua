@@ -64,7 +64,16 @@ local function BuildPanel(panel)
       scalesChanged()
     end)
   end)
-  bar("Import", 80, 102, function()
+  bar("Rename", 80, 102, function()
+    local old = ns.Scales.Active()
+    if not old then ns.Print("the spec preset can't be renamed: pick one of your scales first.") return end
+    UI.Prompt("EquipThisPrompt", "Rename scale", "New name for \"" .. old .. "\":", old, function(text)
+      local name = ns.Scales.Rename(old, text)
+      if name and name ~= old then ns.Print("renamed scale \"" .. old .. "\" to \"" .. name .. "\".") end
+      scalesChanged()
+    end)
+  end)
+  bar("Import", 80, 188, function()
     UI.Prompt("EquipThisPrompt", "Import a scale", "Paste a Pawn-style scale string: ( Pawn: v1: \"Name\": Strength=1, ... )", "", function(text)
       local name, weights, ignored = ns.Scales.Parse(text)
       if not name then ns.Print("couldn't import: " .. tostring(weights) .. "."); return end
@@ -73,23 +82,17 @@ local function BuildPanel(panel)
       scalesChanged()
     end)
   end)
-  bar("Export", 80, 188, function()
+  bar("Export", 80, 274, function()
     local name = ns.Scales.Active() or ns.SpecName(ns.SpecKey())
     UI.ShowLink("EquipThisLinkWindow", "Export: " .. name, ns.Scales.Export(name, ns.CurrentWeights()))
   end)
-  bar("Delete", 80, 274, function()
+  bar("Delete", 80, 360, function()
     local name = ns.Scales.Active()
     if not name then ns.Print("the spec preset can't be deleted: pick one of your scales first.") return end
-    -- a second click within 5 seconds confirms (it can't be undone)
-    local now_ = GetTime and GetTime() or 0
-    if panel.pendingDelete ~= name or now_ - (panel.pendingAt or 0) > 5 then
-      panel.pendingDelete, panel.pendingAt = name, now_
-      ns.Print("click Delete again to delete your scale \"" .. name .. "\" (can't be undone).")
-      return
-    end
-    panel.pendingDelete = nil
-    ns.Scales.Delete(name); ns.Print("deleted scale \"" .. name .. "\".")
-    scalesChanged()
+    UI.Confirm("EquipThisConfirm", "Are you sure you want to delete this preset?\n|cffffd200" .. name .. "|r", function()
+      ns.Scales.Delete(name); ns.Print("deleted scale \"" .. name .. "\".")
+      scalesChanged()
+    end)
   end)
   local sn = at(UI.Text(panel, "note", "Import Pawn-style strings from theorycrafting guides (turned into 0-5), or export yours to share."), 26, -228)
   sn:SetWidth(W_)

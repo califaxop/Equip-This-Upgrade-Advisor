@@ -47,6 +47,18 @@ function Sc.Create(name, weights)
   return name
 end
 
+-- rename a scale (made unique); it stays the active one if it was. Returns the new name.
+function Sc.Rename(old, new)
+  if not ns.db.scales[old] then return nil end
+  new = (new or ""):gsub("^%s+", ""):gsub("%s+$", "")
+  if new == "" or new == old then return old end
+  local base, n, name = new, 2, new
+  while ns.db.scales[name] do name = format("%s %d", base, n); n = n + 1 end
+  ns.db.scales[name], ns.db.scales[old] = ns.db.scales[old], nil
+  if ns.db.scale == old then ns.db.scale = name end
+  return name
+end
+
 function Sc.Delete(name)
   ns.db.scales[name] = nil
   if ns.db.scale == name then ns.db.scale = nil end
