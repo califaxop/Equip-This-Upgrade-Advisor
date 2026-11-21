@@ -91,7 +91,7 @@ local function BuildPanel(panel)
     ns.Scales.Delete(name); ns.Print("deleted scale \"" .. name .. "\".")
     scalesChanged()
   end)
-  local sn = at(UI.Text(panel, "note", "Import Pawn-style strings from theorycrafting guides, or export yours to share. Crit and hit are per 1%."), 26, -228)
+  local sn = at(UI.Text(panel, "note", "Import Pawn-style strings from theorycrafting guides (turned into 0-5), or export yours to share."), 26, -228)
   sn:SetWidth(W_)
 
   -- Show ---------------------------------------------------------------------
@@ -102,7 +102,7 @@ local function BuildPanel(panel)
 
   -- Weights ------------------------------------------------------------------
   at(UI.Section(panel, "Stat weights", W_), 26, -370)
-  local n = at(UI.Text(panel, "note", "The weights of the scale in use (above), the main stat being 1. Crit and hit are per 1%; weapon DPS only counts on weapons. 0 = ignore."), 26, -398)
+  local n = at(UI.Text(panel, "note", "How much each stat matters to you: 0 (ignore) to 5 (most). Decimals OK, e.g. 3.5. Weapon DPS only counts on weapons."), 26, -398)
   n:SetWidth(W_)
   local y0 = -434
   for i, key in ipairs(ns.STAT_ORDER) do
@@ -114,6 +114,7 @@ local function BuildPanel(panel)
       function(v)
         local num = tonumber(v)
         if not num then return end
+        num = math.max(0, math.min(5, math.floor(num * 100 + 0.5) / 100)) -- 0 to 5
         local name, scale = ns.Scales.Active()
         if scale then
           scale[key] = num -- your own scale

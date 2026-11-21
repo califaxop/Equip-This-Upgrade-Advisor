@@ -1,6 +1,6 @@
--- Stat weights: how much each stat is worth to a spec, as points. The main stat is 1; ratings
--- that Classic items give as a percent (crit, hit) are per 1%; DPS is weapon damage per second
--- (only counts on weapons). Starting points to tune in /eqt, not gospel.
+-- Stat weights. The presets below are written as points per unit (the main stat is 1; crit and hit
+-- per 1%; DPS is weapon damage per second, only on weapons), then shown and edited as importance
+-- 0-5 (see ns.NORM). Starting points to tune in /eqt, not gospel.
 local _, ns = ...
 
 -- stat keys: what the tooltip line and /eqt item show
@@ -21,6 +21,32 @@ local CASTER   = { SP = 1, INT = 0.6, SPI = 0.2, STA = 0.2, SPELLCRIT = 8, SPELL
 local HEALER   = { INT = 1, SPI = 0.5, HEAL = 0.6, SP = 0.6, MP5 = 1.5, SPELLCRIT = 6, STA = 0.2, ARMOR = 0.005 }
 local TANK     = { STA = 1, ARMOR = 0.05, DEF = 1.2, DODGE = 12, PARRY = 12, BLOCK = 6, BLOCKVALUE = 0.3,
                    STR = 0.5, AGI = 0.6, HIT = 4, DPS = 1 }
+
+-- Weights are importance, 0 (ignore) to 5 (most), the same scale for every stat. Each stat comes
+-- in its own unit, so importance is turned into points with a fixed factor: what 1 unit of the
+-- stat is worth next to 1 point of a main stat, at full importance (5). E.g. 1% crit ~ 14 Strength.
+ns.NORM = { STR = 1, AGI = 1, STA = 1, INT = 1, SPI = 1, AP = 0.5, RAP = 0.4, SP = 1, HEAL = 0.6, MP5 = 2,
+  CRIT = 14, HIT = 12, SPELLCRIT = 10, SPELLHIT = 10, DPS = 4, ARMOR = 0.02, DEF = 1.2, DODGE = 12,
+  PARRY = 12, BLOCK = 6, BLOCKVALUE = 0.5 }
+local function round2(x) return math.floor(x * 100 + 0.5) / 100 end
+-- points per unit of a stat, for an importance
+function ns.PointsPer(key, importance) return (importance or 0) * (ns.NORM[key] or 0) / 5 end
+-- points-per-unit weights (Pawn-style) -> importance 0-5, the top stat at 5; and the factor used
+function ns.ToImportance(points)
+  local raw, top = {}, 0
+  for k, v in pairs(points) do
+    if ns.NORM[k] then raw[k] = v / ns.NORM[k]; if raw[k] > top then top = raw[k] end end
+  end
+  local f = top > 0 and 5 / top or 0
+  local out = {}
+  for k, v in pairs(raw) do out[k] = round2(v * f) end
+  return out, f
+end
+function ns.ToPoints(importance)
+  local out = {}
+  for k, v in pairs(importance) do out[k] = ns.PointsPer(k, v) end
+  return out
+end
 
 local function with(base, changes)
   local t = ns.Copy(base)
@@ -70,12 +96,17 @@ function ns.ScoringLabel()
   return name or ns.SpecName(ns.SpecKey())
 end
 
--- the weights in use for a spec: your edits over the preset
-function ns.Weights(key)
-  key = key or ns.SpecKey()
+-- a spec's preset, as importance (0-5), and the factor it was scaled by
+function ns.PresetImportance(key)
   local class, tree = key:match("^(%u+):(%d)$")
   local p = class and ns.PRESETS[class] and ns.PRESETS[class][tonumber(tree)]
-  local w = ns.Copy(p and p[2] or MELEE)
+  return ns.ToImportance(p and p[2] or MELEE)
+end
+
+-- the weights (importance 0-5) in use for a spec: your edits over the preset
+function ns.Weights(key)
+  key = key or ns.SpecKey()
+  local w = ns.PresetImportance(key)
   for k, v in pairs(ns.db.weights[key] or {}) do w[k] = v end
   return w
 end

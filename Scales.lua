@@ -68,15 +68,15 @@ function Sc.Parse(text)
     end
   end
   if count == 0 then return nil, "no stats it knows were found in it" end
-  return name, weights, ignored
+  return name, ns.ToImportance(weights), ignored -- Pawn values are points per unit
 end
 
 -- a scale as a Pawn-style string
 function Sc.Export(name, weights)
   local parts = {}
   for _, key in ipairs(ns.STAT_ORDER) do
-    local v = weights[key]
-    if v and v ~= 0 then parts[#parts + 1] = format("%s=%s", TO_PAWN[key], tostring(v)) end
+    local v = ns.PointsPer(key, weights[key]) -- importance -> points per unit, as Pawn expects
+    if v ~= 0 then parts[#parts + 1] = format("%s=%s", TO_PAWN[key], tostring(math.floor(v * 1000 + 0.5) / 1000)) end
   end
   return format('( Pawn: v1: "%s": %s )', name, table.concat(parts, ", "))
 end

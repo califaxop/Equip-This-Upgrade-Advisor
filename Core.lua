@@ -31,6 +31,18 @@ function ns.LoadDB()
     if EquipThisDB[k] == nil then EquipThisDB[k] = Copy(v) end
   end
   ns.db = EquipThisDB
+  if not ns.db.importanceV then
+    -- 2.1.0: weights became importance 0-5. Your preset edits use that spec preset's scaling;
+    -- your own scales are rescaled so their top stat is 5. Scores come out the same.
+    for key, edits in pairs(ns.db.weights or {}) do
+      local _, f = ns.PresetImportance(key)
+      for k, v in pairs(edits) do
+        edits[k] = ns.NORM[k] and math.floor(v / ns.NORM[k] * f * 100 + 0.5) / 100 or nil
+      end
+    end
+    for name, w in pairs(ns.db.scales or {}) do ns.db.scales[name] = (ns.ToImportance(w)) end
+    ns.db.importanceV = 1
+  end
 end
 
 ---------------------------------------------------------------------------

@@ -27,7 +27,7 @@ local function Explain(link)
   local w = ns.CurrentWeights()
   local parts = {}
   for _, k in ipairs(ns.STAT_ORDER) do
-    if f.stats[k] then parts[#parts + 1] = format("%s %s (x%s)", tostring(f.stats[k]), ns.STAT_NAMES[k], tostring(w[k] or 0)) end
+    if f.stats[k] then parts[#parts + 1] = format("%s %s (importance %s)", tostring(f.stats[k]), ns.STAT_NAMES[k], tostring(w[k] or 0)) end
   end
   ns.Print(link .. " - " .. (f.equipLoc or "?") .. (f.usable and "" or ", can't use it"))
   ns.Print("stats: " .. (#parts > 0 and table.concat(parts, ", ") or "none read"))

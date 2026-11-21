@@ -91,7 +91,8 @@ function S.Value(link, weights)
   if not f then return nil end
   local total = 0
   for k, v in pairs(f.stats) do
-    if k ~= "DPS" or WEAPON_LOCS[f.equipLoc] then total = total + v * (weights[k] or 0) end
+    -- weights are importance 0-5; ns.PointsPer turns them into points per unit of the stat
+    if k ~= "DPS" or WEAPON_LOCS[f.equipLoc] then total = total + v * ns.PointsPer(k, weights[k]) end
   end
   return total, f
 end
