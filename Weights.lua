@@ -1,9 +1,9 @@
 -- Stat weights: how much each stat is worth to a spec, as points. The main stat is 1; ratings
 -- that Classic items give as a percent (crit, hit) are per 1%; DPS is weapon damage per second
--- (only counts on weapons). Starting points to tune in /gsight, not gospel.
+-- (only counts on weapons). Starting points to tune in /eqt, not gospel.
 local _, ns = ...
 
--- stat keys: what the tooltip line and /gsight item show
+-- stat keys: what the tooltip line and /eqt item show
 ns.STAT_NAMES = {
   STR = "Strength", AGI = "Agility", STA = "Stamina", INT = "Intellect", SPI = "Spirit",
   ARMOR = "Armor", AP = "Attack Power", RAP = "Ranged Attack Power",

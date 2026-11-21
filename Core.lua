@@ -1,14 +1,14 @@
--- Gearsight: which gear is better for you. Shared namespace, settings, class and spec.
+-- Equip This!: which gear is better for you. Shared namespace, settings, class and spec.
 local ADDON, ns = ...
 ns.name = ADDON
 
 ns.isSecret = issecretvalue or function() return false end
 function ns.Readable(v) return v ~= nil and not ns.isSecret(v) end
-function ns.Print(...) print("|cff7fd6ffGearsight:|r", ...) end
+function ns.Print(...) print("|cff7fd6ffEquip This!:|r", ...) end
 
 ns.DEFAULTS = {
   spec = "auto",          -- "auto" (from your talents) or a spec key like "SHAMAN:2"
-  tooltip = true,         -- the "Gearsight: Upgrade +12%" line on item tooltips
+  tooltip = true,         -- the "Equip This!: Upgrade +12%" line on item tooltips
   rewards = true,         -- glow the best quest reward
   sellFallback = true,    -- no upgrade among the rewards: mark the one that sells for most
   weights = {},           -- your edits: [specKey] = { STAT = weight, ... } (unset = preset)
@@ -24,11 +24,11 @@ end
 ns.Copy = Copy
 
 function ns.LoadDB()
-  GearsightDB = GearsightDB or {}
+  EquipThisDB = EquipThisDB or {}
   for k, v in pairs(ns.DEFAULTS) do
-    if GearsightDB[k] == nil then GearsightDB[k] = Copy(v) end
+    if EquipThisDB[k] == nil then EquipThisDB[k] = Copy(v) end
   end
-  ns.db = GearsightDB
+  ns.db = EquipThisDB
 end
 
 ---------------------------------------------------------------------------
