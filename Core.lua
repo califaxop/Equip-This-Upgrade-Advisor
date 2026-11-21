@@ -53,18 +53,69 @@ function ns.Class()
   return token
 end
 
+-- Points spent in each talent tab, as { [tree 1-3] = points }, or nil if the client won't say.
+-- Forever has no GetTalentTabInfo: its talents are Retail's trait system, with the three tabs as
+-- trait groups of one tree. (Found and checked in game by the Forever++ authors, docs/forever-api.md.)
+local function PointsFromTraits(class)
+  if not (C_ClassTalents and C_ClassTalents.GetActiveConfigID and C_Traits and C_Traits.GetConfigInfo
+    and C_Traits.GetGroupDisplayInfoByTreeID and C_Traits.GetGroupCurrencyInfo) then return nil end
+  local ok, configID = pcall(C_ClassTalents.GetActiveConfigID)
+  if not (ok and type(configID) == "number" and not ns.isSecret(configID)) then return nil end
+  local ok2, info = pcall(C_Traits.GetConfigInfo, configID)
+  local treeID = ok2 and type(info) == "table" and type(info.treeIDs) == "table" and info.treeIDs[1]
+  if type(treeID) ~= "number" then return nil end
+  local ok3, groups = pcall(C_Traits.GetGroupDisplayInfoByTreeID, treeID)
+  if not (ok3 and type(groups) == "table" and #groups > 0) then return nil end
+  local tabs = {}
+  for _, g in ipairs(groups) do if type(g) == "table" and g.groupID then tabs[#tabs + 1] = g end end
+  table.sort(tabs, function(a, b) return (a.orderIndex or 0) < (b.orderIndex or 0) end)
+  local ids = {}
+  for i, g in ipairs(tabs) do ids[i] = g.groupID end
+  local ok4, cur = pcall(C_Traits.GetGroupCurrencyInfo, configID, ids)
+  if not (ok4 and type(cur) == "table") then return nil end
+  local spent = {}
+  for _, c in ipairs(cur) do -- a tab with nothing spent is left out: it counts as 0
+    local n = 0
+    for _, ci in ipairs(c.currencyInfos or {}) do
+      if type(ci.spent) == "number" and not ns.isSecret(ci.spent) then n = n + ci.spent end
+    end
+    if c.traitNodeGroupID then spent[c.traitNodeGroupID] = n end
+  end
+  -- each tab is the tree of ours with its name, else the one in its place (the game's order)
+  local presets = ns.PRESETS and ns.PRESETS[class] or {}
+  local points = {}
+  for pos, g in ipairs(tabs) do
+    local tree = pos
+    for i, p in ipairs(presets) do if p[1] == g.displayName then tree = i end end
+    points[tree] = (points[tree] or 0) + (spent[g.groupID] or 0)
+  end
+  return points
+end
+
+-- older clients: GetTalentTabInfo per tab
+local function PointsFromTabs()
+  if not (GetNumTalentTabs and GetTalentTabInfo) then return nil end
+  local points = {}
+  for i = 1, (GetNumTalentTabs() or 0) do
+    local r = { pcall(GetTalentTabInfo, i) }
+    if r[1] then
+      -- older clients: name, icon, pointsSpent...; newer: id, name, description, icon, pointsSpent...
+      local pts = (type(r[2]) == "number") and r[6] or r[4]
+      if type(pts) == "number" then points[i] = pts end
+    end
+  end
+  return points
+end
+
+function ns.TalentPoints()
+  return PointsFromTraits(ns.Class()) or PointsFromTabs()
+end
+
 -- the talent tree with the most points (1-3), or nil before any talents
 function ns.TalentTree()
   local best, bestPts
-  if GetNumTalentTabs and GetTalentTabInfo then
-    for i = 1, (GetNumTalentTabs() or 0) do
-      local r = { pcall(GetTalentTabInfo, i) }
-      if r[1] then
-        -- older clients: name, icon, pointsSpent...; newer: id, name, description, icon, pointsSpent...
-        local pts = (type(r[2]) == "number") and r[6] or r[4]
-        if type(pts) == "number" and (not bestPts or pts > bestPts) then best, bestPts = i, pts end
-      end
-    end
+  for i, pts in pairs(ns.TalentPoints() or {}) do
+    if not bestPts or pts > bestPts then best, bestPts = i, pts end
   end
   if bestPts and bestPts > 0 then return best end
   return nil

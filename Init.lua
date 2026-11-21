@@ -4,7 +4,9 @@ local _, ns = ...
 local ev = CreateFrame("Frame")
 ev:RegisterEvent("ADDON_LOADED")
 ev:RegisterEvent("PLAYER_LOGIN")
-for _, e in ipairs({ "PLAYER_EQUIPMENT_CHANGED", "CHARACTER_POINTS_CHANGED", "PLAYER_TALENT_UPDATE", "PLAYER_LEVEL_UP" }) do
+-- (TRAIT_*: Forever's talents are trait configs; the others are older clients')
+for _, e in ipairs({ "PLAYER_EQUIPMENT_CHANGED", "CHARACTER_POINTS_CHANGED", "PLAYER_TALENT_UPDATE", "PLAYER_LEVEL_UP",
+  "TRAIT_CONFIG_UPDATED", "TRAIT_TREE_CURRENCY_INFO_UPDATED" }) do
   pcall(ev.RegisterEvent, ev, e)
 end
 ev:SetScript("OnEvent", function(_, event, arg1)
@@ -49,6 +51,10 @@ SlashCmdList.EQUIPTHIS = function(msg)
     local scale = ns.Scales.Active()
     if scale then ns.Print("scoring gear with your scale \"" .. scale .. "\" (your spec: " .. ns.SpecName(ns.SpecKey()) .. ")")
     else ns.Print("scoring gear for " .. ns.SpecName(ns.SpecKey()) .. (ns.db.spec == "auto" and " (from your talents)" or " (set in /eqt)")) end
+    -- what the talents say, tree by tree
+    local pts, parts = ns.TalentPoints(), {}
+    for i, p in ipairs(ns.PRESETS[ns.Class()] or {}) do parts[#parts + 1] = p[1] .. " " .. ((pts and pts[i]) or 0) end
+    ns.Print("talent points: " .. (pts and table.concat(parts, ", ") or "the game didn't say (spec picked as before any talents)"))
   else
     local ok, e = pcall(ns.OpenOptions)
     if not ok then ns.Print("settings error: " .. tostring(e)) end
