@@ -173,6 +173,7 @@ function ns.OpenOptions()
   if not window then
     window = UI.Window("EquipThisOptionsWindow", 522, 640)
     window:SetPoint("CENTER")
+    UI.SetHost(window) -- pop-ups (New, Rename, Import, Delete...) sit over this window
     local ok, e = pcall(BuildPanel, window)
     if not ok then window:Hide(); window = nil; ns.Print("settings failed: " .. tostring(e)); return end
     window:SetHeight(window.height or 640)

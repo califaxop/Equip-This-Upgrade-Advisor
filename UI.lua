@@ -331,6 +331,43 @@ function UI.Window(name, width, height)
   return win
 end
 
+-- A pop-up (a prompt, a Yes/No box, a link to copy): solid, not see-through, and held in the
+-- middle of the window it came from (UI.host), which is dimmed and can't be clicked behind it.
+local popups = {}
+function UI.Popup(name, width, height)
+  local win = UI.Window(name, width, height)
+  win:SetFrameStrata("FULLSCREEN_DIALOG")
+  win:SetMovable(false); win:SetScript("OnDragStart", nil); win:SetScript("OnDragStop", nil)
+  local solid = win:CreateTexture(nil, "BACKGROUND", nil, -8)
+  solid:SetColorTexture(0.04, 0.035, 0.03, 1)
+  solid:SetPoint("TOPLEFT", 3, -3); solid:SetPoint("BOTTOMRIGHT", -3, 3)
+  win.shade = CreateFrame("Frame", nil, win)
+  win.shade:EnableMouse(true) -- clicks on the window behind go nowhere while this is open
+  local dim = win.shade:CreateTexture(nil, "BACKGROUND")
+  dim:SetAllPoints(); dim:SetColorTexture(0, 0, 0, 0.55)
+  win:HookScript("OnShow", function(self)
+    local host = UI.host
+    self:ClearAllPoints()
+    if host and host:IsShown() then
+      self:SetScale(host:GetScale())
+      self:SetPoint("CENTER", host, "CENTER", 0, 40)
+      self.shade:ClearAllPoints(); self.shade:SetAllPoints(host); self.shade:Show()
+    else
+      self:SetScale(1)
+      self:SetPoint("CENTER", UIParent, "CENTER", 0, 120)
+      self.shade:Hide()
+    end
+    self.shade:SetFrameLevel(math.max(0, self:GetFrameLevel() - 1))
+  end)
+  popups[#popups + 1] = win
+  return win
+end
+-- the window pop-ups belong to; they close with it
+function UI.SetHost(host)
+  UI.host = host
+  host:HookScript("OnHide", function() for _, p in ipairs(popups) do p:Hide() end end)
+end
+
 -- tabs along the top of a window: { { "Name", buildFn(page) }, ... }; returns Select(i)
 function UI.Tabs(win, defs, x0, y, pageW, pageH)
   local tabs, pages, current = {}, {}, 1
@@ -410,8 +447,7 @@ end
 function UI.ShowLink(name, title, url)
   local win = _G[name]
   if not win then
-    win = UI.Window(name, 400, 118)
-    win:SetPoint("CENTER", 0, 120)
+    win = UI.Popup(name, 400, 118)
     win.title = UI.Text(win, "title", "")
     win.title:SetPoint("TOPLEFT", 20, -18)
     local note = UI.Text(win, "note", "Press Ctrl+C to copy, then paste it into your browser.")
@@ -438,8 +474,7 @@ end
 function UI.Confirm(name, text, onYes)
   local win = _G[name]
   if not win then
-    win = UI.Window(name, 320, 110)
-    win:SetPoint("CENTER", 0, 120)
+    win = UI.Popup(name, 320, 110)
     win.text = UI.Text(win, "line", "")
     win.text:SetPoint("TOPLEFT", 20, -20); win.text:SetWidth(280)
     local yes = UI.Button(win, "Yes", 90, function() win:Hide(); if win.yes then win.yes() end end)
@@ -455,8 +490,7 @@ end
 function UI.Prompt(name, title, note, default, onOK)
   local win = _G[name]
   if not win then
-    win = UI.Window(name, 420, 150)
-    win:SetPoint("CENTER", 0, 120)
+    win = UI.Popup(name, 420, 150)
     win.title = UI.Text(win, "title", "")
     win.title:SetPoint("TOPLEFT", 20, -18)
     win.note = UI.Text(win, "note", "")
