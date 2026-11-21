@@ -345,7 +345,9 @@ function UI.Popup(name, width, height)
   win.shade:EnableMouse(true) -- clicks on the window behind go nowhere while this is open
   local dim = win.shade:CreateTexture(nil, "BACKGROUND")
   dim:SetAllPoints(); dim:SetColorTexture(0, 0, 0, 0.55)
-  win:HookScript("OnShow", function(self)
+  -- placed every time it opens (a new frame starts out shown, so it's hidden below until asked for)
+  function win.Place(self)
+    self = self or win
     local host = UI.host
     self:ClearAllPoints()
     if host and host:IsShown() then
@@ -358,7 +360,9 @@ function UI.Popup(name, width, height)
       self.shade:Hide()
     end
     self.shade:SetFrameLevel(math.max(0, self:GetFrameLevel() - 1))
-  end)
+  end
+  win:HookScript("OnShow", win.Place)
+  win:Hide()
   popups[#popups + 1] = win
   return win
 end
@@ -464,7 +468,7 @@ function UI.ShowLink(name, title, url)
   win.url = url
   win.title:SetText(title)
   win.edit:SetText(url)
-  win:Show()
+  win:Place(); win:Show()
   win.edit:SetFocus()
   win.edit:HighlightText()
 end
@@ -484,7 +488,7 @@ function UI.Confirm(name, text, onYes)
   end
   win.text:SetText(text)
   win.yes = onYes
-  win:Show()
+  win:Place(); win:Show()
 end
 
 function UI.Prompt(name, title, note, default, onOK)
@@ -513,7 +517,7 @@ function UI.Prompt(name, title, note, default, onOK)
     win:Hide()
     onOK(text)
   end
-  win:Show()
+  win:Place(); win:Show()
   win.edit:SetFocus()
   win.edit:HighlightText()
 end
