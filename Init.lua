@@ -29,10 +29,16 @@ local function Explain(link)
   local w = ns.CurrentWeights()
   local parts = {}
   for _, k in ipairs(ns.STAT_ORDER) do
-    if f.stats[k] then parts[#parts + 1] = format("%s %s (importance %s)", tostring(f.stats[k]), ns.STAT_NAMES[k], tostring(w[k] or 0)) end
+    local v = f.stats[k]
+    if v then
+      local shown = (v == math.floor(v)) and tostring(v) or format("%.1f", v)
+      parts[#parts + 1] = format("%s %s (importance %s)", shown, ns.STAT_NAMES[k], tostring(w[k] or 0))
+    end
   end
   ns.Print(link .. " - " .. (f.equipLoc or "?") .. (f.usable and "" or ", can't use it"))
   ns.Print("stats: " .. (#parts > 0 and table.concat(parts, ", ") or "none read"))
+  local _, why = ns.Effects.Points(f, w)
+  for _, line in ipairs(why or {}) do ns.Print("effect: " .. line) end
   local v = ns.Score.Value(link, w)
   local verdict = ns.Display.Verdict(link)
   ns.Print(format("score %.1f for %s%s", v or 0, ns.ScoringLabel(), verdict and (" - " .. verdict) or ""))

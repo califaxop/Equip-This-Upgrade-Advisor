@@ -9,6 +9,7 @@ Equip This! scores gear for your class and spec, marks upgrades on item tooltips
 - **Tooltips:** "Upgrade +12% (Elemental)", "Downgrade", "Equipped" or "Can't use it", compared with what you wear.
 - **Your spec:** picked from your talents, or set it yourself. Every class and spec has stat weights, which you can tune on a simple 0-5 scale.
 - **Your own scales:** make named stat scales for your theorycrafting, import Pawn-style strings from guides, export yours to share.
+- **Item effects count:** procs ("Chance on hit"), Use effects and "+10% to a spell" are estimated for your spec from the game's own tooltips (your weapon, attack power and the spell's damage and cooldown), then counted through your weights. Effects your spec can't use count for nothing. `/eqt item` shows the working.
 - **Smart comparisons:** rings and trinkets against your weaker one, two-handers against main hand + off hand.
 
 ## Quick start
@@ -33,6 +34,7 @@ New versions come out every **Wednesday at 12:00 UTC** (8 PM Philippine time, 8 
 Found a bug or have an idea? [Open an issue](https://github.com/califaxop/Equip-This-Upgrade-Advisor/issues/new/choose): there's a short form for each. The settings window has a "Report a bug / suggest" button with this link too.
 
 ## Recent changes
+- **2.3.0:** Item effects now count: procs, Use effects and "+X% to a spell", estimated for your spec from live tooltips and counted through your weights (0 if your spec can't use them). `/eqt item` shows each estimate.
 - **2.2.2:** Fixed "Auto: from my talents": it now reads Forever's talent system, so your spec follows the tree you put the most points in (before, it always used your class's leveling default). `/eqt spec` shows the points per tree.
 - **2.2.1:** Native look: the settings use the game's own tooltip border in bronze (without FlareUI style).
 - **2.2.0:** Tooltips say what an item is measured against ("Downgrade -30% vs Seal of Sylvanas"), and your worn rings and trinkets say which is the weaker one (the one a new one replaces). The line now also shows on the comparison tooltips.

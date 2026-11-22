@@ -41,14 +41,18 @@ end
 
 -- what the item tooltip says: Equip-line stats, and whether something on it is red
 -- (can't use it: armor type, weapon skill, class, level)
+-- (also: every line's text, for the effects, and the weapon's speed)
 local function TooltipFacts(link)
-  local extra, red = {}, false
-  if not (C_TooltipInfo and C_TooltipInfo.GetHyperlink) then return extra, red end
+  local extra, red, texts, speed = {}, false, {}, nil
+  if not (C_TooltipInfo and C_TooltipInfo.GetHyperlink) then return extra, red, texts end
   local ok, data = pcall(C_TooltipInfo.GetHyperlink, link)
-  if not (ok and type(data) == "table" and type(data.lines) == "table") then return extra, red end
+  if not (ok and type(data) == "table" and type(data.lines) == "table") then return extra, red, texts end
   for i, l in ipairs(data.lines) do
     if i > 1 and (IsRed(l.leftColor) or IsRed(l.rightColor)) then red = true end
     local t = Readable(l.leftText) and l.leftText or ""
+    texts[#texts + 1] = t
+    local r = Readable(l.rightText) and l.rightText or ""
+    speed = speed or tonumber(r:match("^Speed (%d+%.?%d*)") or t:match("Speed (%d+%.?%d*)") or "")
     if t:find("^Equip:") or t:find("^%+%d+ [Aa]ttack") then
       for _, p in ipairs(EQUIP) do
         local n = t:match(p[1])
@@ -56,7 +60,7 @@ local function TooltipFacts(link)
       end
     end
   end
-  return extra, red
+  return extra, red, texts, speed
 end
 
 local cache = {}
@@ -73,14 +77,15 @@ function S.Facts(link)
     local key = KEYS[k]
     if key and type(v) == "number" then stats[key] = (stats[key] or 0) + v end
   end
-  local extra, red = TooltipFacts(link)
+  local extra, red, texts, speed = TooltipFacts(link)
   for k, v in pairs(extra) do if not stats[k] then stats[k] = v end end
   local sell = select(11, (C_Item and C_Item.GetItemInfo or GetItemInfo)(link))
-  local f = { stats = stats, equipLoc = equipLoc, usable = not red, sell = type(sell) == "number" and sell or 0 }
+  local f = { stats = stats, equipLoc = equipLoc, usable = not red, sell = type(sell) == "number" and sell or 0,
+    speed = speed, effects = ns.Effects and ns.Effects.Parse(texts) or {} }
   cache[link] = f
   return f
 end
-function S.ClearCache() wipe(cache) end
+function S.ClearCache() wipe(cache); if ns.Effects then ns.Effects.ClearCache() end end
 
 local WEAPON_LOCS = { INVTYPE_WEAPON = true, INVTYPE_2HWEAPON = true, INVTYPE_WEAPONMAINHAND = true,
   INVTYPE_WEAPONOFFHAND = true, INVTYPE_RANGED = true, INVTYPE_RANGEDRIGHT = true, INVTYPE_THROWN = true }
@@ -94,6 +99,8 @@ function S.Value(link, weights)
     -- weights are importance 0-5; ns.PointsPer turns them into points per unit of the stat
     if k ~= "DPS" or WEAPON_LOCS[f.equipLoc] then total = total + v * ns.PointsPer(k, weights[k]) end
   end
+  -- procs, Use effects, "+X% to a spell": what they add for this spec (0 if it can't use them)
+  if ns.Effects then total = total + (ns.Effects.Points(f, weights) or 0) end
   return total, f
 end
 
