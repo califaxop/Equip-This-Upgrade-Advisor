@@ -265,9 +265,16 @@ function ns.SetSkillPart(pct)
   list.part = pct
   SaveSkills(list)
 end
--- a skill's share of your output, 0 to 1 (nil = not listed): its weight over the total, times the skill part
-function ns.SkillShare(name)
+-- a skill's share of your output, 0 to 1 (nil = not listed): its weight over the total, times the skill part.
+-- family: every listed skill with that word in its name ("Shock" -> Earth Shock + Flame Shock)
+function ns.SkillShare(name, family)
   local w = ns.SkillWeight(name)
+  if not w and family then
+    local word = " " .. (name or ""):lower() .. " "
+    for _, s in ipairs(ns.CurrentSkills()) do
+      if (" " .. (s[1] or ""):lower() .. " "):find(word, 1, true) then w = (w or 0) + (tonumber(s[2]) or 0) end
+    end
+  end
   if not w then return nil end
   local total = 0
   for _, s in ipairs(ns.CurrentSkills()) do total = total + math.max(0, tonumber(s[2]) or 0) end

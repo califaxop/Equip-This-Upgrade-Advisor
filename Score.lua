@@ -29,12 +29,19 @@ local EQUIP = {
   { "critical strike with all spells and attacks by " .. N .. "%%", "CRIT", "SPELLCRIT" },
   -- spells
   { "critical strike with spells by " .. N .. "%%", "SPELLCRIT" },
+  { "critical strike with %a+ spells by " .. N .. "%%", "SPELLCRIT" }, -- (a school: "with Holy spells")
+  { "critically hit with spells by " .. N .. "%%", "SPELLCRIT" },
+  { "hit with %a+ spells by " .. N .. "%%", "SPELLHIT" },
   { "spell critical strike chance by " .. N .. "%%", "SPELLCRIT" },
   { "spell crit chance by " .. N .. "%%", "SPELLCRIT" },
   { "hit with spells by " .. N .. "%%", "SPELLHIT" },
   { "spell hit chance by " .. N .. "%%", "SPELLHIT" },
   -- melee / ranged
+  { "critical strike with %a+ weapons by " .. N .. "%%", "CRIT" }, -- ("with missile weapons", "with ranged weapons")
+  { "critical strike chance with %a+ weapons by " .. N .. "%%", "CRIT" },
+  { "hit with %a+ weapons by " .. N .. "%%", "HIT" },
   { "critical strike by " .. N .. "%%", "CRIT" },
+  { "critically hit by " .. N .. "%%", "CRIT" },
   { "critical strike chance by " .. N .. "%%", "CRIT" },
   { "crit chance by " .. N .. "%%", "CRIT" },
   { "chance to crit by " .. N .. "%%", "CRIT" },
@@ -47,7 +54,8 @@ local EQUIP = {
   { "spell damage by up to (%d+)", "SP" },
   { "%+(%d+) [Ss]pell [Dd]amage", "SP" },
   { "%+(%d+) [Ss]pell [Pp]ower", "SP" },
-  { "healing done by spells and effects by up to (%d+)", "HEAL" },
+  { "healing done by [%a ]-spells and effects by up to (%d+)", "HEAL" },
+  { "healing done by spells by up to (%d+)", "HEAL" },
   { "healing by up to (%d+)", "HEAL" },
   { "%+(%d+) [Hh]ealing", "HEAL" },
   -- mana
@@ -58,16 +66,23 @@ local EQUIP = {
   { "[Ii]ncreases ranged attack power by (%d+)", "RAP" },
   { "%+(%d+) [Aa]ttack [Pp]ower", "AP" },
   { "[Ii]ncreases [Aa]ttack [Pp]ower by (%d+)", "AP" },
+  { "[Ii]ncreases your [Aa]ttack [Pp]ower by (%d+)", "AP" },
   -- tanking
   { "dodge an attack by " .. N .. "%%", "DODGE" },
   { "parry an attack by " .. N .. "%%", "PARRY" },
   { "block attacks with a shield by " .. N .. "%%", "BLOCK" },
   { "block value of your shield by (%d+)", "BLOCKVALUE" },
   { "[Ii]ncreased [Dd]efense %+(%d+)", "DEF" },
+  { "%+(%d+) [Dd]efense", "DEF" },
   { "[Dd]efense by (%d+)", "DEF" },
 }
 -- bonuses only against some enemies don't count as the stat all the time
-local SITUATIONAL = { "when fighting", "against undead", "against demons", "against beasts" }
+local SITUATIONAL = { "when fighting", "against undead", "against demons", "against beasts", "to undead", "to demons",
+  "undead and demons" }
+-- a buff for a while (a proc or a Use), not a stat you always have
+local TIMED = { "chance on", "chance when", "chance per", "have a chance", "has a chance", "gives a chance", "%d%% chance",
+  "chance to gain", "chance to strike", "chance to deal", "chance to restore", "chance to increase", "chance to grant",
+  "for %d+%.?%d* sec", "for %d+ min", "when struck", "when hit" }
 
 local function IsRed(c)
   return type(c) == "table" and Readable(c.r) and c.r > 0.9 and c.g < 0.3 and c.b < 0.3
@@ -87,7 +102,14 @@ local function TooltipFacts(link)
     texts[#texts + 1] = t
     local r = Readable(l.rightText) and l.rightText or ""
     speed = speed or tonumber(r:match("^Speed (%d+%.?%d*)") or t:match("Speed (%d+%.?%d*)") or "")
-    local perSpell = t:find(" chance of ") or t:find(" chance with ") -- "crit chance of Lightning Bolt": an effect
+    local lt = t:lower()
+    -- "crit chance of Lightning Bolt": an effect (but "chance with ranged weapons" is a stat)
+    local perSpell = (lt:find(" chance of ") or lt:find(" chance with ")) and not lt:find(" weapons by ")
+    local timed = false
+    for _, w in ipairs(TIMED) do
+      if lt:find(w) then timed = true end
+    end
+    perSpell = perSpell or timed
     if (t:find("^Equip:") and not perSpell) or t:find("^%+%d+ [Aa]ttack") then
       local lower = t:lower()
       local situational = false
