@@ -29,6 +29,54 @@ ns.NORM = { STR = 1, AGI = 1, STA = 1, INT = 1, SPI = 1, AP = 0.5, RAP = 0.4, SP
   CRIT = 14, HIT = 12, SPELLCRIT = 10, SPELLHIT = 10, DPS = 4, ARMOR = 0.02, DEF = 1.2, DODGE = 12,
   PARRY = 12, BLOCK = 6, BLOCKVALUE = 0.5 }
 local function round2(x) return math.floor(x * 100 + 0.5) / 100 end
+-- What a stat's weight means, in words (the tooltip on each stat in /eqt): at 5 for everyone, then
+-- with your weights, measured against the primary stat you weight most.
+local PRIMARY = { "STR", "AGI", "INT" }
+local function Short(x) x = math.floor(x * 10 + 0.5) / 10; return (x == math.floor(x)) and tostring(x) or format("%.1f", x) end
+-- a weight as typed: 3.75 -> "3.75", 4.5 -> "4.5", 5 -> "5"
+local function Wt(x) return (format("%.2f", x or 0):gsub("0+$", ""):gsub("%.$", "")) end
+local function Unit(key)
+  if key == "DPS" then return "+1 weapon DPS" end
+  if (ns.STAT_NAMES[key] or ""):find("%%") then return "+1%" end
+  return "+1"
+end
+function ns.WeightInfo(key, weights)
+  local lines = {}
+  local name = ns.STAT_NAMES[key] or key
+  local unit = Unit(key)
+  local label = (unit == "+1%" or unit == "+1") and (unit .. " " .. name:gsub(" %%$", "")) or unit
+  local isPrimary = key == "STR" or key == "AGI" or key == "INT"
+  local at5 = ns.NORM[key] or 0
+  if isPrimary then
+    lines[1] = format("At 5, %s counts as 1 point: the yardstick the other stats are measured against.", label)
+  elseif key == "STA" or key == "SPI" then
+    lines[1] = format("At 5, %s counts as 1 point, as much as +1 of a primary stat (Strength, Agility or Intellect) at 5.", label)
+  else
+    lines[1] = format("At 5, %s counts as much as +%s of a primary stat (Strength, Agility or Intellect) at 5.", label, Short(at5))
+  end
+  local mine = weights and weights[key] or 0
+  local pts = ns.PointsPer(key, mine)
+  if pts <= 0 then
+    lines[2] = "Your weight is 0: it's ignored."
+  else
+    -- your most-weighted primary stat
+    local best, bestPts
+    for _, k in ipairs(PRIMARY) do
+      local p = ns.PointsPer(k, weights[k])
+      if p > 0 and (not bestPts or p > bestPts) then best, bestPts = k, p end
+    end
+    if best and best ~= key then
+      lines[2] = format("With your weights: %s (%s) is worth as much as +%s %s (%s).", label, Wt(mine), Short(pts / bestPts),
+        ns.STAT_NAMES[best], Wt(weights[best]))
+    else
+      lines[2] = format("With your weight (%s): %s = %s points.", Wt(mine), label, Short(pts))
+    end
+  end
+  if key == "DPS" then lines[#lines + 1] = "Only counts on weapons. Item effects (procs, spell bonuses) are counted through this too." end
+  lines[#lines + 1] = "0 ignores a stat; 5 means it matters as much as it can."
+  return lines
+end
+
 -- points per unit of a stat, for an importance
 function ns.PointsPer(key, importance) return (importance or 0) * (ns.NORM[key] or 0) / 5 end
 -- points-per-unit weights (Pawn-style) -> importance 0-5, the top stat at 5; and the factor used

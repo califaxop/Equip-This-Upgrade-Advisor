@@ -105,13 +105,25 @@ local function BuildPanel(panel)
 
   -- Weights ------------------------------------------------------------------
   at(UI.Section(panel, "Stat weights", W_), 26, -370)
-  local n = at(UI.Text(panel, "note", "How much each stat matters to you: 0 (ignore) to 5 (most). Decimals OK, e.g. 3.5. Weapon DPS only counts on weapons."), 26, -398)
+  local n = at(UI.Text(panel, "note", "How much each stat matters to you: 0 (ignore) to 5 (most). Decimals OK, e.g. 3.5. Hover a stat to see what its weight is worth."), 26, -398)
   n:SetWidth(W_)
   local y0 = -434
   for i, key in ipairs(ns.STAT_ORDER) do
     local col, row = (i - 1) % 2, math.floor((i - 1) / 2)
     local x, y = 26 + col * 240, y0 - row * 26
     at(UI.Text(panel, "line", ns.STAT_NAMES[key]), x, y - 3)
+    -- hover the stat for what its weight is worth
+    local function tip(owner)
+      GameTooltip:SetOwner(owner, "ANCHOR_RIGHT")
+      GameTooltip:SetText(ns.STAT_NAMES[key], 1, 1, 1)
+      for _, line in ipairs(ns.WeightInfo(key, ns.CurrentWeights())) do GameTooltip:AddLine(line, 0.85, 0.85, 0.85, true) end
+      GameTooltip:Show()
+    end
+    local hover = CreateFrame("Frame", nil, panel)
+    hover:SetSize(155, 20); hover:SetPoint("TOPLEFT", x - 2, y + 1)
+    hover:EnableMouse(true)
+    hover:SetScript("OnEnter", tip)
+    hover:SetScript("OnLeave", function() GameTooltip:Hide() end)
     local e = UI.Edit(panel, 56, {
       function() local w = ns.CurrentWeights(); return w[key] and tostring(w[key]) or "0" end,
       function(v)
@@ -129,6 +141,8 @@ local function BuildPanel(panel)
         Changed()
       end }, "0", false, true)
     e:SetPoint("TOPLEFT", x + 160, y)
+    e:HookScript("OnEnter", tip)
+    e:HookScript("OnLeave", function() GameTooltip:Hide() end)
     weightRows[#weightRows + 1] = e
     track(e)
   end
