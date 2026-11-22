@@ -40,6 +40,10 @@ local EQUIP = {
   { "critical strike with %a+ weapons by " .. N .. "%%", "CRIT" }, -- ("with missile weapons", "with ranged weapons")
   { "critical strike chance with %a+ weapons by " .. N .. "%%", "CRIT" },
   { "hit with %a+ weapons by " .. N .. "%%", "HIT" },
+  { "critical strike with melee attacks by " .. N .. "%%", "CRIT" },
+  { "critical strike with ranged attacks by " .. N .. "%%", "CRIT" },
+  { "critical effect chance of your %a+ spells by " .. N .. "%%", "SPELLCRIT" },
+  { "spell critical chance of all party members within %d+ yards by " .. N .. "%%", "SPELLCRIT" },
   { "critical strike by " .. N .. "%%", "CRIT" },
   { "critically hit by " .. N .. "%%", "CRIT" },
   { "critical strike chance by " .. N .. "%%", "CRIT" },
@@ -49,6 +53,8 @@ local EQUIP = {
   { "hit chance by " .. N .. "%%", "HIT" },
   -- spell damage and healing (a school's spell damage counts as spell damage)
   { "damage and healing done by magical spells and effects by up to (%d+)", "SP" },
+  { "damage and healing done by magical spells and effects of all party members within %d+ yards by up to (%d+)", "SP" },
+  { "healing done by magical spells and effects of all party members within %d+ yards by up to (%d+)", "HEAL" },
   { "spell damage and healing by up to (%d+)", "SP" },
   { "damage done by %a+ spells and effects by up to (%d+)", "SP" },
   { "spell damage by up to (%d+)", "SP" },
@@ -59,7 +65,7 @@ local EQUIP = {
   { "healing by up to (%d+)", "HEAL" },
   { "%+(%d+) [Hh]ealing", "HEAL" },
   -- mana
-  { "[Rr]estores (%d+) mana per 5 sec", "MP5" },
+  { "[Rr]estores (%d+) [Mm]ana per 5 sec", "MP5" },
   { "(%d+) mana every 5 sec", "MP5" },
   -- attack power (ranged first)
   { "%+(%d+) [Rr]anged [Aa]ttack [Pp]ower", "RAP" },
@@ -67,6 +73,7 @@ local EQUIP = {
   { "%+(%d+) [Aa]ttack [Pp]ower", "AP" },
   { "[Ii]ncreases [Aa]ttack [Pp]ower by (%d+)", "AP" },
   { "[Ii]ncreases your [Aa]ttack [Pp]ower by (%d+)", "AP" },
+  { "[Ii]ncreases melee and ranged attack power by (%d+)", "AP" },
   -- tanking
   { "dodge an attack by " .. N .. "%%", "DODGE" },
   { "parry an attack by " .. N .. "%%", "PARRY" },
@@ -74,11 +81,12 @@ local EQUIP = {
   { "block value of your shield by (%d+)", "BLOCKVALUE" },
   { "[Ii]ncreased [Dd]efense %+(%d+)", "DEF" },
   { "%+(%d+) [Dd]efense", "DEF" },
+  { "^Equip: %+(%d+) [Aa]rmor%.?$", "ARMOR" },
   { "[Dd]efense by (%d+)", "DEF" },
 }
 -- bonuses only against some enemies don't count as the stat all the time
-local SITUATIONAL = { "when fighting", "against undead", "against demons", "against beasts", "to undead", "to demons",
-  "undead and demons" }
+local SITUATIONAL = { "when fighting", "against ", "to undead", "to demons", "undead and demons",
+  "pet", "your imp", "your voidwalker", "your succubus", "your felhunter", "minion", "battle ring" }
 -- a buff for a while (a proc or a Use), not a stat you always have
 local TIMED = { "chance on", "chance when", "chance per", "have a chance", "has a chance", "gives a chance", "%d%% chance",
   "chance to gain", "chance to strike", "chance to deal", "chance to restore", "chance to increase", "chance to grant",
@@ -105,6 +113,7 @@ local function TooltipFacts(link)
     local lt = t:lower()
     -- "crit chance of Lightning Bolt": an effect (but "chance with ranged weapons" is a stat)
     local perSpell = (lt:find(" chance of ") or lt:find(" chance with ")) and not lt:find(" weapons by ")
+      and not lt:find("of your %a+ spells by") and not lt:find("party members")
     local timed = false
     for _, w in ipairs(TIMED) do
       if lt:find(w) then timed = true end
@@ -143,7 +152,8 @@ function S.Facts(link)
   local extra, red, texts, speed = TooltipFacts(link)
   for k, v in pairs(extra) do if not stats[k] then stats[k] = v end end
   local sell = select(11, (C_Item and C_Item.GetItemInfo or GetItemInfo)(link))
-  local f = { stats = stats, equipLoc = equipLoc, usable = not red, sell = type(sell) == "number" and sell or 0,
+  local subType = C_Item and C_Item.GetItemInfoInstant and select(3, C_Item.GetItemInfoInstant(link))
+  local f = { stats = stats, equipLoc = equipLoc, subType = type(subType) == "string" and subType:lower() or nil, usable = not red, sell = type(sell) == "number" and sell or 0,
     speed = speed, effects = ns.Effects and ns.Effects.Parse(texts) or {} }
   cache[link] = f
   return f

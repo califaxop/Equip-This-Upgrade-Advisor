@@ -6,6 +6,10 @@
 -- Skill effects ("+10% Stormstrike", "+1% crit chance of Healing Wave", "-1 sec cooldown", "+3 sec
 -- duration") count by that skill's share of your output (its relative weight in your skill list,
 -- Weights.lua), read as a % of the skill from its live tooltip where needed.
+-- Each effect is read in three layers: trigger (hit, spell, crit, kill, being hit, Use), payload
+-- (damage, buff, haste, mana, extra attack) and target (you, or the enemy: debuffs and slows on the
+-- enemy aren't buffs on you). Procs when you're hit and on kills are named but not counted.
+-- Checked against every effect line on Forever's gear (wow-forever-kb, build 1.60.1.71037).
 -- Reads English tooltips, as the Equip-line stats do.
 local _, ns = ...
 local E = {}
@@ -17,10 +21,14 @@ local CASTS_PER_MIN = 24  -- a caster's casts a minute (2.5 s each), for "N% cha
 local GCD = 1.5           -- the fastest a spell can be used again
 local SP_PER_DPS = 3.5    -- 1 damage (or healing) per second is about 3.5 spell power for a full-time caster
 local CHAIN_BOUNCES = 0.43 -- Chain Heal's jumps (50% + 25%) are ~43% of what it heals
+local CRIT_RATE = 0.25    -- for "chance on critical strike": about a quarter of hits crit (your sheet's, when readable)
+local SPELL_CRIT_RATE = 0.15
+local USE_CD_GUESS = 120  -- a Use line with no cooldown shown: about 2 minutes, like most trinkets
+local SKILL_PER_POINT = 0.2 -- "Increased Swords +5": each point of weapon skill about +0.2% hit vs. raid bosses
 
 -- words on tooltips -> our stat keys (for buffs: "increases your X by N", "grants N X")
 local STAT_WORDS = {
-  ["attack power"] = "AP", ["melee attack power"] = "AP", ["ranged attack power"] = "RAP", ["ranged attack"] = "RAP",
+  ["attack power"] = "AP", ["melee attack power"] = "AP", ["melee and ranged attack power"] = "AP", ["ranged attack power"] = "RAP", ["ranged attack"] = "RAP",
   ["strength"] = "STR", ["agility"] = "AGI", ["stamina"] = "STA", ["intellect"] = "INT", ["spirit"] = "SPI",
   ["armor"] = "ARMOR", ["armor value"] = "ARMOR",
   ["spell damage"] = "SP", ["spell power"] = "SP", ["spell damage and healing"] = "SP", ["damage and healing"] = "SP",
@@ -47,7 +55,9 @@ local STAT_WORDS = {
   -- turned into a stat: 10 health = 1 Stamina, 15 mana = 1 Intellect
   ["health"] = "STA", ["maximum health"] = "STA", ["max health"] = "STA",
   ["mana"] = "INT", ["maximum mana"] = "INT", ["max mana"] = "INT",
+  ["all attributes"] = "ALL", ["all stats"] = "ALL", ["all attribute"] = "ALL",
 }
+local ALL_STATS = { "STR", "AGI", "STA", "INT", "SPI" }
 local STAT_FACTOR = { ["health"] = 0.1, ["maximum health"] = 0.1, ["max health"] = 0.1,
   ["mana"] = 1 / 15, ["maximum mana"] = 1 / 15, ["max mana"] = 1 / 15 }
 
@@ -68,7 +78,8 @@ local function IsTimeUnit(u) u = (u or ""):lower(); return u:find("^sec") or u:f
 -- 10 health = 1 Stamina): the longest run of words at the end that names a stat
 local function StatKey(what)
   local words = {}
-  for w in (what or ""):lower():gmatch("%a+") do words[#words + 1] = w end
+  what = (what or ""):lower():gsub("%s+for%s*$", ""):gsub(" for .*$", "") -- ("150 strength for 10 sec")
+  for w in what:gmatch("%a+") do words[#words + 1] = w end
   for i = 1, #words do
     local tail = table.concat(words, " ", i)
     if STAT_WORDS[tail] then return STAT_WORDS[tail], STAT_FACTOR[tail] or 1 end
@@ -77,35 +88,46 @@ end
 
 -- stat buffs with a duration: "increases your attack power by 300 for 10 sec", "grants 5% critical
 -- strike chance for 10 sec", "increases your spell damage by up to 204 and your healing by up to 408
--- for 20 sec". Returns { { stat, amount }, ... }, seconds (or nil).
+-- for 20 sec", "knocks target silly for 3 sec and increases Strength by 75 for 12 sec", "Defense +20
+-- for 10 sec". Returns { { stat, amount, seconds }, ... } (or nil).
 local function StatBuffs(text)
-  -- the first "for N sec/min" is how long
-  local cut, dur
-  for s, n, unit, e in text:gmatch("()for (%d+%.?%d*) (%a+)()") do
-    if IsTimeUnit(unit) then cut, dur = s, Seconds(n, unit); break end
+  local low = text:lower():gsub("by up to", "by")
+  if low:find("pet") or low:find("party member") and not low:find("you and") then return nil end
+  -- how long: each "for N sec/min" and where it is
+  local durs = {}
+  for at, n, unit in low:gmatch("()for (%d+%.?%d*) (%a+)") do
+    if IsTimeUnit(unit) then durs[#durs + 1] = { at, Seconds(n, unit) } end
   end
-  if not cut then return nil end
-  local pre = text:sub(1, cut - 1):gsub("by up to", "by")
-  -- a debuff on the enemy ("decreases the target's armor"), not a buff on you
-  local lowPre = pre:lower()
-  if lowPre:find("target's") or lowPre:find("enemy's") or lowPre:find("decreas") or lowPre:find("reduc") or lowPre:find("lowers") then
-    return nil
-  end
+  if #durs == 0 then return nil end
+  local function durAfter(at) for _, d in ipairs(durs) do if d[1] > at then return d[2] end end end
   local out = {}
-  -- "X by N" (any number of them: "your armor by 2000 and your defense by 30")
-  for what, n in pre:gmatch("([%a ]+) by (%d+%.?%d*)%%?") do
-    local key, f = StatKey(what)
-    if key then out[#out + 1] = { key, tonumber(n) * f } end
-  end
-  -- "N X": "grants 300 attack power", "you gain 120 Agility", "+40 Strength", "a 3% chance to hit"
-  if #out == 0 then
-    for n, what in pre:gmatch("(%d+%.?%d*)%%? ([%a ]+)") do
-      local key, f = StatKey(what)
-      if key then out[#out + 1] = { key, tonumber(n) * f } end
+  local PCT_KEYS = { CRIT = true, HIT = true, SPELLCRIT = true, SPELLHIT = true, DODGE = true, PARRY = true, BLOCK = true }
+  local function add(what, n, at, pct)
+    -- the clause it's in (from the last " and ", ",", "." or " to "): a debuff on the enemy ("reduce
+    -- target's attack power", "lowering all stats") isn't a buff on you
+    local seg, from = low:sub(1, at), 1
+    for _, b in ipairs({ " and ", ", ", "%. ", " to " }) do
+      for pos in seg:gmatch("()" .. b) do if pos > from and pos < at - #what then from = pos end end
     end
+    local clause = seg:sub(from)
+    if clause:find("target") or clause:find("enem") or clause:find("decreas") or clause:find("reduc")
+      or clause:find("lower") or clause:find("their") or clause:find("its ") or clause:find("attacker") then return end
+    local key, f = StatKey(what)
+    local d = durAfter(at - #what) -- (the first "for N sec" after the stat's name)
+    if not (key and d) then return end
+    if pct and not PCT_KEYS[key] then return end -- ("spell damage by 20%": a % of a flat stat, can't be read as points)
+    if key == "ALL" then for _, k in ipairs(ALL_STATS) do out[#out + 1] = { k, tonumber(n), d } end
+    else out[#out + 1] = { key, tonumber(n) * f, d } end
+  end
+  -- "X by N" (any number of them: "your armor by 2000 and your defense by 30")
+  for what, n, pct, at in low:gmatch("([%a ]+) by (%d+%.?%d*)(%%?)()") do add(what, n, at, pct == "%") end
+  -- "N X": "grants 300 attack power", "you gain 120 Agility", "+40 Strength", "a 3% chance to hit"; "X +N"
+  if #out == 0 then
+    for n, pct, what, at in low:gmatch("(%d+%.?%d*)(%%?) ([%a ]+)()") do add(what, n, at, pct == "%") end
+    for what, n, at in low:gmatch("([%a ]+) %+(%d+%.?%d*)()") do add(what, n, at, false) end
   end
   if #out == 0 then return nil end
-  return out, dur
+  return out
 end
 
 -- "attack speed by 20% for 15 sec" -> 20, 15, casting (true: casting speed only)
@@ -114,6 +136,11 @@ local function Haste(text)
   local p, d, unit = low:match("speed by (%d+%.?%d*)%% for (%d+%.?%d*) (%a+)")
   if not p then p, d, unit = low:match("haste by (%d+%.?%d*)%% for (%d+%.?%d*) (%a+)") end
   if not (p and IsTimeUnit(unit)) then return nil end
+  -- slowing the enemy ("slowing its attack speed", "increases the time between their attacks"): not yours
+  local at = low:find("speed by %d") or low:find("haste by %d") or 1
+  local before = low:sub(math.max(1, at - 30), at)
+  if before:find("slow") or before:find("its ") or before:find("their") or before:find("target") or before:find("enem")
+    or before:find("reduc") or before:find("decreas") or low:find("time between") then return nil end
   local attack, casting = low:find("attack") ~= nil, (low:find("cast") or low:find("spell")) ~= nil
   if not (attack or casting) then return nil end -- (movement speed)
   return tonumber(p), Seconds(d, unit), casting and not attack, attack and casting
@@ -128,7 +155,7 @@ end
 
 -- mana restored: "restores 375 to 625 mana", "restore 200 mana", "gain 100 mana"
 local function Mana(text)
-  local low = text:lower()
+  local low = text:lower():gsub("up to ", "")
   if low:find("per 5 sec") or low:find("every 5 sec") or low:find("mana cost") then return nil end
   local a, b = low:match("(%d[%d,]*) to (%d[%d,]*) mana")
   if a and (low:find("restor") or low:find("gain") or low:find("regain")) then return (Num(a) + Num(b)) / 2 end
@@ -139,17 +166,26 @@ end
 -- the average damage in a text, or nil: "150 Fire damage", "286 to 314 Fire damage and an additional
 -- 40 damage over 8 sec", "7 Nature damage every 2 sec for 30 sec", "steals 48 life"
 local function AvgDamage(text)
-  local low = text:lower()
+  local low = text:lower():gsub("up to ", "")
+  -- healing yourself, not damage ("heals the wielder for 100 damage over 10 sec")
+  if low:find("^heal") or low:find("heals? the wielder") or low:find("heals? wielder") or low:find("heals? you")
+    or low:find("heal yourself") or low:find("heals? the bearer") then return nil end
+  local tick, every, dur = low:match("transfers (%d[%d,]*) health every (%d+%.?%d*) sec%a* [%a ]-for (%d+) sec")
+  if not tick then tick, every, dur = low:match("loses (%d[%d,]*) health[%a ]- every (%d+%.?%d*) sec%a* for (%d+) sec") end
+  if tick then return Num(tick) * tonumber(dur) / tonumber(every) end
   local life = low:match("steals (%d[%d,]*) to (%d[%d,]*) life") and { low:match("steals (%d[%d,]*) to (%d[%d,]*) life") }
   if life then return (Num(life[1]) + Num(life[2])) / 2 end
   local n = low:match("steals (%d[%d,]*) life") or low:match("drains (%d[%d,]*) life") or low:match("drains (%d[%d,]*) health")
     or low:match("(%d[%d,]*) life from")
   if n then return Num(n) end
   if not low:find("damage") then return nil end
-  if low:find("damage taken") or low:find("absorb") then return nil end -- (shields, damage taken: not damage done)
-  -- a damage over time: "7 nature damage every 2 sec for 30 sec"
-  local tick, every, dur = low:match("(%d[%d,]*) %a* ?damage every (%d+%.?%d*) sec%a* for (%d+) sec")
-  if tick then return Num(tick) * tonumber(dur) / tonumber(every) end
+  if low:find("damage taken") or low:find("absorb") or low:find("protects") or low:find("shield") then return nil end -- (shields: not damage done)
+  -- a damage over time: "7 nature damage every 2 sec for 30 sec", "...140 damage every 2 sec. ... Lasts for 20 sec."
+  local t1, every, rest = low:match("(%d[%d,]*) %a* ?damage every (%d+%.?%d*) sec%a*(.*)")
+  if t1 then
+    local dur = rest:match("for (%d+) sec") or rest:match("lasts (%d+) sec") or rest:match("lasts for (%d+) sec")
+    if dur then return Num(t1) * tonumber(dur) / tonumber(every) end
+  end
   local base
   local a, b = low:match("(%d[%d,]*) to (%d[%d,]*) %a* ?damage")
   if not a then a, b = low:match("(%d[%d,]*) to (%d[%d,]*)") end
@@ -171,21 +207,65 @@ local function Cooldown(text)
   return Seconds(cd, unit)
 end
 
--- Equip-line procs: how they're triggered. nil = not a proc (or a proc when you're hit: tanking)
+-- Proc triggers. A line's prefix ("Chance on hit:", "When struck:", "Use:") or, on an Equip line, its
+-- words: hit (melee or ranged), spell (cast or landed), crit, spellcrit, reactive (when you're hit:
+-- tanking), kill. Each sets how often it goes off; reactive and kill procs aren't counted.
+local PREFIX = {
+  ["chance on hit"] = "melee", ["chance on melee hit"] = "melee", ["chance on ranged attack"] = "melee",
+  ["chance on a melee or ranged attack"] = "melee", ["chance on melee or ranged attack"] = "melee",
+  ["chance on striking"] = "melee", ["chance when you hit"] = "melee", ["when you hit"] = "melee", ["on hit"] = "melee",
+  ["when struck"] = "reactive", ["when struck in combat"] = "reactive", ["when struck in melee"] = "reactive",
+  ["when hit"] = "reactive", ["when attacked"] = "reactive", ["when you are hit"] = "reactive",
+  ["when you block"] = "reactive", ["when you dodge"] = "reactive", ["when you parry"] = "reactive",
+  ["chance on spell cast"] = "spell", ["chance on successful spellcast"] = "spell", ["chance on casting"] = "spell",
+  ["chance on spell hit"] = "spell",
+  ["chance on spell critical strike"] = "spellcrit", ["chance when your spell critically strikes"] = "spellcrit",
+  ["chance on critical hit"] = "crit", ["chance on critical strike"] = "crit", ["when you critically strike"] = "crit",
+  ["on a critical strike"] = "crit", ["when your attack critically hits"] = "crit",
+  ["when you kill an enemy"] = "kill", ["upon killing an enemy"] = "kill", ["killing an enemy"] = "kill",
+  ["chance when killing an enemy"] = "kill",
+  ["equip"] = "equip", ["when equipped"] = "equip",
+  ["use"] = "use", ["upon activation"] = "use", ["chance on use"] = "use",
+}
 local DEFENSIVE = { "when struck", "when hit", "when you are hit", "when you are struck", "when attacked",
-  "when you block", "when you dodge", "when you parry", "you take damage", "when damaged" }
+  "when you block", "when you dodge", "when you parry", "you take damage", "when damaged", "strikes you",
+  "every time you block", "victim of" }
 local PROC_WORDS = { "chance on", "chance when", "chance per", "have a chance", "has a chance", "gives a chance",
-  "chance to gain", "chance to strike", "chance to deal", "chance to restore", "chance to increase", "chance to grant",
-  "chance to heal", "% chance to", "% chance on", "% chance of", "chance of hitting" }
+  "% chance", "chance of hitting", "on successful", "on a successful", "each time you", "every time you",
+  "when you hit", "on landing", "chance to strike", "chance to deal", "chance to decapitate", "chance to discharge",
+  "chance to restore", "chance to gain", "chance to increase", "chance to grant", "chance to heal" }
+-- the trigger of an Equip line (nil: not a proc), and whether it goes off every time (no chance stated)
 local function ProcTrigger(low)
-  for _, w in ipairs(DEFENSIVE) do if low:find(w, 1, true) then return nil end end
+  for _, w in ipairs(DEFENSIVE) do if low:find(w, 1, true) then return "reactive" end end
   local proc = false
   for _, w in ipairs(PROC_WORDS) do if low:find(w, 1, true) then proc = true; break end end
   if not proc then return nil end
-  -- what sets it off: the words up to "chance ... to"
+  -- what sets it off: the words up to "chance ... to" (or the whole line)
   local trig = low:match("^(.-chance.-) to ") or low
-  if trig:find("spell") or trig:find("cast") or trig:find("heal") then return "spell" end
-  return "melee"
+  local always = not low:find("chance") and (low:find("each time") or low:find("every time") or low:find("on successful")
+    or low:find("on a successful") or low:find("when you hit")) and true or false
+  if trig:find("kill") then return "kill" end
+  if trig:find("critical") or trig:find("critically") then
+    return (trig:find("spell") or trig:find("heal")) and "spellcrit" or "crit", always
+  end
+  if trig:find("spell") or trig:find("cast") or trig:find("heal") or trig:find("causes ") then return "spell", always end
+  return "melee", always
+end
+-- a skill a proc is tied to ("Causes Wrath to have...", "Your Frostbolt spells have...", "each time you cast Healing Touch")
+local SCHOOLS_WORD = { holy = true, fire = true, nature = true, frost = true, shadow = true, arcane = true }
+local GENERIC = { harmful = true, healing = true, damaging = true, damage = true, melee = true, ranged = true,
+  offensive = true, attacks = true, spells = true, spell = true, direct = true, periodic = true }
+local function TriggerSkill(text)
+  local name = text:match("[Cc]auses ([%a' :%-]-) to have") or text:match("[Yy]our ([%a' :%-]-) spells? ha[sv]e? ")
+    or text:match("[Yy]our ([%a' :%-]-) abilit[%a]* ha[sv]e? ") or text:match("[Yy]our ([%a' :%-]-) ha[sv]e? a")
+    or text:match("time you cast ([%a' :%-]+)") or text:match("when you cast ([%a' :%-]+)")
+  if not name then return nil end
+  name = name:gsub("%s+$", ""):gsub(" spells?$", ""):gsub(" abilit%a+$", "")
+  local low = name:lower()
+  local first = low:match("^(%a+)")
+  if not first or GENERIC[low] or SCHOOLS_WORD[low] or (GENERIC[first] and not low:find(" ")) or low:find("attack")
+    or low:find("^harmful") or low:find("^damaging") then return nil end
+  return name
 end
 
 -- "+10% to a skill": the skill's name and the %, and whether it's healing
@@ -267,7 +347,8 @@ local SCHOOLS = { holy = true, fire = true, nature = true, frost = true, shadow 
 local function CleanSpellNames(name)
   name = name:gsub("^%s+", ""):gsub("%s+$", "")
   local low = name:lower()
-  if low:find("effects") or low:find("weapons?$") or low:find("^spells?$") or low:find("^your spells?$") then return {} end
+  if low:find("effects") or low:find("weapons?$") or low:find("attacks$") or low:find("^spells?$") or low:find("^your spells?$")
+    or low:find("pet") then return {} end
   local part
   if low:find(" to targets beyond the first$") then
     name = name:gsub(" to targets beyond the first$", ""); part = CHAIN_BOUNCES
@@ -306,15 +387,15 @@ local function ReadBody(body, out, base)
   local function add(e) for k, v in pairs(base) do e[k] = v end; out[#out + 1] = e end
   local extra = base.use == nil and ExtraAttacks(body)
   if extra then add({ kind = "procExtra", attacks = extra }); return end
-  local hp, hd, casting = Haste(body)
-  if hp then add({ kind = base.use and "useHaste" or "procHaste", pct = hp, dur = hd, casting = casting }) end
-  local buffs, d = StatBuffs(body)
+  local hp, hd, casting, both = Haste(body)
+  if hp then add({ kind = base.use and "useHaste" or "procHaste", pct = hp, dur = hd, casting = casting, both = both }) end
+  local buffs = StatBuffs(body)
   if buffs then
-    for _, b in ipairs(buffs) do add({ kind = base.use and "useStat" or "procStat", stat = b[1], amount = b[2], dur = d }) end
+    for _, b in ipairs(buffs) do add({ kind = base.use and "useStat" or "procStat", stat = b[1], amount = b[2], dur = b[3] }) end
   end
   if hp or buffs then return end
   local mana = Mana(body)
-  if mana then add({ kind = base.use and "useMana" or "procMana", amount = mana }); return end
+  if mana then add({ kind = base.use and "useMana" or "procMana", amount = mana }) end
   local avg = AvgDamage(body)
   if avg then add({ kind = base.use and "useDamage" or "procDamage", avg = avg }) end
 end
@@ -327,19 +408,33 @@ function E.Parse(texts)
       t = t:gsub("[Ii]mproves", "Increases"):gsub("[Dd]ecreases the cooldown", "Reduces the cooldown")
         :gsub("[Dd]ecreases the cast", "Reduces the cast"):gsub("[Ll]owers the cooldown", "Reduces the cooldown")
       for _, w in ipairs(NO_THE) do t = t:gsub("([IiRr]%a+s) (" .. w .. ")", "%1 the %2") end
-      local onHit = t:match("^Chance on hit: ?(.*)")
-      local equip = t:match("^Equip: ?(.*)")
-      local use = t:match("^Use: ?(.*)")
-      if onHit then
-        ReadBody(onHit, out, { trigger = "melee", chance = tonumber(onHit:match("(%d+%.?%d*)%% chance")), text = t })
-      elseif use then
-        local cd = Cooldown(use)
-        if cd and cd > 0 then ReadBody(use, out, { use = true, cd = cd, text = t }) end
+      t = t:gsub("by %-(%d)", "by %1") -- ("by -2 sec")
+      local pre, rest = t:match("^([%a ]-): ?(.*)$")
+      local what = pre and PREFIX[pre:lower()]
+      local function chanceOf(b) return tonumber(b:match("(%d+%.?%d*)%% chance")) end
+      local equip = (what == "equip") and rest or nil
+      local low = (rest or ""):lower()
+      if what == "reactive" or what == "kill" then
+        out[#out + 1] = { kind = "note", why = format("%s: %s", pre, what == "kill" and "kill procs aren't counted" or "procs when you're hit aren't counted (tanking)"), text = t }
+      elseif what == "melee" or what == "spell" or what == "crit" or what == "spellcrit" then
+        ReadBody(rest, out, { trigger = what, chance = chanceOf(rest), skillTrig = TriggerSkill(rest), text = t })
+      elseif what == "use" then
+        local cd = Cooldown(rest)
+        ReadBody(rest, out, { use = true, cd = (cd and cd > 0) and cd or USE_CD_GUESS, cdGuess = not (cd and cd > 0), text = t })
       elseif equip then
-        local trig = ProcTrigger(equip:lower())
-        if trig then
-          ReadBody(equip, out, { trigger = trig, chance = tonumber(equip:match("(%d+%.?%d*)%% chance")), text = t })
-        elseif not equip:lower():find("when struck") then
+        local trig, always = ProcTrigger(low)
+        local adds = low:match("adds (%d+) %a* ?damage to your") -- damage on every swing
+        local wskill, wn = rest:match("^Increased ([%a%- ]+) %+(%d+)")
+        if adds then
+          out[#out + 1] = { kind = "procDamage", avg = tonumber(adds), trigger = "melee", chance = 100, text = t }
+        elseif wskill and not ({ defense = true, fishing = true, skinning = true, mining = true, herbalism = true,
+          lockpicking = true, ["first aid"] = true, cooking = true })[wskill:lower()] then
+          out[#out + 1] = { kind = "weaponSkill", skill = wskill, amount = tonumber(wn), text = t }
+        elseif trig == "reactive" or trig == "kill" then
+          out[#out + 1] = { kind = "note", why = trig == "kill" and "Kill proc: not counted" or "Proc when you're hit: not counted (tanking)", text = t }
+        elseif trig then
+          ReadBody(rest, out, { trigger = trig, chance = always and 100 or chanceOf(rest), skillTrig = TriggerSkill(rest), text = t })
+        elseif not low:find("pet") and not low:find("your imp") then
           -- effects on a skill (flat bonuses are often written "by up to N")
           local body = equip:gsub("by up to", "by")
           -- read by name at score time (your skill list); the patterns below name the skill when it
@@ -468,7 +563,7 @@ local function SpellUse(id, f)
     if a then avg = (Num(a) + Num(b)) / 2; how = format("%s to %s", a, b) end
   end
   if not avg and not weapon then
-    local n = all:match("for (%d[%d,]*)")
+    local n = all:match("absorbing (%d[%d,]*)") or all:match("absorbs (%d[%d,]*)") or all:match("for (%d[%d,]*)")
     if n then avg = Num(n); how = n end
   end
   heal = (all:lower():find("heal") ~= nil) and not all:lower():find("damage")
@@ -501,10 +596,30 @@ local function SwingsPerMin(f)
   return 60 / (speed or 2.5)
 end
 
--- how often a proc goes off a minute: its stated chance per swing (or per cast), else about once
+-- your crit chance (0-1) from the character sheet when it can be read, else a typical one
+local function CritRate(spell)
+  local fn = spell and GetSpellCritChance or GetCritChance
+  if fn then
+    local ok, v = pcall(fn, spell and 4 or nil) -- (4: Nature; any school will do)
+    if ok and Readable(v) and type(v) == "number" and v > 0 then return v / 100 end
+  end
+  return spell and SPELL_CRIT_RATE or CRIT_RATE
+end
+
+-- how often a proc goes off a minute: its stated chance per swing (or per cast, or per crit), else about once.
+-- A proc tied to one skill goes off on that skill's casts: its part of your casts (its weight over the list's).
 local function PerMin(e, f)
-  if not e.chance then return PPM end
-  return e.chance / 100 * (e.trigger == "spell" and CASTS_PER_MIN or SwingsPerMin(f))
+  local spell = e.trigger == "spell" or e.trigger == "spellcrit"
+  local per = spell and CASTS_PER_MIN or SwingsPerMin(f)
+  if e.skillTrig then
+    local w = ns.SkillWeight(e.skillTrig) or 0
+    local total = 0
+    for _, s in ipairs(ns.CurrentSkills()) do total = total + math.max(0, tonumber(s[2]) or 0) end
+    per = (total > 0) and (CASTS_PER_MIN * w / total) or 0
+  end
+  if e.trigger == "crit" or e.trigger == "spellcrit" then per = per * CritRate(spell) end
+  if not e.chance then return e.skillTrig and math.min(per, PPM) or PPM end
+  return e.chance / 100 * per
 end
 
 -- one effect: its points for these weights, and a line saying how
@@ -512,10 +627,18 @@ function E.Value(e, weights, f)
   local dpsPts = ns.PointsPer("DPS", weights.DPS) -- extra damage per second counts as weapon DPS...
   local spPts = ns.PointsPer("SP", weights.SP) * SP_PER_DPS -- ...or as spell damage, for a caster
   local melee = dpsPts > 0 -- your spec gets value from hitting with weapons
-  local what = e.use and "Use" or (e.trigger == "spell" and "Spell proc" or "Chance on hit")
+  if e.kind == "note" then return 0, e.why end
+  if e.kind == "weaponSkill" then return E.WeaponSkill(e, weights, f) end
+  local what = e.use and (e.cdGuess and "Use (no cooldown shown: 2 min assumed)" or "Use")
+    or (e.trigger == "spell" and "Spell proc") or (e.trigger == "crit" and "Crit proc")
+    or (e.trigger == "spellcrit" and "Spell crit proc") or "Chance on hit"
+  if e.skillTrig then
+    if not ns.SkillWeight(e.skillTrig) then return 0, format("%s (on %s): not in your skills", what, e.skillTrig) end
+    what = format("%s (on %s)", what, e.skillTrig)
+  end
   -- damage per second -> points: weapon DPS for melee, spell damage for casters
   local function dmg(dps) if melee and e.trigger ~= "spell" then return dps * dpsPts end return dps * spPts end
-  if e.trigger == "melee" and not melee then return 0, what .. ": your spec doesn't hit with weapons" end
+  if (e.trigger == "melee" or e.trigger == "crit") and not melee then return 0, what .. ": your spec doesn't hit with weapons" end
   local perMin = e.use and (60 / e.cd) or PerMin(e, f)
   local every = e.use and format(" every %ss", Secs(e.cd)) or format(" x %.1f/min", perMin)
   if e.kind == "procDamage" or e.kind == "useDamage" then
@@ -533,7 +656,9 @@ function E.Value(e, weights, f)
       what, Amount(e.amount, e.stat), Secs(e.dur or 0), uptime * 100 + 0.5, Avg(avg, e.stat))
   end
   if e.kind == "procHaste" or e.kind == "useHaste" then
-    if e.casting or not melee then
+    if not melee and not (e.casting or e.both) then return 0, what .. ": attack speed, and your spec doesn't fight with weapons" end
+    if melee and e.casting then return 0, what .. ": casting speed, and your spec fights in melee" end
+    if not melee then
       -- faster casts: that much more of the output that comes from skills
       local gain = e.pct * uptime * ns.SkillPart() / 100
       return gain * ns.OUTPUT_PTS, format("%s: +%s%% casting speed, up %d%% of the time = +%.2f%% output", what,
@@ -559,6 +684,7 @@ function E.Value(e, weights, f)
     elseif e.kind == "spellCd" then label = format("-%ss cooldown", Secs(e.secs))
     elseif e.kind == "spellCast" then label = format("-%ss cast time", Secs(e.secs))
     elseif e.kind == "spellDur" then label = format("+%ss duration", Secs(e.secs))
+    elseif e.kind == "skillMana" then label = format("+%d mana", e.mana)
     else label = format("-%s cost", e.cut) end
     label = label .. " " .. e.spell .. (e.family and " (all)" or "") .. (e.part and " (jumps)" or "")
     -- counts only if it's in your skill list, by its share of your output (/eqt, Skill Weights)
@@ -566,6 +692,14 @@ function E.Value(e, weights, f)
     if not share then return 0, format("%s: not in your skills", label) end
     if share <= 0 then return 0, format("%s: %s is at 0 in your skills", label, e.spell) end
     if e.kind == "spellMana" then return 0, format("%s: costs aren't counted (only what it does)", label) end
+    if e.kind == "skillMana" then
+      local total = 0
+      for _, s in ipairs(ns.CurrentSkills()) do total = total + math.max(0, tonumber(s[2]) or 0) end
+      local casts = CASTS_PER_MIN * (ns.SkillWeight(e.spell) or 0) / math.max(total, 0.01)
+      local mp5 = e.mana * casts / 12
+      return mp5 * ns.PointsPer("MP5", weights.MP5), format("+%d mana per %s: ~%.1f casts/min = +%.1f mana per 5 sec",
+        e.mana, e.spell, casts, mp5)
+    end
     share = share * (e.part or 1)
     -- what it adds, as a % of the skill (a family: the first listed skill stands for the rest)
     local pct, detail
@@ -620,6 +754,28 @@ function E.Value(e, weights, f)
   return 0, nil
 end
 
+-- "Increased Swords +5": counts when the item, or the main hand you wear, is that kind of weapon
+local function WeaponKind(link)
+  if not (link and C_Item and C_Item.GetItemInfoInstant) then return nil end
+  local ok, _, _, sub = pcall(C_Item.GetItemInfoInstant, link)
+  return ok and Readable(sub) and type(sub) == "string" and sub:lower() or nil
+end
+local function SkillFits(skill, sub)
+  if not sub then return false end
+  skill = skill:lower()
+  if skill:find("two%-handed") then return sub == skill end
+  return sub == skill or sub == "one-handed " .. skill
+end
+function E.WeaponSkill(e, weights, f)
+  local label = format("+%d %s skill", e.amount, e.skill)
+  local fits = (f and SkillFits(e.skill, f.subType))
+    or SkillFits(e.skill, WeaponKind(GetInventoryItemLink and GetInventoryItemLink("player", 16)))
+    or SkillFits(e.skill, WeaponKind(GetInventoryItemLink and GetInventoryItemLink("player", 18)))
+  if not fits then return 0, label .. ": you don't use that kind of weapon" end
+  local hit = e.amount * SKILL_PER_POINT
+  return hit * ns.PointsPer("HIT", weights.HIT), format("%s: about +%.1f%% hit against raid bosses", label, hit)
+end
+
 -- a skill effect worded any way: find your listed skills by name in the line, then read the number
 -- next to it and what it changes from the words around it
 local function Norm(x) return " " .. x:lower():gsub("[^%a'%d%%%.]+", " ") .. " " end
@@ -639,6 +795,8 @@ function E.SkillLine(line, weights, f)
   end
   local effects = {}
   local text = line.body:lower()
+  -- a change to how a skill works ("can now also trigger...", "a 50% reduced chance"), not a bonus to it
+  if (text:find("chance") and not text:find("crit")) or text:find("can now") or text:find("talent") then found = {} end
   for _, fs in ipairs(found) do
     local name = fs[1]
     -- the number tied to it: "by N" after the name, else the first "by N", else the first number
@@ -651,7 +809,9 @@ function E.SkillLine(line, weights, f)
       local unit = text:match(tostring(n):gsub("%.", "%%.") .. "%.?%d* (%a+)") or ""
       local e = { spell = name, text = line.text }
       if text:find("beyond the first") then e.part = CHAIN_BOUNCES end
-      if text:find("mana cost") or text:find("energy cost") or text:find("rage cost") then
+      if text:find("mana") and not text:find("cost") and (text:find("cast") or text:find("restore") or text:find("gain")) then
+        e.kind, e.mana = "skillMana", n -- "gain up to 50 mana each time you cast Healing Touch"
+      elseif text:find("mana cost") or text:find("energy cost") or text:find("rage cost") then
         e.kind, e.cut = "spellMana", n .. (isPct and "%" or "")
       elseif text:find("cooldown") and not isPct then
         e.kind, e.secs = "spellCd", Seconds(n, unit)
