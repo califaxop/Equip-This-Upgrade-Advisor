@@ -72,7 +72,7 @@ function ns.WeightInfo(key, weights)
       lines[2] = format("With your weight (%s): %s = %s points.", Wt(mine), label, Short(pts))
     end
   end
-  if key == "DPS" then lines[#lines + 1] = "Only counts on weapons. Item effects (procs, spell bonuses) are counted through this too." end
+  if key == "DPS" then lines[#lines + 1] = "Only counts on weapons. Damage procs and extra attacks are counted through this too." end
   lines[#lines + 1] = "0 ignores a stat; 5 means it matters as much as it can."
   return lines
 end
@@ -138,6 +138,105 @@ function ns.CurrentWeights()
   if w then return ns.Copy(w) end
   return ns.Weights()
 end
+---------------------------------------------------------------------------
+-- Skills: the spells you use, each 0-5 like a stat. An item effect on a skill ("+10% Stormstrike",
+-- "+1% crit chance of Healing Wave", "-1 sec cooldown of Earth Shock") counts by that skill's
+-- weight; skills not listed count for nothing. Starting lists per spec come from the usual
+-- rotations: tune them for Forever. Saved per spec (your edits) or with a custom scale.
+---------------------------------------------------------------------------
+ns.SKILL_SLOTS = 6
+-- at 5, +1% to a skill counts as this many points: a skill at 5 is about a quarter of your output,
+-- and +1% of everything is worth about 14 (as 1% crit)
+ns.SKILL_PTS = 3.5
+
+local S5 = function(...) local t = {} for i = 1, select("#", ...), 2 do t[#t + 1] = { (select(i, ...)), (select(i + 1, ...)) } end return t end
+ns.PRESET_SKILLS = {
+  WARRIOR = { S5("Mortal Strike", 5, "Overpower", 3, "Heroic Strike", 3, "Whirlwind", 2),
+              S5("Bloodthirst", 5, "Whirlwind", 4, "Heroic Strike", 3, "Execute", 2),
+              S5("Shield Slam", 5, "Revenge", 4, "Sunder Armor", 3, "Heroic Strike", 2) },
+  PALADIN = { S5("Holy Light", 5, "Flash of Light", 4, "Holy Shock", 3),
+              S5("Holy Shield", 4, "Consecration", 4, "Judgement", 3),
+              S5("Judgement", 5, "Seal of Command", 4, "Crusader Strike", 4, "Consecration", 2, "Exorcism", 2) },
+  HUNTER  = { S5("Multi-Shot", 4, "Arcane Shot", 3, "Serpent Sting", 2),
+              S5("Aimed Shot", 5, "Multi-Shot", 4, "Arcane Shot", 3, "Serpent Sting", 2),
+              S5("Multi-Shot", 4, "Arcane Shot", 3, "Serpent Sting", 2, "Raptor Strike", 2) },
+  ROGUE   = { S5("Eviscerate", 5, "Sinister Strike", 4, "Rupture", 3),
+              S5("Sinister Strike", 5, "Eviscerate", 4, "Slice and Dice", 3),
+              S5("Backstab", 5, "Hemorrhage", 4, "Eviscerate", 4) },
+  PRIEST  = { S5("Power Word: Shield", 5, "Greater Heal", 4, "Flash Heal", 4, "Renew", 3),
+              S5("Greater Heal", 5, "Flash Heal", 4, "Renew", 4, "Prayer of Healing", 3),
+              S5("Mind Blast", 5, "Mind Flay", 5, "Shadow Word: Pain", 4) },
+  SHAMAN  = { S5("Lightning Bolt", 5, "Chain Lightning", 4, "Earth Shock", 3, "Flame Shock", 3),
+              S5("Stormstrike", 5, "Lightning Bolt", 3, "Earth Shock", 2, "Flame Shock", 2),
+              S5("Healing Wave", 5, "Chain Heal", 5, "Lesser Healing Wave", 4) },
+  MAGE    = { S5("Arcane Missiles", 5, "Arcane Explosion", 3, "Frostbolt", 2),
+              S5("Fireball", 5, "Fire Blast", 3, "Scorch", 3, "Pyroblast", 3),
+              S5("Frostbolt", 5, "Cone of Cold", 2, "Fire Blast", 2) },
+  WARLOCK = { S5("Corruption", 5, "Curse of Agony", 4, "Shadow Bolt", 4, "Drain Life", 2),
+              S5("Shadow Bolt", 5, "Corruption", 3, "Immolate", 3),
+              S5("Shadow Bolt", 5, "Immolate", 4, "Conflagrate", 3) },
+  DRUID   = { S5("Wrath", 5, "Starfire", 5, "Moonfire", 3),
+              S5("Shred", 4, "Claw", 4, "Ferocious Bite", 4, "Rip", 3, "Maul", 3),
+              S5("Healing Touch", 5, "Rejuvenation", 5, "Regrowth", 4) },
+}
+
+-- the skill list in use: { { name, weight }, ... } (a custom scale's own, your edits for the spec, or the preset's)
+function ns.CurrentSkills()
+  local scale = ns.Scales.Active()
+  if scale then
+    ns.db.scaleSkills = ns.db.scaleSkills or {}
+    if not ns.db.scaleSkills[scale] then ns.db.scaleSkills[scale] = ns.Copy(ns.SpecSkills()) end
+    return ns.db.scaleSkills[scale]
+  end
+  return ns.SpecSkills()
+end
+function ns.SpecSkills(key)
+  key = key or ns.SpecKey()
+  local mine = ns.db.skills and ns.db.skills[key]
+  if mine then return mine end
+  local class, tree = key:match("^(%u+):(%d)$")
+  local p = class and ns.PRESET_SKILLS[class] and ns.PRESET_SKILLS[class][tonumber(tree)]
+  return p and ns.Copy(p) or {}
+end
+-- change one slot (name and/or weight); saved to the scale in use, else as your edit of the spec
+function ns.SetSkill(i, name, weight)
+  local list = ns.Copy(ns.CurrentSkills())
+  local cur = list[i] or { "", 3 }
+  if name ~= nil then cur[1] = name end
+  if weight ~= nil then cur[2] = weight end
+  list[i] = cur
+  -- drop empty slots, keep the order
+  local clean = {}
+  for k = 1, ns.SKILL_SLOTS do
+    local s = list[k]
+    if s and s[1] and s[1]:gsub("%s", "") ~= "" then clean[#clean + 1] = { s[1]:gsub("^%s+", ""):gsub("%s+$", ""), s[2] or 3 } end
+  end
+  local scale = ns.Scales.Active()
+  if scale then ns.db.scaleSkills[scale] = clean
+  else ns.db.skills = ns.db.skills or {}; ns.db.skills[ns.SpecKey()] = clean end
+end
+-- a skill's weight in the list in use (nil = not listed)
+function ns.SkillWeight(name)
+  name = (name or ""):lower()
+  for _, s in ipairs(ns.CurrentSkills()) do
+    if (s[1] or ""):lower() == name then return tonumber(s[2]) or 0 end
+  end
+end
+-- what a skill's weight means (the tooltip on a skill in /eqt)
+function ns.SkillInfo(name, w)
+  local lines = {}
+  lines[1] = format("At 5, +1%% damage or healing to %s counts as much as +%s of a primary stat (Strength, Agility or Intellect) at 5.",
+    name ~= "" and name or "a skill", ns.SKILL_PTS)
+  if w and w > 0 then
+    lines[2] = format("At %s: +1%% to it = %.1f points. +1%% crit chance on it counts as +1%% (weapon strikes) or +0.5%% (spells).",
+      tostring(w), ns.SKILL_PTS * w / 5)
+  else
+    lines[2] = "At 0 it's ignored."
+  end
+  lines[3] = "Flat damage and cooldown or cast time cuts are turned into a % of the skill first. Skills not listed count for nothing."
+  return lines
+end
+
 -- the label shown with verdicts: the custom scale's name, else the spec's
 function ns.ScoringLabel()
   local name = ns.Scales.Active()

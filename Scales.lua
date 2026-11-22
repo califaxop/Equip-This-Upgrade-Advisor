@@ -43,6 +43,8 @@ function Sc.Create(name, weights)
   local base, n = name, 2
   while ns.db.scales[name] do name = format("%s %d", base, n); n = n + 1 end
   ns.db.scales[name] = ns.Copy(weights or {})
+  ns.db.scaleSkills = ns.db.scaleSkills or {}
+  ns.db.scaleSkills[name] = ns.Copy(ns.CurrentSkills()) -- (before switching: the skills in use now)
   ns.db.scale = name
   return name
 end
@@ -55,12 +57,14 @@ function Sc.Rename(old, new)
   local base, n, name = new, 2, new
   while ns.db.scales[name] do name = format("%s %d", base, n); n = n + 1 end
   ns.db.scales[name], ns.db.scales[old] = ns.db.scales[old], nil
+  if ns.db.scaleSkills then ns.db.scaleSkills[name], ns.db.scaleSkills[old] = ns.db.scaleSkills[old], nil end
   if ns.db.scale == old then ns.db.scale = name end
   return name
 end
 
 function Sc.Delete(name)
   ns.db.scales[name] = nil
+  if ns.db.scaleSkills then ns.db.scaleSkills[name] = nil end
   if ns.db.scale == name then ns.db.scale = nil end
 end
 

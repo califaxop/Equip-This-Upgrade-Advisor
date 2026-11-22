@@ -5,6 +5,18 @@ ns.name = ADDON
 ns.isSecret = issecretvalue or function() return false end
 function ns.Readable(v) return v ~= nil and not ns.isSecret(v) end
 function ns.Print(...) print("|cff7fd6ffEquip This!:|r", ...) end
+-- a spell's name from its ID (for a spell dragged onto a skill slot)
+function ns.SpellName(id)
+  if not id then return nil end
+  if C_Spell and C_Spell.GetSpellName then
+    local ok, n = pcall(C_Spell.GetSpellName, id)
+    if ok and ns.Readable(n) and n ~= "" then return n end
+  end
+  if C_Spell and C_Spell.GetSpellInfo then
+    local ok, info = pcall(C_Spell.GetSpellInfo, id)
+    if ok and type(info) == "table" and ns.Readable(info.name) then return info.name end
+  end
+end
 
 ns.DEFAULTS = {
   spec = "auto",          -- "auto" (from your talents) or a spec key like "SHAMAN:2"
@@ -14,7 +26,8 @@ ns.DEFAULTS = {
   weights = {},           -- your edits: [specKey] = { STAT = weight, ... } (unset = preset)
   scales = {},            -- your own scales: [name] = { STAT = weight, ... }
   scale = nil,            -- the custom scale in use (nil = the spec preset)
-  rotation = {},          -- your changes to a spec's rotation: [specKey] = { [spell] = casts per minute }
+  skills = {},            -- your skill list per spec: [specKey] = { { name, weight }, ... } (unset = the preset's)
+  scaleSkills = {},       -- each custom scale's skill list: [scale name] = { { name, weight }, ... }
   flareStyle = true,
 }
 

@@ -146,11 +146,55 @@ local function BuildPanel(panel)
     weightRows[#weightRows + 1] = e
     track(e)
   end
-  local yEnd = y0 - math.ceil(#ns.STAT_ORDER / 2) * 26 - 10
+  -- Skills -------------------------------------------------------------------
+  -- the skills you use, 0-5 each: item effects on a skill count by its weight here
+  local ys = y0 - math.ceil(#ns.STAT_ORDER / 2) * 26 - 16
+  at(UI.Section(panel, "Skills", W_), 26, ys)
+  local sn = at(UI.Text(panel, "note", "The skills you use, 0 to 5 each. Items that improve a skill (\"+10% Stormstrike damage\", \"+1% crit chance of Healing Wave\") count by its weight. Unlisted skills count for nothing. Type a name or drag a spell in."), 26, ys - 28)
+  sn:SetWidth(W_)
+  local yk = ys - 72
+  for i = 1, ns.SKILL_SLOTS do
+    local col, row = (i - 1) % 2, math.floor((i - 1) / 2)
+    local x, y = 26 + col * 240, yk - row * 26
+    local function slot() return ns.CurrentSkills()[i] end
+    local function tip(owner)
+      local s = slot()
+      GameTooltip:SetOwner(owner, "ANCHOR_RIGHT")
+      GameTooltip:SetText(s and s[1] or "Skill " .. i, 1, 1, 1)
+      for _, line in ipairs(ns.SkillInfo(s and s[1] or "", s and tonumber(s[2]))) do GameTooltip:AddLine(line, 0.85, 0.85, 0.85, true) end
+      GameTooltip:Show()
+    end
+    local name = UI.Edit(panel, 150, {
+      function() local s = slot(); return s and s[1] or "" end,
+      function(v) ns.SetSkill(i, v, nil); Changed(); refreshWeights() end }, "(none)", true)
+    name:SetPoint("TOPLEFT", x, y)
+    local wt = UI.Edit(panel, 56, {
+      function() local s = slot(); return s and tostring(s[2]) or "" end,
+      function(v)
+        local num = tonumber(v)
+        if not num or not slot() then return end
+        ns.SetSkill(i, nil, math.max(0, math.min(5, math.floor(num * 100 + 0.5) / 100)))
+        Changed()
+      end }, "", false, true)
+    wt:SetPoint("TOPLEFT", x + 160, y)
+    for _, e in ipairs({ name, wt }) do
+      e:HookScript("OnEnter", tip)
+      e:HookScript("OnLeave", function() GameTooltip:Hide() end)
+      weightRows[#weightRows + 1] = e
+      track(e)
+    end
+  end
+
+  local yEnd = yk - math.ceil(ns.SKILL_SLOTS / 2) * 26 - 10
   local reset = at(UI.Button(panel, "Reset weights", 130, function()
     local name = ns.Scales.Active()
-    if name then ns.db.scales[name] = ns.Weights() -- your scale back to the spec preset's numbers
-    else ns.db.weights[ns.SpecKey()] = nil end
+    if name then
+      ns.db.scales[name] = ns.Weights() -- your scale back to the spec preset's numbers
+      if ns.db.scaleSkills then ns.db.scaleSkills[name] = nil end
+    else
+      ns.db.weights[ns.SpecKey()] = nil
+      if ns.db.skills then ns.db.skills[ns.SpecKey()] = nil end
+    end
     Changed(); refreshWeights()
   end), 26, yEnd)
   local fb = UI.Button(panel, "Report a bug / suggest", 170, function()

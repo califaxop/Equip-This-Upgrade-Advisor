@@ -1,9 +1,9 @@
--- Item effects that aren't plain stats: procs ("Chance on hit"), Use effects, and "+X% to a spell".
--- Each is estimated as what it adds for YOUR current spec, from live tooltips (the spell's own
--- tooltip on this client, your weapon, your attack power), then counted through your own
--- weights: extra damage per second like weapon DPS (or spell damage, for casters), extra healing
--- per second through Healing, stat buffs through that stat. An effect your spec can't use is
--- worth 0. Reads English tooltips, as the Equip-line stats do.
+-- Item effects that aren't plain stats: procs ("Chance on hit"), Use effects, and "+X% to a skill".
+-- Procs: extra damage as DPS through your Weapon Damage weight (about once a minute unless the text
+-- says otherwise), stat buffs through that stat's weight by how long they're up. Skill effects
+-- ("+10% Stormstrike", "+1% crit chance of Healing Wave", "-1 sec cooldown") count by that skill's
+-- weight in your skill list (Weights.lua), read as a % of the skill from its live tooltip where
+-- needed. Reads English tooltips, as the Equip-line stats do.
 local _, ns = ...
 local E = {}
 ns.Effects = E
@@ -11,7 +11,6 @@ local Readable = ns.Readable
 
 local PPM = 1        -- "Chance on hit" with no stated chance: about once a minute (Classic's usual rate)
 local GCD = 1.5      -- the fastest a spell can be used again
-local SP_PER_DPS = 3.5 -- 1 damage (or healing) per second is about 3.5 spell power for a full-time caster
 
 -- words on tooltips -> our stat keys (for "increases your X by N")
 local STAT_WORDS = {
@@ -22,6 +21,14 @@ local STAT_WORDS = {
   ["healing done by spells and effects"] = "HEAL", ["healing"] = "HEAL",
   ["spell damage and healing"] = "SP", ["damage and healing"] = "SP", ["ranged attack"] = "RAP",
   ["dodge rating"] = "DODGE", ["defense"] = "DEF", ["block value"] = "BLOCKVALUE",
+  -- % buffs: "grants 5% critical strike chance for 10 sec", "increases your chance to hit by 2% for 20 sec"
+  ["critical strike chance"] = "CRIT", ["crit chance"] = "CRIT", ["chance to critically hit"] = "CRIT",
+  ["chance to crit"] = "CRIT", ["critical strike"] = "CRIT", ["melee critical strike chance"] = "CRIT",
+  ["hit chance"] = "HIT", ["chance to hit"] = "HIT", ["melee hit chance"] = "HIT",
+  ["spell critical strike chance"] = "SPELLCRIT", ["spell crit chance"] = "SPELLCRIT",
+  ["chance to critically hit with spells"] = "SPELLCRIT", ["chance to get a critical strike with spells"] = "SPELLCRIT",
+  ["spell hit chance"] = "SPELLHIT", ["chance to hit with spells"] = "SPELLHIT",
+  ["dodge chance"] = "DODGE", ["chance to dodge"] = "DODGE", ["parry chance"] = "PARRY", ["chance to parry"] = "PARRY",
 }
 
 local function Num(s) return tonumber((s or ""):gsub(",", ""), 10) end
@@ -37,17 +44,24 @@ local function Seconds(n, unit)
 end
 
 -- "increases your attack power by 300 for 10 sec" -> "AP", 300, 10 (or nil)
+-- (amounts can be "300", "2.5" or "5%"; a % buff reads as that many points of the % stat)
 local function StatBuff(text)
-  local what, n, d, unit = text:match("[Ii]ncreases? your ([%a ]-) by up to (%d+) for (%d+) (%a+)")
-  if not what then what, n, d, unit = text:match("[Ii]ncreases? your ([%a ]-) by (%d+) for (%d+) (%a+)") end
-  if not what then what, n, d, unit = text:match("[Ii]ncreases? ([%a ]-) by up to (%d+) for (%d+) (%a+)") end
-  if not what then what, n, d, unit = text:match("[Ii]ncreases? ([%a ]-) by (%d+) for (%d+) (%a+)") end
-  -- "grants 300 attack power for 10 sec", "you gain 120 Agility for 30 sec", "+40 Strength for 20 sec"
-  if not what then n, what, d, unit = text:match("[Gg]rants? you (%d+) ([%a ]-) for (%d+) (%a+)") end
-  if not what then n, what, d, unit = text:match("[Gg]rants? (%d+) ([%a ]-) for (%d+) (%a+)") end
-  if not what then n, what, d, unit = text:match("[Gg]ain (%d+) ([%a ]-) for (%d+) (%a+)") end
-  if not what then n, what, d, unit = text:match("%+(%d+) ([%a ]-) for (%d+) (%a+)") end
+  local N, D = "(%d+%.?%d*)%%?", "(%d+%.?%d*) (%a+)"
+  local what, n, d, unit = text:match("[Ii]ncreases? your ([%a ]-) by up to " .. N .. " for " .. D)
+  if not what then what, n, d, unit = text:match("[Ii]ncreases? your ([%a ]-) by " .. N .. " for " .. D) end
+  if not what then what, n, d, unit = text:match("[Ii]ncreases? ([%a ]-) by up to " .. N .. " for " .. D) end
+  if not what then what, n, d, unit = text:match("[Ii]ncreases? ([%a ]-) by " .. N .. " for " .. D) end
+  -- "grants 300 attack power for 10 sec", "you gain 120 Agility for 30 sec", "+40 Strength for 20 sec",
+  -- "grants 5% critical strike chance for 10 sec", "grants you a 3% chance to hit for 15 sec"
+  if not what then n, what, d, unit = text:match("[Gg]rants? you an? " .. N .. " ([%a ]-) for " .. D) end
+  if not what then n, what, d, unit = text:match("[Gg]rants? you " .. N .. " ([%a ]-) for " .. D) end
+  if not what then n, what, d, unit = text:match("[Gg]rants? an? " .. N .. " ([%a ]-) for " .. D) end
+  if not what then n, what, d, unit = text:match("[Gg]rants? " .. N .. " ([%a ]-) for " .. D) end
+  if not what then n, what, d, unit = text:match("[Gg]ain an? " .. N .. " ([%a ]-) for " .. D) end
+  if not what then n, what, d, unit = text:match("[Gg]ain " .. N .. " ([%a ]-) for " .. D) end
+  if not what then n, what, d, unit = text:match("%+" .. N .. " ([%a ]-) for " .. D) end
   if not what then return nil end
+  what = what:gsub("^increased ", ""):gsub("^additional ", ""):gsub("^extra ", "")
   local key = STAT_WORDS[what:lower():gsub("^%s+", ""):gsub("%s+$", "")]
   if not key then return nil end
   return key, tonumber(n), Seconds(d, unit)
@@ -335,16 +349,17 @@ end
 ---------------------------------------------------------------------------
 -- Value for your spec
 ---------------------------------------------------------------------------
--- how a spec turns extra damage / healing per second into points (your weights decide)
-local function Rates(weights)
-  local dpsPts = ns.PointsPer("DPS", weights.DPS)
-  local spPts = ns.PointsPer("SP", weights.SP) * SP_PER_DPS
-  local healPts = ns.PointsPer("HEAL", weights.HEAL) * SP_PER_DPS
-  return dpsPts, spPts, healPts
-end
-
 -- 8 -> "8", 2.5 -> "2.5"
 local function Secs(x) return (x == math.floor(x)) and tostring(x) or format("%.1f", x) end
+
+-- a stat amount as the tooltip says it: "300 Attack Power", "5% Crit"
+local PCT_STATS = { CRIT = true, HIT = true, SPELLCRIT = true, SPELLHIT = true, DODGE = true, PARRY = true }
+local function Amount(n, stat)
+  local num = (n == math.floor(n)) and tostring(n) or format("%.1f", n)
+  local name = (ns.STAT_NAMES[stat] or stat):gsub(" %%$", "") -- ("5% Crit", not "5% Crit %")
+  return (PCT_STATS[stat] and (num .. "%") or num) .. " " .. name
+end
+local function Avg(n, stat) return PCT_STATS[stat] and format("%.2f%%", n) or format("%.0f", n) end
 
 local function SwingsPerMin(f)
   local _, speed = WeaponHit(f)
@@ -353,9 +368,8 @@ end
 
 -- one effect: its points for these weights, and a line saying how
 function E.Value(e, weights, f)
-  local dpsPts, spPts, healPts = Rates(weights)
+  local dpsPts = ns.PointsPer("DPS", weights.DPS) -- extra damage per second counts as weapon DPS
   local melee = dpsPts > 0 -- your spec gets value from hitting with weapons
-  local function dmgPoints(dps) return melee and dps * dpsPts or dps * spPts end
   if e.kind == "procDamage" or e.kind == "procStat" or e.kind == "procHaste" then
     if not melee then return 0, "Chance on hit: your spec doesn't hit with weapons" end
     local perMin = e.chance and (e.chance / 100 * SwingsPerMin(f)) or PPM
@@ -366,8 +380,8 @@ function E.Value(e, weights, f)
     local uptime = math.min(1, (e.dur or 0) * perMin / 60)
     if e.kind == "procStat" then
       local avg = e.amount * uptime
-      return avg * ns.PointsPer(e.stat, weights[e.stat]), format("Chance on hit: +%d %s, up %d%% of the time = +%.0f on average",
-        e.amount, ns.STAT_NAMES[e.stat] or e.stat, uptime * 100 + 0.5, avg)
+      return avg * ns.PointsPer(e.stat, weights[e.stat]), format("Chance on hit: +%s, up %d%% of the time = +%s on average",
+        Amount(e.amount, e.stat), uptime * 100 + 0.5, Avg(avg, e.stat))
     end
     local hit, speed, wdps = WeaponHit(f)
     if not hit then return 0, "Chance on hit (attack speed): no weapon to read" end
@@ -378,8 +392,8 @@ function E.Value(e, weights, f)
   if e.kind == "useStat" then
     local uptime = math.min(1, (e.dur or 0) / e.cd)
     local avg = e.amount * uptime
-    return avg * ns.PointsPer(e.stat, weights[e.stat]), format("Use: +%d %s for %ds every %ds = +%.0f on average",
-      e.amount, ns.STAT_NAMES[e.stat] or e.stat, e.dur or 0, e.cd, avg)
+    return avg * ns.PointsPer(e.stat, weights[e.stat]), format("Use: +%s for %ss every %ss = +%s on average",
+      Amount(e.amount, e.stat), Secs(e.dur or 0), Secs(e.cd), Avg(avg, e.stat))
   end
   if e.kind == "procExtra" then
     -- extra swings: each one a weapon hit
@@ -393,72 +407,51 @@ function E.Value(e, weights, f)
   if e.kind == "spellPct" or e.kind == "spellFlat" or e.kind == "spellCd" or e.kind == "spellCast" then
     local label
     if e.kind == "spellPct" then label = e.crit and format("+%s%% crit", e.pct) or format("+%s%%", e.pct)
-    elseif e.kind == "spellFlat" then label = format("+%d damage", e.amount)
+    elseif e.kind == "spellFlat" then label = format("+%d", e.amount)
     elseif e.kind == "spellCd" then label = format("-%ss cooldown", Secs(e.secs))
     else label = format("-%ss cast time", Secs(e.secs)) end
-    -- the spell: known, and something your spec spends time on
+    label = label .. " " .. e.spell
+    -- counts only if it's in your skill list, by its weight there (/eqt, Skills)
+    local w = ns.SkillWeight(e.spell)
+    if not w then return 0, format("%s: not in your skills", label) end
+    if w <= 0 then return 0, format("%s: %s is at 0 in your skills", label, e.spell) end
+    -- what it adds, as a % of the skill
+    local pct, detail
     local id, cast, cd = KnownSpell(e.spell)
-    if not id then return 0, format("%s %s: you don't know %s", label, e.spell, e.spell) end
-    local avg, tcd, heal, how, weapon = SpellUse(id, f)
-    if not avg and e.kind ~= "spellFlat" then
-      return 0, format("%s %s: %s", label, e.spell, weapon and "no weapon to read its damage from" or "couldn't read its damage")
-    end
-    local spellCd = math.max(cd or 0, tcd or 0)
-    local every
-    -- how often your spec uses it: its rotation list (Rotations.lua, with your changes)...
-    local rot = ns.Rotations and ns.Rotations.Every(e.spell)
-    if rot == false then
-      return 0, format("%s %s: not in %s's rotation", label, e.spell, ns.SpecName(ns.SpecKey()))
-    elseif rot == "cd" then
-      every = math.max(spellCd, cast or 0, GCD)
-    elseif type(rot) == "number" then
-      every = math.max(rot, spellCd, GCD)
-    else
-      -- ...or, for a spec with no list yet: a melee spec uses spells with a cooldown (on cooldown),
-      -- not cast-time fillers; a caster doesn't use weapon strikes
-      if melee and not weapon and spellCd <= GCD then
-        return 0, format("%s %s: a filler with no cooldown, and your spec fights in melee", label, e.spell)
-      end
-      if not melee and weapon then
-        return 0, format("%s %s: a weapon strike, and your spec doesn't fight with weapons", label, e.spell)
-      end
-      every = math.max(spellCd, cast or 0, GCD)
-    end
-    local per, detail
+    local avg, tcd, weapon
+    if id then avg, tcd, _, _, weapon = SpellUse(id, f) end
     if e.kind == "spellPct" then
-      local gain = e.pct / 100
+      pct = e.pct
       if e.crit then -- a crit adds +100% for a weapon strike, +50% for a spell or heal
         local extra = weapon and 1 or 0.5
-        gain = gain * extra
-        label = format("%s (crits add %d%%)", label, extra * 100)
+        pct = e.pct * extra
+        detail = format("crits add %d%%", extra * 100)
       end
-      per = avg / every * gain
-      detail = format("%d every %ss (%s)", avg, Secs(every), how or "?")
     elseif e.kind == "spellFlat" then
-      per = e.amount / every
-      detail = format("used every %ss", Secs(every))
+      if not id then return 0, format("%s: you don't know %s, so its damage can't be read", label, e.spell) end
+      if not avg or avg <= 0 then
+        return 0, format("%s: %s", label, weapon and "no weapon to read its damage from" or "couldn't read its damage")
+      end
+      pct = e.amount / avg * 100
+      detail = format("of %d", avg)
     elseif e.kind == "spellCd" then
-      -- a cooldown cut only helps a spell used on cooldown
-      if spellCd <= GCD or every > spellCd + 0.01 then
-        return 0, format("%s %s: %s", label, e.spell, spellCd <= GCD and "it has no cooldown to cut" or "you don't use it on cooldown")
-      end
+      local spellCd = math.max(cd or 0, tcd or 0)
+      if not id then return 0, format("%s: you don't know %s, so its cooldown can't be read", label, e.spell) end
+      if spellCd <= GCD then return 0, format("%s: it has no cooldown to cut", label) end
       local now = math.max(spellCd - e.secs, cast or 0, GCD)
-      per = avg / now - avg / every
-      detail = format("%d every %ss instead of %ss", avg, Secs(now), Secs(every))
+      pct = (spellCd / now - 1) * 100
+      detail = format("every %ss instead of %ss", Secs(now), Secs(spellCd))
     else
-      -- a cast-time cut only helps a spell you hard-cast back to back
-      local castNow = math.max((cast or 0) - e.secs, GCD)
-      if (cast or 0) <= GCD or every > (cast or 0) + 0.01 then
-        return 0, format("%s %s: %s", label, e.spell, (cast or 0) <= GCD and "it's already instant (or as fast as it gets)" or "you don't cast it back to back")
-      end
-      local now = math.max(spellCd, castNow)
-      per = avg / now - avg / every
-      detail = format("%d every %ss instead of %ss", avg, Secs(now), Secs(every))
+      if not id then return 0, format("%s: you don't know %s, so its cast time can't be read", label, e.spell) end
+      if (cast or 0) <= GCD then return 0, format("%s: it's already instant (or as fast as it gets)", label) end
+      local now = math.max(cast - e.secs, GCD)
+      pct = (cast / now - 1) * 100
+      detail = format("%ss cast instead of %ss", Secs(now), Secs(cast))
     end
-    if heal or e.heal then
-      return per * healPts, format("%s %s: %s = +%.1f HPS", label, e.spell, detail, per)
-    end
-    return dmgPoints(per), format("%s %s: %s = +%.1f DPS", label, e.spell, detail, per)
+    local pts = pct * ns.SKILL_PTS * w / 5
+    local pctText = (pct == math.floor(pct)) and tostring(pct) or format("%.1f", pct)
+    return pts, format("%s: %s+%s%% to it, at %s in your skills%s", label, detail and (detail .. " = ") or "", pctText,
+      tostring(w), id and "" or " (not learned yet)")
   end
   return 0, nil
 end

@@ -10,7 +10,6 @@
 
 Core.lua
 Weights.lua
-Rotations.lua
 Effects.lua
 Score.lua
 Scales.lua
