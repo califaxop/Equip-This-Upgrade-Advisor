@@ -404,15 +404,26 @@ function E.Value(e, weights, f)
       return 0, format("%s %s: %s", label, e.spell, weapon and "no weapon to read its damage from" or "couldn't read its damage")
     end
     local spellCd = math.max(cd or 0, tcd or 0)
-    -- A melee spec swings its weapons: it uses spells with a cooldown (on cooldown), not
-    -- cast-time fillers; a caster doesn't use weapon strikes
-    if melee and not weapon and spellCd <= GCD then
-      return 0, format("%s %s: a filler with no cooldown, and your spec fights in melee", label, e.spell)
+    local every
+    -- how often your spec uses it: its rotation list (Rotations.lua, with your changes)...
+    local rot = ns.Rotations and ns.Rotations.Every(e.spell)
+    if rot == false then
+      return 0, format("%s %s: not in %s's rotation", label, e.spell, ns.SpecName(ns.SpecKey()))
+    elseif rot == "cd" then
+      every = math.max(spellCd, cast or 0, GCD)
+    elseif type(rot) == "number" then
+      every = math.max(rot, spellCd, GCD)
+    else
+      -- ...or, for a spec with no list yet: a melee spec uses spells with a cooldown (on cooldown),
+      -- not cast-time fillers; a caster doesn't use weapon strikes
+      if melee and not weapon and spellCd <= GCD then
+        return 0, format("%s %s: a filler with no cooldown, and your spec fights in melee", label, e.spell)
+      end
+      if not melee and weapon then
+        return 0, format("%s %s: a weapon strike, and your spec doesn't fight with weapons", label, e.spell)
+      end
+      every = math.max(spellCd, cast or 0, GCD)
     end
-    if not melee and weapon then
-      return 0, format("%s %s: a weapon strike, and your spec doesn't fight with weapons", label, e.spell)
-    end
-    local every = math.max(spellCd, cast or 0, GCD)
     local per, detail
     if e.kind == "spellPct" then
       local gain = e.pct / 100
@@ -427,13 +438,19 @@ function E.Value(e, weights, f)
       per = e.amount / every
       detail = format("used every %ss", Secs(every))
     elseif e.kind == "spellCd" then
+      -- a cooldown cut only helps a spell used on cooldown
+      if spellCd <= GCD or every > spellCd + 0.01 then
+        return 0, format("%s %s: %s", label, e.spell, spellCd <= GCD and "it has no cooldown to cut" or "you don't use it on cooldown")
+      end
       local now = math.max(spellCd - e.secs, cast or 0, GCD)
-      if spellCd <= GCD or now >= every then return 0, format("%s %s: it has no cooldown to cut", label, e.spell) end
       per = avg / now - avg / every
       detail = format("%d every %ss instead of %ss", avg, Secs(now), Secs(every))
     else
+      -- a cast-time cut only helps a spell you hard-cast back to back
       local castNow = math.max((cast or 0) - e.secs, GCD)
-      if (cast or 0) <= GCD then return 0, format("%s %s: it's already instant (or as fast as it gets)", label, e.spell) end
+      if (cast or 0) <= GCD or every > (cast or 0) + 0.01 then
+        return 0, format("%s %s: %s", label, e.spell, (cast or 0) <= GCD and "it's already instant (or as fast as it gets)" or "you don't cast it back to back")
+      end
       local now = math.max(spellCd, castNow)
       per = avg / now - avg / every
       detail = format("%d every %ss instead of %ss", avg, Secs(now), Secs(every))

@@ -53,6 +53,8 @@ SlashCmdList.EQUIPTHIS = function(msg)
     local link = rest:match("|H(item:[^|]+)|h") and rest or nil
     if not link then ns.Print("usage: /eqt item <shift-click an item>") return end
     Explain(rest:match("(|c%x+|Hitem:.-|h.-|h|r)") or rest)
+  elseif cmd == "rotation" then
+    ns.Rotations.Command(rest or "")
   elseif cmd == "spec" then
     local scale = ns.Scales.Active()
     if scale then ns.Print("scoring gear with your scale \"" .. scale .. "\" (your spec: " .. ns.SpecName(ns.SpecKey()) .. ")")

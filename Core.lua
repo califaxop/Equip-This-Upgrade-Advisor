@@ -14,6 +14,7 @@ ns.DEFAULTS = {
   weights = {},           -- your edits: [specKey] = { STAT = weight, ... } (unset = preset)
   scales = {},            -- your own scales: [name] = { STAT = weight, ... }
   scale = nil,            -- the custom scale in use (nil = the spec preset)
+  rotation = {},          -- your changes to a spec's rotation: [specKey] = { [spell] = casts per minute }
   flareStyle = true,
 }
 
