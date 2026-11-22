@@ -61,13 +61,15 @@ end
 
 -- "+10% to a spell": the spell's name and the %, and whether it's healing
 local SPELL_PCT = {
-  { "[Ii]ncreases the damage done by ([%a' :%-]+) by (%d+)%%", false },
-  { "[Ii]ncreases the damage of ([%a' :%-]+) by (%d+)%%", false },
-  { "[Ii]ncreases damage done by ([%a' :%-]+) by (%d+)%%", false },
-  { "[Ii]ncreases ([%a' :%-]+) damage by (%d+)%%", false },
-  { "[Ii]ncreases the healing done by ([%a' :%-]+) by (%d+)%%", true },
-  { "[Ii]ncreases the healing of ([%a' :%-]+) by (%d+)%%", true },
-  { "[Ii]ncreases ([%a' :%-]+) healing by (%d+)%%", true },
+  { "[Ii]ncreases the damage dealt by ([%a' :,%-]+) by (%d+)%%", false }, -- "...dealt by your Stormstrike ability by 10%"
+  { "[Ii]ncreases the healing dealt by ([%a' :,%-]+) by (%d+)%%", true },
+  { "[Ii]ncreases the damage done by ([%a' :,%-]+) by (%d+)%%", false },
+  { "[Ii]ncreases the damage of ([%a' :,%-]+) by (%d+)%%", false },
+  { "[Ii]ncreases damage done by ([%a' :,%-]+) by (%d+)%%", false },
+  { "[Ii]ncreases ([%a' :,%-]+) damage by (%d+)%%", false },
+  { "[Ii]ncreases the healing done by ([%a' :,%-]+) by (%d+)%%", true },
+  { "[Ii]ncreases the healing of ([%a' :,%-]+) by (%d+)%%", true },
+  { "[Ii]ncreases ([%a' :,%-]+) healing by (%d+)%%", true },
 }
 
 -- An item's effects from its tooltip lines (left texts). Each: a table with kind and its numbers.
@@ -99,8 +101,13 @@ function E.Parse(texts)
         for _, p in ipairs(SPELL_PCT) do
           local name, pct = body:match(p[1])
           if name then
-            name = name:gsub("^%s+", ""):gsub("%s+$", ""):gsub("^your ", "")
-            out[#out + 1] = { kind = "spellPct", spell = name, pct = tonumber(pct), heal = p[2], text = t }
+            -- "your Stormstrike ability" / "the Lightning Bolt spell" -> the spell's name
+            name = name:gsub("^%s+", ""):gsub("%s+$", ""):gsub("^your ", ""):gsub("^the ", "")
+              :gsub(" abilities$", ""):gsub(" ability$", ""):gsub(" spells$", ""):gsub(" spell$", "")
+            -- "Mortal Strike and Overpower" / "A, B and C": one effect per spell
+            for one in (name:gsub(" and ", ", ") .. ","):gmatch("%s*([^,]-)%s*,") do
+              if one ~= "" then out[#out + 1] = { kind = "spellPct", spell = one, pct = tonumber(pct), heal = p[2], text = t } end
+            end
             break
           end
         end
