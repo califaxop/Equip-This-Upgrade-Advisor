@@ -24,7 +24,11 @@ local CHAIN_BOUNCES = 0.43 -- Chain Heal's jumps (50% + 25%) are ~43% of what it
 local CRIT_RATE = 0.25    -- for "chance on critical strike": about a quarter of hits crit (your sheet's, when readable)
 local SPELL_CRIT_RATE = 0.15
 local USE_CD_GUESS = 120  -- a Use line with no cooldown shown: about 2 minutes, like most trinkets
-local SKILL_PER_POINT = 0.2 -- "Increased Swords +5": each point of weapon skill about +0.2% hit vs. raid bosses
+-- "Increased Swords +5": each point of weapon skill is +0.04% hit (and dodge/parry avoided) and +0.04%
+-- crit, against any target (Forever's own SkillsFrame.lua, build 1.60.1); against raid bosses (level 63,
+-- 315 defense) it also softens glancing blows, which the client reports (GetGlancingBlowChance/Penalty)
+local SKILL_PER_POINT = 0.04
+local BOSS_DEFENSE = 63 * 5
 
 -- words on tooltips -> our stat keys (for buffs: "increases your X by N", "grants N X")
 local STAT_WORDS = {
@@ -772,8 +776,30 @@ function E.WeaponSkill(e, weights, f)
     or SkillFits(e.skill, WeaponKind(GetInventoryItemLink and GetInventoryItemLink("player", 16)))
     or SkillFits(e.skill, WeaponKind(GetInventoryItemLink and GetInventoryItemLink("player", 18)))
   if not fits then return 0, label .. ": you don't use that kind of weapon" end
-  local hit = e.amount * SKILL_PER_POINT
-  return hit * ns.PointsPer("HIT", weights.HIT), format("%s: about +%.1f%% hit against raid bosses", label, hit)
+  local pct = e.amount * SKILL_PER_POINT
+  local pts = pct * ns.PointsPer("HIT", weights.HIT) + pct * ns.PointsPer("CRIT", weights.CRIT)
+  local why = format("%s: +%.2f%% hit and +%.2f%% crit", label, pct, pct)
+  -- at max level, raid bosses: fewer or softer glancing blows on your white hits
+  local level = UnitLevel and UnitLevel("player")
+  if Readable(level) and type(level) == "number" and level >= 60 and GetGlancingBlowChance and GetGlancingBlowPenalty
+    and ns.PointsPer("DPS", weights.DPS) > 0 then
+    local skill = level * 5
+    local function loss(sk)
+      local okC, c = pcall(GetGlancingBlowChance, sk, BOSS_DEFENSE)
+      local okP, p = pcall(GetGlancingBlowPenalty, sk, BOSS_DEFENSE)
+      if okC and okP and Readable(c) and Readable(p) and type(c) == "number" and type(p) == "number" then return c * p end
+    end
+    local before, after = loss(skill), loss(skill + e.amount)
+    if before and after and before < 1 then
+      local white = (before - after) / (1 - before) * 100 -- % more white damage
+      local gain = white * (1 - ns.SkillPart() / 100)    -- white hits' part of your output
+      if gain > 0 then
+        pts = pts + gain * ns.OUTPUT_PTS
+        why = format("%s, and glancing blows on raid bosses cost %.1f%% less (+%.2f%% output)", why, white, gain)
+      end
+    end
+  end
+  return pts, why
 end
 
 -- a skill effect worded any way: find your listed skills by name in the line, then read the number
