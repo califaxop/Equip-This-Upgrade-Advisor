@@ -144,9 +144,19 @@ end
 -- weight; skills not listed count for nothing. Starting lists per spec come from the usual
 -- rotations: tune them for Forever. Saved per spec (your edits) or with a custom scale.
 ---------------------------------------------------------------------------
--- at 5, +1% to a skill counts as this many points: a skill at 5 is about a quarter of your output,
--- and +1% of everything is worth about 14 (as 1% crit)
-ns.SKILL_PTS = 3.5
+-- Skill weights are relative: a skill's share of your damage (or healing) is its weight over the
+-- list's total, times the part of your output that comes from skills at all (the rest: white hits,
+-- Auto Shot). +X% to a skill then adds X x share % to your output, and +1% output counts as
+-- ns.OUTPUT_PTS points (as much as +1% crit at 5: both are about +1% damage).
+ns.OUTPUT_PTS = 14
+-- the part of your output from skills, by default: melee ~50% (white hits), hunters ~60% (Auto Shot),
+-- casters and healers ~95% (wands, the odd melee swing)
+local MELEE_PART, HUNTER_PART, CASTER_PART = 50, 60, 95
+ns.SKILL_PART = {
+  WARRIOR = { MELEE_PART, MELEE_PART, MELEE_PART }, ROGUE = { MELEE_PART, MELEE_PART, MELEE_PART },
+  PALADIN = { CASTER_PART, MELEE_PART, MELEE_PART }, HUNTER = { HUNTER_PART, HUNTER_PART, HUNTER_PART },
+  SHAMAN = { CASTER_PART, MELEE_PART, CASTER_PART }, DRUID = { CASTER_PART, MELEE_PART, CASTER_PART },
+}
 
 local S5 = function(...) local t = {} for i = 1, select("#", ...), 2 do t[#t + 1] = { (select(i, ...)), (select(i + 1, ...)) } end return t end
 ns.PRESET_SKILLS = {
@@ -242,18 +252,40 @@ function ns.SkillWeight(name)
     if (s[1] or ""):lower() == name then return tonumber(s[2]) or 0 end
   end
 end
+-- the % of your output from skills: yours (saved with the list) or the spec's default
+function ns.SkillPart()
+  local mine = tonumber(ns.CurrentSkills().part)
+  if mine then return mine end
+  local class, tree = ns.SpecKey():match("^(%u+):(%d)$")
+  local p = class and ns.SKILL_PART[class]
+  return p and p[tonumber(tree)] or CASTER_PART
+end
+function ns.SetSkillPart(pct)
+  local list = ns.Copy(ns.CurrentSkills())
+  list.part = pct
+  SaveSkills(list)
+end
+-- a skill's share of your output, 0 to 1 (nil = not listed): its weight over the total, times the skill part
+function ns.SkillShare(name)
+  local w = ns.SkillWeight(name)
+  if not w then return nil end
+  local total = 0
+  for _, s in ipairs(ns.CurrentSkills()) do total = total + math.max(0, tonumber(s[2]) or 0) end
+  if total <= 0 or w <= 0 then return 0 end
+  return w / total * ns.SkillPart() / 100
+end
 -- what a skill's weight means (the tooltip on a skill in /eqt)
 function ns.SkillInfo(name, w)
   local lines = {}
-  lines[1] = format("At 5, +1%% damage or healing to %s counts as much as +%s of a primary stat (Strength, Agility or Intellect) at 5.",
-    name ~= "" and name or "a skill", ns.SKILL_PTS)
-  if w and w > 0 then
-    lines[2] = format("At %s: +1%% to it = %.1f points. +1%% crit chance on it counts as +1%% (weapon strikes) or +0.5%% (spells).",
-      tostring(w), ns.SKILL_PTS * w / 5)
-  else
+  lines[1] = "Weights are relative: a skill's share of your output is its weight over all your skills' weights, times the part that comes from skills."
+  local share = name ~= "" and ns.SkillShare(name)
+  if share and share > 0 then
+    lines[2] = format("%s is about %.0f%% of your output, so +10%% to it is +%.2f%% to your output (as much as +%.2f%% crit at 5).",
+      name, share * 100, share * 10, share * 10)
+  elseif w == 0 then
     lines[2] = "At 0 it's ignored."
   end
-  lines[3] = "Flat damage and cooldown or cast time cuts are turned into a % of the skill first. Skills not listed count for nothing."
+  lines[#lines + 1] = "Crit chance on it counts in full for weapon strikes, half for spells. Flat damage and cooldown or cast time cuts are turned into a % of the skill first. Unlisted skills count for nothing."
   return lines
 end
 

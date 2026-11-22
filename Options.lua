@@ -166,7 +166,7 @@ local function BuildPanel(panel)
   local nStats = #ns.STAT_ORDER
   local skillsBtn = at(UI.Button(panel, "Skill Weights", 216, function() ns.OpenSkills(refreshWeights) end),
     26 + (nStats % 2) * 240, y0 - math.floor(nStats / 2) * 26)
-  skillsBtn.tip = "The skills you use, 0 to 5 each: items that improve one count by its weight."
+  skillsBtn.tip = "The skills you use and their share of your output: items that improve one count by its share."
   fb:SetPoint("LEFT", reset, "RIGHT", 8, 0)
   local hint = at(UI.Text(panel, "note", "/eqt item: how an item was scored"), 26, yEnd - 30)
 
@@ -186,18 +186,44 @@ function ns.OpenSkills(onChange)
     title:SetPoint("TOPLEFT", 20, -18)
     win.sub = UI.Text(win, "note", "")
     win.sub:SetPoint("LEFT", title, "RIGHT", 10, 0)
-    local note = UI.Text(win, "note", "The skills you use, 0 to 5 each. Items that improve one (\"+10% Stormstrike damage\", \"+1% crit chance of Healing Wave\") count by its weight. Unlisted skills count for nothing. Type a name or drag a spell in.")
+    local note = UI.Text(win, "note", "The skills you use and how much of your damage (or healing) each does, as relative weights 0 to 5. Items that improve one (\"+10% Stormstrike damage\", \"+1% crit chance of Healing Wave\") count by its share. Unlisted skills count for nothing. Type a name or drag a spell in.")
     note:SetPoint("TOPLEFT", 20, -44); note:SetWidth(380)
-    local hs = UI.Text(win, "note", "Skill"); hs:SetPoint("TOPLEFT", 22, -100)
-    local hw = UI.Text(win, "note", "Weight"); hw:SetPoint("TOPLEFT", 294, -100)
+    -- the part of your output from skills (the rest: white hits, Auto Shot)
+    local pl = UI.Text(win, "line", "Skills are")
+    pl:SetPoint("TOPLEFT", 20, -103)
+    win.part = UI.Edit(win, 48, {
+      function() return tostring(ns.SkillPart()) end,
+      function(v)
+        local num = tonumber((v or ""):match("[%d%.]+"))
+        if not num then return end
+        ns.SetSkillPart(math.max(0, math.min(100, math.floor(num + 0.5))))
+        win.changed(); win.Layout()
+      end }, "", false, true)
+    win.part:SetPoint("LEFT", pl, "RIGHT", 6, 0)
+    local pr = UI.Text(win, "line", "% of your output. Hover for more.")
+    pr:SetPoint("LEFT", win.part, "RIGHT", 6, 0)
+    local partTip = function(owner)
+      GameTooltip:SetOwner(owner, "ANCHOR_RIGHT")
+      GameTooltip:SetText("Skills' part of your output", 1, 1, 1)
+      GameTooltip:AddLine("How much of your damage or healing comes from skills at all. Melee specs: about 50% (white hits are the rest), hunters about 60%, casters and healers about 95%. A damage meter tells you yours.", 0.85, 0.85, 0.85, true)
+      GameTooltip:Show()
+    end
+    win.part:HookScript("OnEnter", partTip)
+    win.part:HookScript("OnLeave", function() GameTooltip:Hide() end)
+    local TOP = -150 -- where the rows start
+    local hs = UI.Text(win, "note", "Skill"); hs:SetPoint("TOPLEFT", 22, TOP + 18)
+    local hw = UI.Text(win, "note", "Weight"); hw:SetPoint("TOPLEFT", 264, TOP + 18)
+    local hp = UI.Text(win, "note", "Share"); hp:SetPoint("TOPLEFT", 318, TOP + 18)
     win.scroll, win.content = UI.Scroll(win, 390, 26)
-    win.scroll:SetPoint("TOPLEFT", 20, -118)
+    win.scroll:SetPoint("TOPLEFT", 20, TOP)
     win.rows = {}
     local function changed()
+      win.part.Refresh()
       ns.Score.ClearCache()
       if ns.Display then pcall(ns.Display.MarkRewards) end
       if win.onChange then win.onChange() end
     end
+    win.changed = changed
     local function row(i)
       local r = win.rows[i]
       if r then return r end
@@ -210,7 +236,7 @@ function ns.OpenSkills(onChange)
         for _, line in ipairs(ns.SkillInfo(s and s[1] or "", s and tonumber(s[2]))) do GameTooltip:AddLine(line, 0.85, 0.85, 0.85, true) end
         GameTooltip:Show()
       end
-      r.name = UI.Edit(win.content, 266, {
+      r.name = UI.Edit(win.content, 236, {
         function() local s = skill(); return s and s[1] or "" end,
         function(v)
           local before = #ns.CurrentSkills()
@@ -228,14 +254,17 @@ function ns.OpenSkills(onChange)
           num = math.max(0, math.min(5, math.floor(num * 100 + 0.5) / 100))
           if not skill() then r.pending = num; return end
           ns.SetSkill(i, nil, num)
-          changed()
+          changed(); win.Layout() -- (every share changes)
         end }, "", false, true)
-      r.weight:SetPoint("TOPLEFT", 274, -(i - 1) * 26)
+      r.weight:SetPoint("TOPLEFT", 244, -(i - 1) * 26)
+      -- its share of your output, from the weights
+      r.share = UI.Text(win.content, "line", "")
+      r.share:SetPoint("TOPLEFT", 300, -(i - 1) * 26 - 3); r.share:SetWidth(48); r.share:SetJustifyH("CENTER")
       r.remove = UI.Button(win.content, "\195\151", 24, function()
         if skill() then ns.RemoveSkill(i); changed() else win.blank = math.max(0, win.blank - 1) end
         win.Layout()
       end)
-      r.remove:SetPoint("TOPLEFT", 338, -(i - 1) * 26 + 1)
+      r.remove:SetPoint("TOPLEFT", 352, -(i - 1) * 26 + 1)
       r.remove.tip = "Remove"
       for _, e in ipairs({ r.name, r.weight }) do
         e:HookScript("OnEnter", tip)
@@ -255,7 +284,7 @@ function ns.OpenSkills(onChange)
       ns.ResetSkills(); win.blank = 0; changed(); win.Layout()
     end)
     reset:SetPoint("LEFT", win.add, "RIGHT", 8, 0)
-    reset.tip = "Back to the suggested list for your spec."
+    reset.tip = "Back to the suggested list (and skill part) for your spec."
     local done = UI.Button(win, "Done", 80, function() win:Hide() end)
     done:SetPoint("LEFT", reset, "RIGHT", 8, 0)
     function win.Layout()
@@ -264,6 +293,9 @@ function ns.OpenSkills(onChange)
         local r = row(i)
         for k, w in pairs(r) do if k ~= "pending" then w:Show() end end
         r.name.Refresh(); r.weight.Refresh()
+        local s = ns.CurrentSkills()[i]
+        local share = s and ns.SkillShare(s[1])
+        r.share:SetText(share and format("%.0f%%", share * 100) or "")
       end
       for i = n + 1, #win.rows do
         win.rows[i].pending = nil
@@ -273,8 +305,9 @@ function ns.OpenSkills(onChange)
       win.content:SetHeight(math.max(1, n * 26))
       win.scroll:SetHeight(shown * 26)
       win.scroll.Update()
-      win.add:ClearAllPoints(); win.add:SetPoint("TOPLEFT", 20, -118 - shown * 26 - 10)
-      win:SetHeight(118 + shown * 26 + 10 + 22 + 20)
+      win.add:ClearAllPoints(); win.add:SetPoint("TOPLEFT", 20, TOP - shown * 26 - 10)
+      win:SetHeight(-TOP + shown * 26 + 10 + 22 + 20)
+      win.part.Refresh()
       local scale = ns.Scales.Active()
       win.sub:SetText(scale and ("scale: " .. scale) or ns.SpecName(ns.SpecKey()))
     end

@@ -2,8 +2,8 @@
 -- Procs: extra damage as DPS through your Weapon Damage weight (about once a minute unless the text
 -- says otherwise), stat buffs through that stat's weight by how long they're up. Skill effects
 -- ("+10% Stormstrike", "+1% crit chance of Healing Wave", "-1 sec cooldown") count by that skill's
--- weight in your skill list (Weights.lua), read as a % of the skill from its live tooltip where
--- needed. Reads English tooltips, as the Equip-line stats do.
+-- share of your output (its relative weight in your skill list, Weights.lua), read as a % of the
+-- skill from its live tooltip where needed. Reads English tooltips, as the Equip-line stats do.
 local _, ns = ...
 local E = {}
 ns.Effects = E
@@ -412,9 +412,9 @@ function E.Value(e, weights, f)
     else label = format("-%ss cast time", Secs(e.secs)) end
     label = label .. " " .. e.spell
     -- counts only if it's in your skill list, by its weight there (/eqt, Skills)
-    local w = ns.SkillWeight(e.spell)
-    if not w then return 0, format("%s: not in your skills", label) end
-    if w <= 0 then return 0, format("%s: %s is at 0 in your skills", label, e.spell) end
+    local share = ns.SkillShare(e.spell)
+    if not share then return 0, format("%s: not in your skills", label) end
+    if share <= 0 then return 0, format("%s: %s is at 0 in your skills", label, e.spell) end
     -- what it adds, as a % of the skill
     local pct, detail
     local id, cast, cd = KnownSpell(e.spell)
@@ -448,10 +448,10 @@ function E.Value(e, weights, f)
       pct = (cast / now - 1) * 100
       detail = format("%ss cast instead of %ss", Secs(now), Secs(cast))
     end
-    local pts = pct * ns.SKILL_PTS * w / 5
+    local gain = pct * share -- % added to your whole output
     local pctText = (pct == math.floor(pct)) and tostring(pct) or format("%.1f", pct)
-    return pts, format("%s: %s+%s%% to it, at %s in your skills%s", label, detail and (detail .. " = ") or "", pctText,
-      tostring(w), id and "" or " (not learned yet)")
+    return gain * ns.OUTPUT_PTS, format("%s: %s+%s%% to it x %.0f%% of your output = +%.2f%% output%s", label,
+      detail and (detail .. " = ") or "", pctText, share * 100, gain, id and "" or " (not learned yet)")
   end
   return 0, nil
 end
