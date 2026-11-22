@@ -162,10 +162,12 @@ local function BuildPanel(panel)
     UI.ShowLink("EquipThisLinkWindow", "Equip This!: bugs and ideas", "https://github.com/califaxop/Equip-This-Upgrade-Advisor/issues/new/choose")
   end)
   -- your skills (for item effects on them) in their own box
-  local skillsBtn = UI.Button(panel, "Skills", 90, function() ns.OpenSkills(refreshWeights) end)
-  skillsBtn:SetPoint("LEFT", reset, "RIGHT", 8, 0)
+  -- (in the stat grid's free spot, under Block %)
+  local nStats = #ns.STAT_ORDER
+  local skillsBtn = at(UI.Button(panel, "Skill Weights", 216, function() ns.OpenSkills(refreshWeights) end),
+    26 + (nStats % 2) * 240, y0 - math.floor(nStats / 2) * 26)
   skillsBtn.tip = "The skills you use, 0 to 5 each: items that improve one count by its weight."
-  fb:SetPoint("LEFT", skillsBtn, "RIGHT", 8, 0)
+  fb:SetPoint("LEFT", reset, "RIGHT", 8, 0)
   local hint = at(UI.Text(panel, "note", "/eqt item: how an item was scored"), 26, yEnd - 30)
 
   panel:HookScript("OnShow", function() for _, w in ipairs(refreshers) do w.Refresh() end end)
@@ -180,7 +182,7 @@ function ns.OpenSkills(onChange)
   local win = EquipThisSkills
   if not win then
     win = UI.Popup("EquipThisSkills", 420, 200)
-    local title = UI.Text(win, "title", "Skills")
+    local title = UI.Text(win, "title", "Skill Weights")
     title:SetPoint("TOPLEFT", 20, -18)
     win.sub = UI.Text(win, "note", "")
     win.sub:SetPoint("LEFT", title, "RIGHT", 10, 0)
