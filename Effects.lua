@@ -137,6 +137,11 @@ local SPELL_CAST = {
   "[Rr]educes ([%a' :,%-]+) cast time by (%d+%.?%d*) (%a+)",
 }
 
+-- wordings written with or without "the"
+local NO_THE = { "damage dealt by", "damage done by", "damage of", "healing dealt by", "healing done by", "healing of",
+  "critical strike chance of", "critical strike chance with", "crit chance of", "chance to crit with",
+  "cooldown of", "cooldown on", "casting time of", "cast time of" }
+
 local function CleanSpellNames(name)
   name = name:gsub("^%s+", ""):gsub("%s+$", ""):gsub("^your ", ""):gsub("^the ", "")
     :gsub(" abilities$", ""):gsub(" ability$", ""):gsub(" spells$", ""):gsub(" spell$", "")
@@ -155,6 +160,8 @@ function E.Parse(texts)
   for _, t in ipairs(texts) do
     if Readable(t) and type(t) == "string" then
       t = t:gsub("[Ii]mproves", "Increases") -- (both verbs are used for the same thing)
+      -- "Increases healing of X" = "Increases the healing of X" (the patterns below expect "the")
+      for _, w in ipairs(NO_THE) do t = t:gsub("([IiRr]%a+s) (" .. w .. ")", "%1 the %2") end
       local body = t:match("^Chance on hit: ?(.*)")
       local equipBody = t:match("^Equip: ?(.*)")
       if not body and equipBody then
