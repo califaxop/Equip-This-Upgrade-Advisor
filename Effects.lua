@@ -61,16 +61,35 @@ end
 
 -- "+10% to a spell": the spell's name and the %, and whether it's healing
 local SPELL_PCT = {
-  { "[Ii]ncreases the damage dealt by ([%a' :,%-]+) by (%d+)%%", false }, -- "...dealt by your Stormstrike ability by 10%"
-  { "[Ii]ncreases the healing dealt by ([%a' :,%-]+) by (%d+)%%", true },
-  { "[Ii]ncreases the damage done by ([%a' :,%-]+) by (%d+)%%", false },
-  { "[Ii]ncreases the damage of ([%a' :,%-]+) by (%d+)%%", false },
-  { "[Ii]ncreases damage done by ([%a' :,%-]+) by (%d+)%%", false },
-  { "[Ii]ncreases ([%a' :,%-]+) damage by (%d+)%%", false },
-  { "[Ii]ncreases the healing done by ([%a' :,%-]+) by (%d+)%%", true },
-  { "[Ii]ncreases the healing of ([%a' :,%-]+) by (%d+)%%", true },
-  { "[Ii]ncreases ([%a' :,%-]+) healing by (%d+)%%", true },
+  { "[Ii]ncreases the damage dealt by ([%a' :,%-]+) by (%d+%.?%d*)%%", false }, -- "...dealt by your Stormstrike ability by 10%"
+  { "[Ii]ncreases the healing dealt by ([%a' :,%-]+) by (%d+%.?%d*)%%", true },
+  { "[Ii]ncreases the damage done by ([%a' :,%-]+) by (%d+%.?%d*)%%", false },
+  { "[Ii]ncreases the damage of ([%a' :,%-]+) by (%d+%.?%d*)%%", false },
+  { "[Ii]ncreases damage done by ([%a' :,%-]+) by (%d+%.?%d*)%%", false },
+  { "[Ii]ncreases ([%a' :,%-]+) damage by (%d+%.?%d*)%%", false },
+  { "[Ii]ncreases the healing done by ([%a' :,%-]+) by (%d+%.?%d*)%%", true },
+  { "[Ii]ncreases the healing of ([%a' :,%-]+) by (%d+%.?%d*)%%", true },
+  { "[Ii]ncreases ([%a' :,%-]+) healing by (%d+%.?%d*)%%", true },
 }
+-- "+X% crit chance to a spell": worth the spell's damage x X% x what a crit adds
+local SPELL_CRIT = {
+  "[Ii]ncreases the critical strike chance of ([%a' :,%-]+) by (%d+%.?%d*)%%",
+  "[Ii]ncreases the crit chance of ([%a' :,%-]+) by (%d+%.?%d*)%%",
+  "[Ii]ncreases the chance to crit with ([%a' :,%-]+) by (%d+%.?%d*)%%",
+  "[Ii]ncreases the critical strike chance with ([%a' :,%-]+) by (%d+%.?%d*)%%",
+  "[Ii]ncreases ([%a' :,%-]+) critical strike chance by (%d+%.?%d*)%%",
+}
+local function CleanSpellNames(name)
+  name = name:gsub("^%s+", ""):gsub("%s+$", ""):gsub("^your ", ""):gsub("^the ", "")
+    :gsub(" abilities$", ""):gsub(" ability$", ""):gsub(" spells$", ""):gsub(" spell$", "")
+  local list = {}
+  -- ("your critical strike chance", "spell critical strike chance": the whole character, not a spell)
+  local NOT_A_SPELL = { [""] = true, your = true, spell = true, spells = true, melee = true, ranged = true, your_spell = true }
+  for one in (name:gsub(" and ", ", ") .. ","):gmatch("%s*([^,]-)%s*,") do
+    if not NOT_A_SPELL[one:lower()] then list[#list + 1] = one end
+  end
+  return list
+end
 
 -- An item's effects from its tooltip lines (left texts). Each: a table with kind and its numbers.
 function E.Parse(texts)
@@ -97,16 +116,26 @@ function E.Parse(texts)
         if key and cds and cds > 0 then out[#out + 1] = { kind = "useStat", stat = key, amount = n, dur = d, cd = cds, text = t } end
       end
       body = t:match("^Equip: ?(.*)")
+      local critDone = false
       if body then
+        for _, pat in ipairs(SPELL_CRIT) do
+          local name, pct = body:match(pat)
+          if name then
+            for _, one in ipairs(CleanSpellNames(name)) do
+              out[#out + 1] = { kind = "spellPct", spell = one, pct = tonumber(pct), crit = true, text = t }
+            end
+            critDone = true
+            break
+          end
+        end
+      end
+      if body and not critDone then
         for _, p in ipairs(SPELL_PCT) do
           local name, pct = body:match(p[1])
           if name then
-            -- "your Stormstrike ability" / "the Lightning Bolt spell" -> the spell's name
-            name = name:gsub("^%s+", ""):gsub("%s+$", ""):gsub("^your ", ""):gsub("^the ", "")
-              :gsub(" abilities$", ""):gsub(" ability$", ""):gsub(" spells$", ""):gsub(" spell$", "")
-            -- "Mortal Strike and Overpower" / "A, B and C": one effect per spell
-            for one in (name:gsub(" and ", ", ") .. ","):gmatch("%s*([^,]-)%s*,") do
-              if one ~= "" then out[#out + 1] = { kind = "spellPct", spell = one, pct = tonumber(pct), heal = p[2], text = t } end
+            -- "your Stormstrike ability", "Mortal Strike and Overpower", "A, B and C": one effect per spell
+            for _, one in ipairs(CleanSpellNames(name)) do
+              out[#out + 1] = { kind = "spellPct", spell = one, pct = tonumber(pct), heal = p[2], text = t }
             end
             break
           end
@@ -172,7 +201,7 @@ local function SpellUse(id, f)
   local hit = WeaponHit(f)
   local key = id .. ":" .. tostring(hit and math.floor(hit * 10) or "-") -- (per weapon hit: two weapons can share a speed)
   local c = spellCache[key]
-  if c then return c.avg, c.cd, c.heal, c.how end
+  if c then return c.avg, c.cd, c.heal, c.how, c.weapon end
   local texts = {}
   if C_TooltipInfo and C_TooltipInfo.GetSpellByID then
     local ok, data = pcall(C_TooltipInfo.GetSpellByID, id)
@@ -187,17 +216,18 @@ local function SpellUse(id, f)
   local avg, how, heal
   local pct = all:match("(%d+)%% weapon damage") or all:match("(%d+)%% of weapon damage")
   local plus = all:match("weapon damage plus (%d+)") or all:match("weapon damage %+ ?(%d+)")
-  if pct or plus or all:find("weapon damage") then
+  local weapon = (pct or plus or all:find("weapon damage")) and true or false
+  if weapon then
     if hit then
       avg = hit * (tonumber(pct) or 100) / 100 + (tonumber(plus) or 0)
       how = format("%s weapon damage%s", pct and (pct .. "%") or "100%", plus and (" + " .. plus) or "")
     end
   end
-  if not avg then
+  if not avg and not weapon then -- (a weapon strike with no weapon to read: no estimate)
     local a, b = all:match("(%d[%d,]*) to (%d[%d,]*)")
     if a then avg = (Num(a) + Num(b)) / 2; how = format("%s to %s", a, b) end
   end
-  if not avg then
+  if not avg and not weapon then
     local n = all:match("for (%d[%d,]*)")
     if n then avg = Num(n); how = n end
   end
@@ -205,8 +235,8 @@ local function SpellUse(id, f)
   local cd
   local n, unit = all:match("(%d+%.?%d*) (%a+) cooldown")
   if n then cd = Seconds(n, unit) end
-  spellCache[key] = { avg = avg, cd = cd, heal = heal, how = how }
-  return avg, cd, heal, how
+  spellCache[key] = { avg = avg, cd = cd, heal = heal, how = how, weapon = weapon }
+  return avg, cd, heal, how, weapon
 end
 
 ---------------------------------------------------------------------------
@@ -219,6 +249,9 @@ local function Rates(weights)
   local healPts = ns.PointsPer("HEAL", weights.HEAL) * SP_PER_DPS
   return dpsPts, spPts, healPts
 end
+
+-- 8 -> "8", 2.5 -> "2.5"
+local function Secs(x) return (x == math.floor(x)) and tostring(x) or format("%.1f", x) end
 
 local function SwingsPerMin(f)
   local _, speed = WeaponHit(f)
@@ -257,15 +290,33 @@ function E.Value(e, weights, f)
   end
   if e.kind == "spellPct" then
     local id, cast, cd = KnownSpell(e.spell)
-    if not id then return 0, format("+%d%% %s: you don't know %s", e.pct, e.spell, e.spell) end
-    local avg, tcd, heal, how = SpellUse(id, f)
-    if not avg then return 0, format("+%d%% %s: couldn't read its damage", e.pct, e.spell) end
-    local every = math.max(cd or 0, tcd or 0, cast or 0, GCD)
-    local per = avg / every * e.pct / 100
-    if heal or e.heal then
-      return per * healPts, format("+%d%% %s: %d healing every %.0fs (%s) = +%.1f HPS", e.pct, e.spell, avg, every, how or "?", per)
+    if not id then return 0, format("+%s%% %s: you don't know %s", e.pct, e.spell, e.spell) end
+    local avg, tcd, heal, how, weapon = SpellUse(id, f)
+    if not avg then
+      return 0, format("+%s%% %s: %s", e.pct, e.spell, weapon and "no weapon to read its damage from" or "couldn't read its damage")
     end
-    return dmgPoints(per), format("+%d%% %s: %d damage every %.0fs (%s) = +%.1f DPS", e.pct, e.spell, avg, every, how or "?", per)
+    local spellCd = math.max(cd or 0, tcd or 0)
+    -- does your spec actually spend time on it? A melee spec swings its weapons: it uses spells
+    -- with a cooldown (on cooldown), not cast-time fillers; a caster doesn't use weapon strikes
+    if melee and not weapon and spellCd <= GCD then
+      return 0, format("+%s%% %s: a filler with no cooldown, and your spec fights in melee", e.pct, e.spell)
+    end
+    if not melee and weapon then
+      return 0, format("+%s%% %s: a weapon strike, and your spec doesn't fight with weapons", e.pct, e.spell)
+    end
+    local every = math.max(spellCd, cast or 0, GCD)
+    local gain = e.pct / 100
+    local label = format("+%s%%", e.pct)
+    if e.crit then -- a crit adds +100% for a weapon strike, +50% for a spell or heal
+      local extra = weapon and 1 or 0.5
+      gain = gain * extra
+      label = format("+%s%% crit (crits add %d%%)", e.pct, extra * 100)
+    end
+    local per = avg / every * gain
+    if heal or e.heal then
+      return per * healPts, format("%s %s: %d healing every %ss (%s) = +%.1f HPS", label, e.spell, avg, Secs(every), how or "?", per)
+    end
+    return dmgPoints(per), format("%s %s: %d damage every %ss (%s) = +%.1f DPS", label, e.spell, avg, Secs(every), how or "?", per)
   end
   return 0, nil
 end

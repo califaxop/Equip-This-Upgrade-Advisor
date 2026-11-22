@@ -19,11 +19,21 @@ local KEYS = {
 }
 
 -- Classic items often put these on "Equip:" lines instead of in the stat list (English client)
+-- (numbers can have decimals: "by 1.0%". Spell-only wordings come first, so "spell critical strike
+-- chance" isn't read as plain crit; "the crit chance OF a spell" is an effect, see Effects.lua)
+local N = "(%d+%.?%d*)"
 local EQUIP = {
-  { "critical strike with spells by (%d+)%%", "SPELLCRIT" },
-  { "hit with spells by (%d+)%%", "SPELLHIT" },
-  { "critical strike by (%d+)%%", "CRIT" },
-  { "chance to hit by (%d+)%%", "HIT" },
+  { "critical strike with spells by " .. N .. "%%", "SPELLCRIT" },
+  { "spell critical strike chance by " .. N .. "%%", "SPELLCRIT" },
+  { "spell crit chance by " .. N .. "%%", "SPELLCRIT" },
+  { "hit with spells by " .. N .. "%%", "SPELLHIT" },
+  { "spell hit chance by " .. N .. "%%", "SPELLHIT" },
+  { "critical strike by " .. N .. "%%", "CRIT" },
+  { "critical strike chance by " .. N .. "%%", "CRIT" },
+  { "crit chance by " .. N .. "%%", "CRIT" },
+  { "chance to crit by " .. N .. "%%", "CRIT" },
+  { "chance to hit by " .. N .. "%%", "HIT" },
+  { "hit chance by " .. N .. "%%", "HIT" },
   { "damage and healing done by magical spells and effects by up to (%d+)", "SP" },
   { "healing done by spells and effects by up to (%d+)", "HEAL" },
   { "Restores (%d+) mana per 5 sec", "MP5" },
@@ -53,7 +63,8 @@ local function TooltipFacts(link)
     texts[#texts + 1] = t
     local r = Readable(l.rightText) and l.rightText or ""
     speed = speed or tonumber(r:match("^Speed (%d+%.?%d*)") or t:match("Speed (%d+%.?%d*)") or "")
-    if t:find("^Equip:") or t:find("^%+%d+ [Aa]ttack") then
+    local perSpell = t:find(" chance of ") or t:find(" chance with ") -- "crit chance of Lightning Bolt": an effect
+    if (t:find("^Equip:") and not perSpell) or t:find("^%+%d+ [Aa]ttack") then
       for _, p in ipairs(EQUIP) do
         local n = t:match(p[1])
         if n then extra[p[2]] = (extra[p[2]] or 0) + tonumber(n); break end
