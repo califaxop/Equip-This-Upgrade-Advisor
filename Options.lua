@@ -146,46 +146,7 @@ local function BuildPanel(panel)
     weightRows[#weightRows + 1] = e
     track(e)
   end
-  -- Skills -------------------------------------------------------------------
-  -- the skills you use, 0-5 each: item effects on a skill count by its weight here
-  local ys = y0 - math.ceil(#ns.STAT_ORDER / 2) * 26 - 16
-  at(UI.Section(panel, "Skills", W_), 26, ys)
-  local sn = at(UI.Text(panel, "note", "The skills you use, 0 to 5 each. Items that improve a skill (\"+10% Stormstrike damage\", \"+1% crit chance of Healing Wave\") count by its weight. Unlisted skills count for nothing. Type a name or drag a spell in."), 26, ys - 28)
-  sn:SetWidth(W_)
-  local yk = ys - 72
-  for i = 1, ns.SKILL_SLOTS do
-    local col, row = (i - 1) % 2, math.floor((i - 1) / 2)
-    local x, y = 26 + col * 240, yk - row * 26
-    local function slot() return ns.CurrentSkills()[i] end
-    local function tip(owner)
-      local s = slot()
-      GameTooltip:SetOwner(owner, "ANCHOR_RIGHT")
-      GameTooltip:SetText(s and s[1] or "Skill " .. i, 1, 1, 1)
-      for _, line in ipairs(ns.SkillInfo(s and s[1] or "", s and tonumber(s[2]))) do GameTooltip:AddLine(line, 0.85, 0.85, 0.85, true) end
-      GameTooltip:Show()
-    end
-    local name = UI.Edit(panel, 150, {
-      function() local s = slot(); return s and s[1] or "" end,
-      function(v) ns.SetSkill(i, v, nil); Changed(); refreshWeights() end }, "(none)", true)
-    name:SetPoint("TOPLEFT", x, y)
-    local wt = UI.Edit(panel, 56, {
-      function() local s = slot(); return s and tostring(s[2]) or "" end,
-      function(v)
-        local num = tonumber(v)
-        if not num or not slot() then return end
-        ns.SetSkill(i, nil, math.max(0, math.min(5, math.floor(num * 100 + 0.5) / 100)))
-        Changed()
-      end }, "", false, true)
-    wt:SetPoint("TOPLEFT", x + 160, y)
-    for _, e in ipairs({ name, wt }) do
-      e:HookScript("OnEnter", tip)
-      e:HookScript("OnLeave", function() GameTooltip:Hide() end)
-      weightRows[#weightRows + 1] = e
-      track(e)
-    end
-  end
-
-  local yEnd = yk - math.ceil(ns.SKILL_SLOTS / 2) * 26 - 10
+  local yEnd = y0 - math.ceil(#ns.STAT_ORDER / 2) * 26 - 10
   local reset = at(UI.Button(panel, "Reset weights", 130, function()
     local name = ns.Scales.Active()
     if name then
@@ -200,12 +161,127 @@ local function BuildPanel(panel)
   local fb = UI.Button(panel, "Report a bug / suggest", 170, function()
     UI.ShowLink("EquipThisLinkWindow", "Equip This!: bugs and ideas", "https://github.com/califaxop/Equip-This-Upgrade-Advisor/issues/new/choose")
   end)
-  fb:SetPoint("LEFT", reset, "RIGHT", 8, 0)
-  local hint = UI.Text(panel, "note", "/eqt item: how scored")
-  hint:SetPoint("LEFT", fb, "RIGHT", 10, 0)
+  -- your skills (for item effects on them) in their own box
+  local skillsBtn = UI.Button(panel, "Skills", 90, function() ns.OpenSkills(refreshWeights) end)
+  skillsBtn:SetPoint("LEFT", reset, "RIGHT", 8, 0)
+  skillsBtn.tip = "The skills you use, 0 to 5 each: items that improve one count by its weight."
+  fb:SetPoint("LEFT", skillsBtn, "RIGHT", 8, 0)
+  local hint = at(UI.Text(panel, "note", "/eqt item: how an item was scored"), 26, yEnd - 30)
 
   panel:HookScript("OnShow", function() for _, w in ipairs(refreshers) do w.Refresh() end end)
-  panel.height = -(yEnd - 46)
+  panel.height = -(yEnd - 66)
+end
+
+---------------------------------------------------------------------------
+-- Skills box: the list in use (spec or scale), one row per skill, + to add one
+---------------------------------------------------------------------------
+local SKILL_ROWS = 10 -- rows shown before it scrolls
+function ns.OpenSkills(onChange)
+  local win = EquipThisSkills
+  if not win then
+    win = UI.Popup("EquipThisSkills", 420, 200)
+    local title = UI.Text(win, "title", "Skills")
+    title:SetPoint("TOPLEFT", 20, -18)
+    win.sub = UI.Text(win, "note", "")
+    win.sub:SetPoint("LEFT", title, "RIGHT", 10, 0)
+    local note = UI.Text(win, "note", "The skills you use, 0 to 5 each. Items that improve one (\"+10% Stormstrike damage\", \"+1% crit chance of Healing Wave\") count by its weight. Unlisted skills count for nothing. Type a name or drag a spell in.")
+    note:SetPoint("TOPLEFT", 20, -44); note:SetWidth(380)
+    local hs = UI.Text(win, "note", "Skill"); hs:SetPoint("TOPLEFT", 22, -100)
+    local hw = UI.Text(win, "note", "Weight"); hw:SetPoint("TOPLEFT", 294, -100)
+    win.scroll, win.content = UI.Scroll(win, 390, 26)
+    win.scroll:SetPoint("TOPLEFT", 20, -118)
+    win.rows = {}
+    local function changed()
+      ns.Score.ClearCache()
+      if ns.Display then pcall(ns.Display.MarkRewards) end
+      if win.onChange then win.onChange() end
+    end
+    local function row(i)
+      local r = win.rows[i]
+      if r then return r end
+      r = {}
+      local function skill() return ns.CurrentSkills()[i] end
+      local function tip(owner)
+        local s = skill()
+        GameTooltip:SetOwner(owner, "ANCHOR_RIGHT")
+        GameTooltip:SetText(s and s[1] or "New skill", 1, 1, 1)
+        for _, line in ipairs(ns.SkillInfo(s and s[1] or "", s and tonumber(s[2]))) do GameTooltip:AddLine(line, 0.85, 0.85, 0.85, true) end
+        GameTooltip:Show()
+      end
+      r.name = UI.Edit(win.content, 266, {
+        function() local s = skill(); return s and s[1] or "" end,
+        function(v)
+          local before = #ns.CurrentSkills()
+          ns.SetSkill(i, v, (i > before) and r.pending or nil) -- (a weight typed before the name)
+          r.pending = nil
+          if i > before and #ns.CurrentSkills() > before then win.blank = math.max(0, win.blank - 1) end
+          changed(); win.Layout()
+        end }, "Skill name, or drag a spell here", true)
+      r.name:SetPoint("TOPLEFT", 0, -(i - 1) * 26)
+      r.weight = UI.Edit(win.content, 56, {
+        function() local s = skill(); return s and tostring(s[2]) or tostring(r.pending or 3) end,
+        function(v)
+          local num = tonumber(v)
+          if not num then return end
+          num = math.max(0, math.min(5, math.floor(num * 100 + 0.5) / 100))
+          if not skill() then r.pending = num; return end
+          ns.SetSkill(i, nil, num)
+          changed()
+        end }, "", false, true)
+      r.weight:SetPoint("TOPLEFT", 274, -(i - 1) * 26)
+      r.remove = UI.Button(win.content, "\195\151", 24, function()
+        if skill() then ns.RemoveSkill(i); changed() else win.blank = math.max(0, win.blank - 1) end
+        win.Layout()
+      end)
+      r.remove:SetPoint("TOPLEFT", 338, -(i - 1) * 26 + 1)
+      r.remove.tip = "Remove"
+      for _, e in ipairs({ r.name, r.weight }) do
+        e:HookScript("OnEnter", tip)
+        e:HookScript("OnLeave", function() GameTooltip:Hide() end)
+      end
+      win.rows[i] = r
+      return r
+    end
+    win.add = UI.Button(win, "+ Add skill", 110, function()
+      win.blank = win.blank + 1
+      win.Layout()
+      local r = win.rows[#ns.CurrentSkills() + win.blank]
+      if r then r.name:SetFocus() end
+      win.scroll:SetVerticalScroll(math.max(0, win.content:GetHeight() - win.scroll:GetHeight())); win.scroll.Update()
+    end)
+    local reset = UI.Button(win, "Reset to suggested", 150, function()
+      ns.ResetSkills(); win.blank = 0; changed(); win.Layout()
+    end)
+    reset:SetPoint("LEFT", win.add, "RIGHT", 8, 0)
+    reset.tip = "Back to the suggested list for your spec."
+    local done = UI.Button(win, "Done", 80, function() win:Hide() end)
+    done:SetPoint("LEFT", reset, "RIGHT", 8, 0)
+    function win.Layout()
+      local n = #ns.CurrentSkills() + win.blank
+      for i = 1, n do
+        local r = row(i)
+        for k, w in pairs(r) do if k ~= "pending" then w:Show() end end
+        r.name.Refresh(); r.weight.Refresh()
+      end
+      for i = n + 1, #win.rows do
+        win.rows[i].pending = nil
+        for k, w in pairs(win.rows[i]) do if k ~= "pending" then w:Hide() end end
+      end
+      local shown = math.max(1, math.min(n, SKILL_ROWS))
+      win.content:SetHeight(math.max(1, n * 26))
+      win.scroll:SetHeight(shown * 26)
+      win.scroll.Update()
+      win.add:ClearAllPoints(); win.add:SetPoint("TOPLEFT", 20, -118 - shown * 26 - 10)
+      win:SetHeight(118 + shown * 26 + 10 + 22 + 20)
+      local scale = ns.Scales.Active()
+      win.sub:SetText(scale and ("scale: " .. scale) or ns.SpecName(ns.SpecKey()))
+    end
+  end
+  win.onChange = onChange
+  win.blank = (#ns.CurrentSkills() == 0) and 1 or 0
+  win.scroll:SetVerticalScroll(0)
+  win.Layout()
+  win:Place(); win:Show()
 end
 
 function ns.CreateOptions()

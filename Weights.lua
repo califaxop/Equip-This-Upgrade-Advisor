@@ -144,7 +144,6 @@ end
 -- weight; skills not listed count for nothing. Starting lists per spec come from the usual
 -- rotations: tune them for Forever. Saved per spec (your edits) or with a custom scale.
 ---------------------------------------------------------------------------
-ns.SKILL_SLOTS = 6
 -- at 5, +1% to a skill counts as this many points: a skill at 5 is about a quarter of your output,
 -- and +1% of everything is worth about 14 (as 1% crit)
 ns.SKILL_PTS = 3.5
@@ -198,22 +197,43 @@ function ns.SpecSkills(key)
   local p = class and ns.PRESET_SKILLS[class] and ns.PRESET_SKILLS[class][tonumber(tree)]
   return p and ns.Copy(p) or {}
 end
--- change one slot (name and/or weight); saved to the scale in use, else as your edit of the spec
+-- save a skill list: to the scale in use, else as your edit of the spec
+local function SaveSkills(list)
+  local scale = ns.Scales.Active()
+  if scale then ns.db.scaleSkills = ns.db.scaleSkills or {}; ns.db.scaleSkills[scale] = list
+  else ns.db.skills = ns.db.skills or {}; ns.db.skills[ns.SpecKey()] = list end
+end
+-- change one skill (name and/or weight); past the end adds one; an empty name removes it
 function ns.SetSkill(i, name, weight)
   local list = ns.Copy(ns.CurrentSkills())
-  local cur = list[i] or { "", 3 }
-  if name ~= nil then cur[1] = name end
-  if weight ~= nil then cur[2] = weight end
-  list[i] = cur
-  -- drop empty slots, keep the order
-  local clean = {}
-  for k = 1, ns.SKILL_SLOTS do
-    local s = list[k]
-    if s and s[1] and s[1]:gsub("%s", "") ~= "" then clean[#clean + 1] = { s[1]:gsub("^%s+", ""):gsub("%s+$", ""), s[2] or 3 } end
+  if name ~= nil then name = name:gsub("^%s+", ""):gsub("%s+$", "") end
+  if i > #list then
+    if not name or name == "" then return end
+    list[#list + 1] = { name, weight or 3 }
+  elseif name == "" then
+    table.remove(list, i)
+  else
+    if name then list[i][1] = name end
+    if weight then list[i][2] = weight end
   end
+  SaveSkills(list)
+end
+function ns.RemoveSkill(i)
+  local list = ns.Copy(ns.CurrentSkills())
+  table.remove(list, i)
+  SaveSkills(list)
+end
+-- back to the spec's suggested list
+function ns.ResetSkills()
   local scale = ns.Scales.Active()
-  if scale then ns.db.scaleSkills[scale] = clean
-  else ns.db.skills = ns.db.skills or {}; ns.db.skills[ns.SpecKey()] = clean end
+  if scale then
+    local key = ns.SpecKey()
+    local class, tree = key:match("^(%u+):(%d)$")
+    local p = class and ns.PRESET_SKILLS[class] and ns.PRESET_SKILLS[class][tonumber(tree)]
+    ns.db.scaleSkills[scale] = p and ns.Copy(p) or {}
+  elseif ns.db.skills then
+    ns.db.skills[ns.SpecKey()] = nil
+  end
 end
 -- a skill's weight in the list in use (nil = not listed)
 function ns.SkillWeight(name)
