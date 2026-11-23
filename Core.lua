@@ -29,6 +29,7 @@ ns.DEFAULTS = {
   skills = {},            -- your skill list per spec: [specKey] = { { name, weight }, ... } (unset = the preset's)
   scaleSkills = {},       -- each custom scale's skill list: [scale name] = { { name, weight }, ... }
   flareStyle = true,
+  euiStyle = true,       -- EllesmereUI look when EllesmereUI is installed (its skinning API)
 }
 
 local function Copy(v)
