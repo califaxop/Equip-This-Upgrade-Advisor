@@ -135,6 +135,23 @@ local function TooltipFacts(link)
   return extra, red, texts, speed
 end
 
+-- Stats that are a % on the item ("Improves your chance to hit by 1.0%"). WoW: Forever lists them
+-- in the item's stats as ratings (that 1% as 10 hit rating), so: the % from the item's own line
+-- when it has one; a rating with no such line, turned into a % the way the game does for you.
+local PCT_STATS = { HIT = 6, CRIT = 9, SPELLHIT = 8, SPELLCRIT = 11, DODGE = 3, PARRY = 4, BLOCK = 5 } -- (their combat rating IDs)
+local RATING_PER_PCT = 10 -- (when the game won't say: 1% = 10 rating, as these items show)
+local function RatingToPct(key, rating)
+  local cr = PCT_STATS[key]
+  if GetCombatRating and GetCombatRatingBonus then
+    local ok1, r = pcall(GetCombatRating, cr)
+    local ok2, b = pcall(GetCombatRatingBonus, cr)
+    if ok1 and ok2 and Readable(r) and Readable(b) and type(r) == "number" and type(b) == "number" and r > 0 and b > 0 then
+      return rating * b / r -- (% per rating for you, from what you wear now)
+    end
+  end
+  return rating / RATING_PER_PCT
+end
+
 local cache = {}
 -- { stats = { STR = 5, ... }, equipLoc = "INVTYPE_...", usable = bool, sell = copper } or nil (not loaded yet)
 function S.Facts(link)
@@ -150,7 +167,11 @@ function S.Facts(link)
     if key and type(v) == "number" then stats[key] = (stats[key] or 0) + v end
   end
   local extra, red, texts, speed = TooltipFacts(link)
-  for k, v in pairs(extra) do if not stats[k] then stats[k] = v end end
+  for k, v in pairs(stats) do
+    if PCT_STATS[k] and not extra[k] then stats[k] = RatingToPct(k, v) end -- (a rating with no % line)
+  end
+  -- what the item's own lines say: fills in what the stat list lacks, and gives a %'s true value
+  for k, v in pairs(extra) do if not stats[k] or PCT_STATS[k] then stats[k] = v end end
   local sell = select(11, (C_Item and C_Item.GetItemInfo or GetItemInfo)(link))
   local subType = C_Item and C_Item.GetItemInfoInstant and select(3, C_Item.GetItemInfoInstant(link))
   local f = { stats = stats, equipLoc = equipLoc, subType = type(subType) == "string" and subType:lower() or nil, usable = not red, sell = type(sell) == "number" and sell or 0,
