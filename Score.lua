@@ -172,11 +172,37 @@ local function RatingToPct(key, rating)
   return rating / (RATING_PER_PCT[key] or 10)
 end
 
+-- Enchants (Spells.lua: ns.ENCHANTS, from Forever's tables). An item is read without its enchant, then
+-- the enchant's own effect is added (so it's never counted twice): stats ("+5 Strength", wizard oil's
+-- spell power...), weapon damage (stones, "+3 Damage") and procs (Crusader, Fiery Weapon, poisons).
+local function Unenchanted(link) return (link:gsub("(item:%d+):%d*", "%1:", 1)) end
+local function EnchantOf(link) return tonumber(link:match("item:%d+:(%d+)") or "") end
+-- an enchant's effect added to an item's facts (stats, weapon damage, a proc)
+function S.AddEnchant(f, id)
+  local e = id and ns.ENCHANTS and ns.ENCHANTS[id]
+  if not e then return end
+  for k, v in pairs(e[4] or {}) do f.stats[k] = (f.stats[k] or 0) + v end
+  if (e[3] or 0) > 0 and f.stats.DPS and f.speed and f.speed > 0 then f.stats.DPS = f.stats.DPS + e[3] / f.speed end
+  local pr = e[5]
+  if pr then
+    local chance = (pr.chance or 0) > 0 and pr.chance or nil -- (none given: about once a minute)
+    if pr.damage then
+      f.effects[#f.effects + 1] = { kind = "procDamage", avg = pr.damage, trigger = "melee", chance = chance, enchant = true, text = e[1] }
+    elseif pr.stat then
+      f.effects[#f.effects + 1] = { kind = "procStat", stat = pr.stat, amount = pr.amount, dur = pr.seconds, trigger = "melee", chance = chance, enchant = true, text = e[1] }
+    end
+  end
+end
+
 local cache = {}
 -- { stats = { STR = 5, ... }, equipLoc = "INVTYPE_...", usable = bool, sell = copper } or nil (not loaded yet)
+-- (with its permanent enchant; temporary ones: S.FactsWithTemp)
 function S.Facts(link)
   if type(link) ~= "string" then return nil end
   if cache[link] then return cache[link] end
+  local enchant = EnchantOf(link)
+  local full = link
+  link = Unenchanted(link)
   local equipLoc = C_Item and C_Item.GetItemInfoInstant and select(4, C_Item.GetItemInfoInstant(link))
   if not equipLoc or equipLoc == "" then return nil end
   local stats = {}
@@ -196,10 +222,57 @@ function S.Facts(link)
   local subType = C_Item and C_Item.GetItemInfoInstant and select(3, C_Item.GetItemInfoInstant(link))
   local f = { id = tonumber(link:match("item:(%d+)")), stats = stats, equipLoc = equipLoc, subType = type(subType) == "string" and subType:lower() or nil, usable = not red, sell = type(sell) == "number" and sell or 0,
     speed = speed, effects = ns.Effects and ns.Effects.Parse(texts) or {} }
+  if enchant and enchant > 0 then S.AddEnchant(f, enchant); f.enchant = enchant end
   -- Kept for next time only once the item's text was read: one read before it loads has no effect
   -- lines (a "+10% Stormstrike" weapon would score as if it had none, for the whole session).
-  if complete then cache[link] = f end
+  if complete then cache[full] = f end
   return f
+end
+
+-- A weapon's temporary enchant (a shaman imbue, a poison, a stone, an oil): the enchant ID, or nil.
+-- On you: the game says (GetWeaponEnchantInfo); in your bags: its tooltip's line ("Rockbiter 5 (59 min)").
+local tempByName
+local function TempByName(name)
+  if not tempByName then
+    tempByName = {}
+    for id, e in pairs(ns.ENCHANTS or {}) do if e[2] then tempByName[e[1]] = id end end
+  end
+  return tempByName[name]
+end
+local tempCache = {}
+function S.ForgetTemp() wipe(tempCache) end
+function S.TempEnchant(link)
+  if type(link) ~= "string" then return nil end
+  local c = tempCache[link]
+  if c ~= nil then return c or nil end
+  local id
+  local worn = { [16] = 1, [17] = 2 }
+  for slot, n in pairs(worn) do
+    local l = GetInventoryItemLink and GetInventoryItemLink("player", slot)
+    if l == link and GetWeaponEnchantInfo then
+      local r = { pcall(GetWeaponEnchantInfo) }
+      local has, ench = r[n == 1 and 2 or 6], r[n == 1 and 5 or 9]
+      if r[1] and Readable(has) and has and Readable(ench) then id = ench end
+    end
+  end
+  if not id and C_TooltipInfo and C_TooltipInfo.GetBagItem then
+    for _, b in ipairs(S.BagList()) do
+      if b[1] == link then
+        local ok, data = pcall(C_TooltipInfo.GetBagItem, b[3], b[4])
+        for _, l in ipairs(ok and type(data) == "table" and data.lines or {}) do
+          local t = Readable(l.leftText) and l.leftText or ""
+          local name = t:match("^(.-) %(%d+ %a+%)$")
+          if name then
+            id = TempByName(name)
+            if id then break end
+          end
+        end
+        break
+      end
+    end
+  end
+  tempCache[link] = id or false
+  return id
 end
 function S.ClearCache() wipe(cache); S.ForgetCompared(); if S.ForgetBags then S.ForgetBags() end; if ns.Sim then ns.Sim.Forget() end; if ns.Effects then ns.Effects.ClearCache() end; end
 
@@ -255,7 +328,7 @@ end
 
 -- Gear in your bags you could wear: { { link, equipLoc } }, kept until your bags change
 local bagItems
-function S.ForgetBags() bagItems = nil; S.ForgetCompared() end
+function S.ForgetBags() bagItems = nil; S.ForgetCompared(); if S.ForgetTemp then S.ForgetTemp() end end
 local function BagItems()
   if bagItems then return bagItems end
   bagItems = {}
@@ -269,7 +342,7 @@ local function BagItems()
       local okL, l = pcall(linkOf, bag, slot)
       if okL and type(l) == "string" and l:find("item:", 1, true) then
         local loc = C_Item and C_Item.GetItemInfoInstant and select(4, C_Item.GetItemInfoInstant(l))
-        if loc and SLOTS[loc] then bagItems[#bagItems + 1] = { l, loc } end
+        if loc and SLOTS[loc] then bagItems[#bagItems + 1] = { l, loc, bag, slot } end
       end
     end
   end
@@ -279,6 +352,7 @@ end
 local FAMILY = { INVTYPE_ROBE = "INVTYPE_CHEST", INVTYPE_SHIELD = "INVTYPE_WEAPONOFFHAND", INVTYPE_HOLDABLE = "INVTYPE_WEAPONOFFHAND",
   INVTYPE_WEAPONMAINHAND = "INVTYPE_WEAPON", INVTYPE_RANGEDRIGHT = "INVTYPE_RANGED", INVTYPE_THROWN = "INVTYPE_RANGED" }
 local function Family(loc) return FAMILY[loc] or loc end
+function S.BagList() return BagItems() end
 -- your bag items of a kind (not this item), as { { value, link } }: usable ones only
 local function BagScores(loc, exceptId, weights)
   local out = {}

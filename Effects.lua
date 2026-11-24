@@ -621,7 +621,7 @@ local function PerMin(e, f)
   end
   if e.trigger == "crit" or e.trigger == "spellcrit" then per = per * CritRate(spell) end
   -- the chance: the item's own words, else the game's tables (Procs.lua), else about once a minute
-  local chance = e.chance or (f and f.id and ns.PROC_CHANCE and ns.PROC_CHANCE[f.id])
+  local chance = e.chance or (not e.enchant and f and f.id and ns.PROC_CHANCE and ns.PROC_CHANCE[f.id])
   if not chance then return e.skillTrig and math.min(per, PPM) or PPM end
   return chance / 100 * per
 end

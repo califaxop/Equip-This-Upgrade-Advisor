@@ -78,8 +78,13 @@ local function Weapon(link)
   local f = link and ns.Score.Facts(link)
   if not (f and f.stats and f.stats.DPS and f.stats.DPS > 0) then return nil end
   local sub = C_Item and C_Item.GetItemInfoInstant and select(7, C_Item.GetItemInfoInstant(link))
-  return { dps = f.stats.DPS, speed = f.speed or 2.5, twoHand = f.equipLoc == "INVTYPE_2HWEAPON", dagger = sub == 15,
+  local w = { dps = f.stats.DPS, speed = f.speed or 2.5, twoHand = f.equipLoc == "INVTYPE_2HWEAPON", dagger = sub == 15,
     ranged = f.equipLoc == "INVTYPE_RANGED" or f.equipLoc == "INVTYPE_RANGEDRIGHT" or f.equipLoc == "INVTYPE_THROWN" }
+  -- its temporary enchant (an imbue, a poison, a stone, an oil): stones add weapon damage
+  w.temp = ns.Score.TempEnchant and ns.Score.TempEnchant(link) or nil
+  local e = w.temp and ns.ENCHANTS and ns.ENCHANTS[w.temp]
+  if e and (e[3] or 0) > 0 then w.dps = w.dps + e[3] / w.speed end
+  return w
 end
 M.Weapon = Weapon
 
@@ -145,7 +150,7 @@ function M.State()
   if ns.SpecKey() == "DRUID:2" then s.mh, s.oh, s.form = M.FormWeapon(s), nil, true end
   -- Windfury on your main hand? (true / false; nil: the game didn't say). Rockbiter, Flametongue...: no
   s.windfury = (ns.Class() == "SHAMAN") and M.WindfuryOn() or false
-  s.wfBonus = s.windfury ~= false and WindfuryBonus() or 0
+  s.wfBonus = s.windfury ~= false and WindfuryBonus(s.mh and s.mh.temp) or 0
   if s.oh and not s.oh.dps then s.oh = nil end
   return s
 end
@@ -300,6 +305,39 @@ local function WornBonus(names)
   return wornBonus
 end
 
+-- A temporary enchant: Windfury? (its name)
+local function IsWindfury(id)
+  local e = id and ns.ENCHANTS and ns.ENCHANTS[id]
+  return e ~= nil and e[1]:match("^Windfury %d") ~= nil
+end
+-- a spell rank's tooltip: the number before "attack power" ("2 extra attacks with 202 extra melee attack
+-- power", "increases ... attack power by 423"); nil if none
+local function TooltipAP(spell)
+  if not (spell and C_TooltipInfo and C_TooltipInfo.GetSpellByID) then return nil end
+  local ok, data = pcall(C_TooltipInfo.GetSpellByID, spell)
+  if not (ok and type(data) == "table" and type(data.lines) == "table") then return nil end
+  for _, l in ipairs(data.lines) do
+    local t = Readable(l.leftText) and l.leftText or ""
+    local n = t:match("(%d+) extra %a* ?attack power") or t:match("(%d+) additional %a* ?attack power")
+      or t:match("attack power by (%d+)") or t:match("(%d+) %a* ?attack power")
+    if n then return tonumber(n) end
+  end
+end
+-- what a weapon's temporary enchant gives you while it's on: { stat = amount } (Rockbiter's attack power:
+-- its rank's tooltip, with your talents; else Forever's tables)
+local tempStats = {}
+function M.TempStats(w)
+  local id = w and w.temp
+  local e = id and ns.ENCHANTS and ns.ENCHANTS[id]
+  if not e or IsWindfury(id) then return {} end
+  if tempStats[id] then return tempStats[id] end
+  local st = {}
+  for k, v in pairs(e[4] or {}) do st[k] = v end
+  if st.AP and ns.IMBUES and ns.IMBUES[id] then st.AP = TooltipAP(ns.IMBUES[id]) or st.AP end
+  tempStats[id] = st
+  return st
+end
+
 -- Is Windfury Weapon the imbue on your main hand? true / false (another imbue, or none); nil when the
 -- game doesn't say (then it's counted, as the site's sim does)
 function M.WindfuryOn()
@@ -308,33 +346,24 @@ function M.WindfuryOn()
   if not (ok and Readable(has)) then return nil end
   if not has then return false end
   if not Readable(enchant) or type(enchant) ~= "number" then return nil end
-  return (ns.IMBUES and ns.IMBUES[enchant] ~= nil) or false
+  return IsWindfury(enchant) or ((not ns.ENCHANTS) and ns.IMBUES and ns.IMBUES[enchant] ~= nil) or false
 end
 
 -- Windfury Weapon's bonus attack power on its extra attacks, from the tooltip of the rank on your weapon
 -- ("2 extra attacks with 202 extra melee attack power"); 0 when it can't be read
-function WindfuryBonus()
+function WindfuryBonus(enchant)
   if not (C_TooltipInfo and C_TooltipInfo.GetSpellByID) then return 0 end
-  -- the rank on your main hand (its imbue -> the rank that applies it, Spells.lua), else the highest you know
-  local id
-  if GetWeaponEnchantInfo and ns.IMBUES then
-    local ok, has, _, _, enchant = pcall(GetWeaponEnchantInfo)
-    if ok and Readable(has) and has and Readable(enchant) then id = ns.IMBUES[enchant] end
+  -- the rank on the weapon (its imbue -> the rank that applies it, Spells.lua), else the highest you know
+  local id = enchant and ns.IMBUES and ns.IMBUES[enchant]
+  if not id and GetWeaponEnchantInfo and ns.IMBUES then
+    local ok, has, _, _, ench = pcall(GetWeaponEnchantInfo)
+    if ok and Readable(has) and has and Readable(ench) then id = ns.IMBUES[ench] end
   end
   if not id and C_Spell and C_Spell.GetSpellInfo then
     local ok, info = pcall(C_Spell.GetSpellInfo, "Windfury Weapon")
     if ok and type(info) == "table" and Readable(info.spellID) then id = info.spellID end
   end
-  if not id then return 0 end
-  local okT, data = pcall(C_TooltipInfo.GetSpellByID, id)
-  if not (okT and type(data) == "table" and type(data.lines) == "table") then return 0 end
-  for _, l in ipairs(data.lines) do
-    local t = Readable(l.leftText) and l.leftText or ""
-    -- ("2 extra attacks with 202 extra melee attack power")
-    local n = t:match("(%d+) extra %a* ?attack power") or t:match("(%d+) additional %a* ?attack power") or t:match("(%d+) %a* ?attack power")
-    if n then return tonumber(n) end
-  end
-  return 0
+  return TooltipAP(id) or 0
 end
 
 -- A summon's hit (Searing Totem: "attacks an enemy ... for 26 to 35 Fire damage"; Healing Stream Totem:
@@ -445,7 +474,7 @@ function M.Play(s, base)
       local w = s.mh
       local swings = 60 * (1 + s.haste / 100) / w.speed
       local attacks = swings * cpm / siteSwings
-      local hit = w.dps * w.speed + (s.ap + (base.wfBonus or 0)) * w.speed / R.apPerDps
+      local hit = w.dps * w.speed + (s.ap + (s.wfBonus or 0)) * w.speed / R.apPerDps
       e[2], e[3], e[7], e[8] = hit * StrikeLanding(s) * attacks, "white", hit, attacks
     elseif PET(name) then
       e[3] = "pet"
@@ -502,7 +531,7 @@ function M.Cached()
   if not cached or now - (cachedAt or 0) > 1 then cached, cachedAt = M.State(), now; memo = {} end
   return cached
 end
-function M.Forget() cached = nil; wornBonus = nil; memo = {} end
+function M.Forget() cached = nil; wornBonus = nil; memo = {}; wipe(tempStats) end
 local function Memo(s, key, fn)
   if s ~= cached then return fn() end
   local v = memo[key]
@@ -577,7 +606,26 @@ function M.Change(swap, s)
   for _, l in ipairs(swap.out or {}) do local f = ns.Score.Facts(l); if f then Apply(t, f.stats, -1) end end
   for _, l in ipairs(swap.inn or {}) do local f = ns.Score.Facts(l); if f then Apply(t, f.stats, 1) end end
   for _, k in ipairs({ "mh", "oh", "rw" }) do
-    if swap[k] ~= nil and not (t.form and k ~= "rw") then t[k] = swap[k] or nil end -- (Feral: the claws stay)
+    if swap[k] ~= nil and not (t.form and k ~= "rw") then -- (Feral: the claws stay)
+      local old, new = t[k], swap[k] or nil
+      -- a weapon with no imbue (new loot): you'd put yours on it, so it takes the old one's
+      if new and not new.temp and old and old.temp then
+        local c = {}
+        for kk, v in pairs(new) do c[kk] = v end
+        c.temp = old.temp
+        local e = ns.ENCHANTS and ns.ENCHANTS[old.temp]
+        if e and (e[3] or 0) > 0 then c.dps = c.dps + e[3] / c.speed end
+        new = c
+      end
+      -- imbues stay on their weapon: the old one's goes, the new one's comes (Rockbiter, oils...)
+      Apply(t, M.TempStats(old), -1)
+      Apply(t, M.TempStats(new), 1)
+      t[k] = new
+      if k == "mh" and ns.Class() == "SHAMAN" then
+        t.windfury = (new and IsWindfury(new.temp)) or false
+        t.wfBonus = t.windfury and WindfuryBonus(new.temp) or 0
+      end
+    end
   end
   return (M.Total(t, s) / before - 1) * 100, t
 end
@@ -656,6 +704,22 @@ end
 -- The % change from wearing `link` in place of `out` (links), weapons into the hand `hand`
 -- ("mh" / "oh" / "rw"; a two-hander clears the off hand)
 -- (`partner`: an off-hand worn with it, when a one-hander replaces a two-hander)
+-- an item's facts with its temporary enchant's proc among its effects (poisons...), for its value
+local function WithTemp(l, skip)
+  local f = l and ns.Score.Facts(l)
+  local id = f and not skip and ns.Score.TempEnchant and ns.Score.TempEnchant(l)
+  local e = id and ns.ENCHANTS and ns.ENCHANTS[id]
+  if not (e and e[5]) then return f end
+  local g = { effects = {}, stats = {} }
+  for k, v in pairs(f) do if k ~= "effects" and k ~= "stats" then g[k] = v end end
+  for _, x in ipairs(f.effects or {}) do g.effects[#g.effects + 1] = x end
+  for k, v in pairs(f.stats) do g.stats[k] = v end
+  local only = { stats = {}, effects = g.effects }
+  ns.Score.AddEnchant(only, id) -- (the proc only: its stats come with the weapon, Sim.TempStats)
+  return g
+end
+M.WithTemp = WithTemp
+
 function M.Gain(link, out, weights, hand, s, partner)
   s = s or M.Cached()
   local f = ns.Score.Facts(link)
@@ -668,9 +732,12 @@ function M.Gain(link, out, weights, hand, s, partner)
   local change = M.Change(swap, s)
   if not change then return nil end
   local rate = M.Rate(s)
-  local gain = change + M.Extra(f, weights, s, rate)
-  if pf then gain = gain + M.Extra(pf, weights, s, rate) end
-  for _, l in ipairs(out or {}) do gain = gain - M.Extra(ns.Score.Facts(l), weights, s, rate) end
+  -- (an incoming weapon with no imbue takes yours: its proc, a poison's, then stays on both sides)
+  local function Bare(l) return l and ns.Score.Facts(l) and (ns.Score.Facts(l).stats.DPS or 0) > 0 and not ns.Score.TempEnchant(l) end
+  local carried = Bare(link) or (pf and Bare(partner))
+  local gain = change + M.Extra(WithTemp(link), weights, s, rate)
+  if pf then gain = gain + M.Extra(WithTemp(partner), weights, s, rate) end
+  for _, l in ipairs(out or {}) do gain = gain - M.Extra(WithTemp(l, carried), weights, s, rate) end
   return gain
 end
 

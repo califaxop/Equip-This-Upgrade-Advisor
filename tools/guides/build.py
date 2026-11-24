@@ -118,7 +118,7 @@ def fmt(x):
 
 def build_spells(names, out, build=None):
     build = build or latest_build()
-    wanted = set()
+    wanted = {"rockbiter weapon", "flametongue weapon", "frostbrand weapon", "windfury weapon"}
     for n in names:
         base = n.split(" (")[0].strip()
         if base and base.lower() not in ("attack", "melee", "auto shot"):
@@ -145,6 +145,7 @@ def build_spells(names, out, build=None):
     for r in table("SpellEffect", build):
         if r["SpellID"] in allids and r["Effect"] in ("54", "360") and fnum(r["EffectMiscValue_0"]) > 0:
             imbues[int(fnum(r["EffectMiscValue_0"]))] = int(r["SpellID"])
+    enchants = build_enchants(build)
     lines, kept = [], 0
     for name in sorted(ids):
         for i in sorted(ids[name], key=int):
@@ -172,10 +173,100 @@ def build_spells(names, out, build=None):
         f.write("ns.SPELLS = {\n" + "\n".join(lines) + "\n}\n")
         f.write("-- weapon imbues: [enchant ID on the weapon] = the spell rank that applies it\n")
         f.write("ns.IMBUES = { " + ", ".join(f"[{k}] = {v}" for k, v in sorted(imbues.items())) + " }\n")
+        f.write("-- enchants (permanent and temporary: imbues, poisons, stones, oils): [enchant ID] = { name, temporary,\n")
+        f.write("-- weapon damage, { stat = amount }, proc = { damage, stat, amount, seconds, chance % (0: about once a minute) } }\n")
+        f.write("ns.ENCHANTS = {\n" + "\n".join(enchants) + "\n}\n")
     print(f"wrote {out}: {kept} spell ranks of {len(ids)} spells (Forever build {build})")
     missing = sorted(n for n in wanted if n not in {k.lower() for k in ids})
     if missing:
         print("  not player spells (procs, pets, talents' passives: valued by the site's share):", ", ".join(missing))
+
+
+# what an enchant does, from Forever's tables: SpellItemEnchantment's effects (1: a proc spell, 2: weapon
+# damage, 3: an equip spell, 5: a stat) and the spells they name (stat auras; a proc's damage or stat buff)
+AURA_STAT = {"99": "AP", "124": "RAP", "13": "SP", "135": "HEAL", "57": "SPELLCRIT", "52": "CRIT", "54": "HIT",
+             "55": "SPELLHIT", "85": "MP5", "34": "HEALTH"}
+MOD_STAT = {"0": "STR", "1": "AGI", "2": "STA", "3": "INT", "4": "SPI"}
+ITEM_MOD = {"3": "AGI", "4": "STR", "5": "INT", "6": "SPI", "7": "STA", "45": "SP", "38": "AP", "41": "HEAL"}
+
+
+def build_enchants(build):
+    effects = collections.defaultdict(list)
+    for r in table("SpellEffect", build):
+        if r["DifficultyID"] == "0":
+            effects[r["SpellID"]].append(r)
+    misc = {r["SpellID"]: r for r in table("SpellMisc", build) if r["DifficultyID"] == "0"}
+    durs = {r["ID"]: int(fnum(r["Duration"])) for r in table("SpellDuration", build)}
+
+    def auras(spell):
+        st = {}
+        effs = effects.get(spell, [])
+        has_sp = any(e["EffectAura"] == "13" for e in effs)
+        for e in effs:
+            if e["Effect"] != "6":
+                continue
+            a, bp, mv = e["EffectAura"], fnum(e["EffectBasePointsF"]), e["EffectMiscValue_0"]
+            if a == "29":
+                for k in (MOD_STAT.values() if mv == "-1" else [MOD_STAT.get(mv)]):
+                    if k:
+                        st[k] = st.get(k, 0) + bp
+            elif a == "22" and mv == "1":
+                st["ARMOR"] = st.get("ARMOR", 0) + bp
+            elif a in AURA_STAT and not (a == "135" and has_sp):  # (spell damage and healing: spell power)
+                k = AURA_STAT[a]
+                st[k] = st.get(k, 0) + bp
+        return st
+
+    def proc(spell):
+        effs = effects.get(spell, [])
+        m = misc.get(spell, {})
+        dur = durs.get(m.get("DurationIndex"), 0)
+        dmg = 0
+        for e in effs:
+            if e["Effect"] == "2":
+                dmg += fnum(e["EffectBasePointsF"])
+            elif e["Effect"] == "6" and e["EffectAura"] == "3":
+                per = fnum(e["EffectAuraPeriod"])
+                dmg += fnum(e["EffectBasePointsF"]) * (max(1, dur // per) if per > 0 and dur > 0 else 1)
+        st = auras(spell)
+        if dmg > 0:
+            return {"damage": dmg}
+        if st and dur > 0:
+            k, v = next(iter(st.items()))
+            return {"stat": k, "amount": v, "seconds": dur / 1000}
+        return None
+
+    out = []
+    for r in table("SpellItemEnchantment", build):
+        name = (r.get("Name_lang") or "").strip()
+        if not name:
+            continue
+        temp = fnum(r.get("Duration")) > 0
+        dmg, stats, pr = 0, {}, None
+        for i in range(3):
+            eff, pts, arg = r.get(f"Effect_{i}"), fnum(r.get(f"EffectPointsMin_{i}")), r.get(f"EffectArg_{i}")
+            if eff == "2":
+                dmg += pts
+            elif eff == "5":
+                k = ITEM_MOD.get(arg)
+                if k:
+                    stats[k] = stats.get(k, 0) + pts
+            elif eff == "3" and arg and arg != "0":
+                for k, v in auras(arg).items():
+                    stats[k] = stats.get(k, 0) + v
+            elif eff == "1" and arg and arg != "0" and not pr:
+                pr = proc(arg)
+                if pr:
+                    pr["chance"] = pts
+        windfury = temp and name.startswith("Windfury ") and name[9:].isdigit() # (its attacks: worked out in game)
+        if not (dmg or stats or pr or windfury):
+            continue
+        cells = [lua(name), "true" if temp else "false", fmt(dmg),
+                 "{ " + ", ".join(f"{k} = {fmt(v)}" for k, v in sorted(stats.items())) + " }"]
+        if pr:
+            cells.append("{ " + ", ".join(f"{k} = {lua(v) if isinstance(v, str) else fmt(v)}" for k, v in sorted(pr.items())) + " }")
+        out.append(f"  [{r['ID']}] = {{ {', '.join(cells)} }},")
+    return out
 
 
 def lua(s):
