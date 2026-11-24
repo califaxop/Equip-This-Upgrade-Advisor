@@ -185,7 +185,7 @@ function S.Facts(link)
   if complete then cache[link] = f end
   return f
 end
-function S.ClearCache() wipe(cache); if ns.Effects then ns.Effects.ClearCache() end; if ns.ForgetTalents then ns.ForgetTalents() end end
+function S.ClearCache() wipe(cache); if ns.Effects then ns.Effects.ClearCache() end; if ns.Rotation then ns.Rotation.ClearCache() end; if ns.ForgetTalents then ns.ForgetTalents() end end
 
 local WEAPON_LOCS = { INVTYPE_WEAPON = true, INVTYPE_2HWEAPON = true, INVTYPE_WEAPONMAINHAND = true,
   INVTYPE_WEAPONOFFHAND = true, INVTYPE_RANGED = true, INVTYPE_RANGEDRIGHT = true, INVTYPE_THROWN = true }

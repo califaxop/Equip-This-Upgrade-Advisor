@@ -7,7 +7,7 @@
 -- the swing, not the hit. The enemy's side (who you hit, how often you miss) isn't something the
 -- game tells addons: those are the Classic rules, all in RULES below.
 --
--- Your output is split the way your Skill Weights say (/eqt): white hits, and each skill's share.
+-- Your output is split the way you fight (Rotation.lua: a guide's rotation, then your damage meter).
 -- Each part moves the way it really does with gear:
 --   white hits (and weapon imbues like Windfury)  -> your damage per second
 --   weapon strikes (Stormstrike, Mortal Strike...) -> one main-hand swing: the weapon's hit plus
@@ -193,24 +193,11 @@ local function Swing(s)
   return (weaponHit + s.ap * speed / R.apPerDps) * TalentDamage(s) * SpecialLanding(s)
 end
 M.Swing = Swing
+M.SpecialLanding, M.TalentDamage = SpecialLanding, TalentDamage
 
--- your output, split: { white = share, parts = { { name, share, kind } ... } } (shares add up to 1),
--- from your damage meter once it's learned enough, else your Skill Weights
-function M.Split()
-  local parts, used = {}, 0
-  if ns.Learn and ns.Learn.Active() then
-    for _, sp in ipairs(ns.Learn.Shares()) do parts[#parts + 1] = { sp[1], sp[2], M.SkillKind(sp[1]) } end
-    return { white = 0, parts = parts, learned = true }
-  end
-  for _, sk in ipairs(ns.CurrentSkills()) do
-    local share = ns.SkillShare(sk[1])
-    if share and share > 0 then
-      parts[#parts + 1] = { sk[1], share, M.SkillKind(sk[1]) }
-      used = used + share
-    end
-  end
-  return { white = math.max(0, 1 - used), parts = parts }
-end
+-- your output, split: { white = share, parts = { { name, share, kind } ... } } (shares add up to 1):
+-- the guide's rotation, blended with your damage meter as it learns (Rotation.lua)
+function M.Split() return ns.Rotation.Split() end
 
 -- how much your output changes from state `a` to state `b`: their ratio
 local function Ratio(a, b, split)
@@ -389,7 +376,7 @@ function M.Report(print)
   for i, p in ipairs(split.parts) do
     if i <= 10 then parts[#parts + 1] = format("%s %d%% (%s)", p[1], math.floor(p[2] * 100 + 0.5), how[p[3]]) end
   end
-  print("your output (" .. (split.learned and "your damage meter" or "Skill Weights") .. "): " .. table.concat(parts, ", "))
+  print("your output (" .. ns.Rotation.Source(split) .. "): " .. table.concat(parts, ", "))
   print("weapon talents: " .. (#s.tal.names > 0 and table.concat(s.tal.names, ", ") or "none that depend on the weapon"))
   local land, miss, dodge, crit = Landing(Hit(s), Crit(s), DW(s), s.expertise)
   print(format("against an enemy your level: %.1f%% miss, %.1f%% dodge, %d%% glancing, %.1f%% crit = %.0f%% of your swings' damage lands",

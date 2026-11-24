@@ -139,18 +139,13 @@ function ns.CurrentWeights()
   return ns.Weights()
 end
 ---------------------------------------------------------------------------
--- Skills: the spells you use, each 0-5 like a stat. An item effect on a skill ("+10% Stormstrike",
--- "+1% crit chance of Healing Wave", "-1 sec cooldown of Earth Shock") counts by that skill's
--- weight; skills not listed count for nothing. Starting lists per spec come from the usual
--- rotations: tune them for Forever. Saved per spec (your edits) or with a custom scale.
+-- Skills: your damage split (auto attack and each skill) comes from Rotation.lua. An item effect on a
+-- skill ("+10% Stormstrike") counts by that skill's share of your output: +10% to a skill that's 20% of
+-- it is +2% output, and +1% output counts as ns.OUTPUT_PTS points (as much as +1% crit at 5).
 ---------------------------------------------------------------------------
--- Skill weights are relative: a skill's share of your damage (or healing) is its weight over the
--- list's total, times the part of your output that comes from skills at all (the rest: white hits,
--- Auto Shot). +X% to a skill then adds X x share % to your output, and +1% output counts as
--- ns.OUTPUT_PTS points (as much as +1% crit at 5: both are about +1% damage).
 ns.OUTPUT_PTS = 14
--- the part of your output from skills, by default: melee ~50% (white hits), hunters ~60% (Auto Shot),
--- casters and healers ~95% (wands, the odd melee swing)
+-- Specs without a guide rotation (Rotation.lua) use these: the part of your output from skills (melee
+-- ~50%, the rest white hits; hunters ~60%, the rest Auto Shot; casters and healers ~95%), split by weight.
 local MELEE_PART, HUNTER_PART, CASTER_PART = 50, 60, 95
 ns.SKILL_PART = {
   WARRIOR = { MELEE_PART, MELEE_PART, MELEE_PART }, ROGUE = { MELEE_PART, MELEE_PART, MELEE_PART },
@@ -188,115 +183,6 @@ ns.PRESET_SKILLS = {
               S5("Shred", 4, "Claw", 4, "Ferocious Bite", 4, "Rip", 3, "Maul", 3),
               S5("Healing Touch", 5, "Rejuvenation", 5, "Regrowth", 4) },
 }
-
--- the skill list in use: { { name, weight }, ... } (a custom scale's own, your edits for the spec, or the preset's)
-function ns.CurrentSkills()
-  local scale = ns.Scales.Active()
-  if scale then
-    ns.db.scaleSkills = ns.db.scaleSkills or {}
-    if not ns.db.scaleSkills[scale] then ns.db.scaleSkills[scale] = ns.Copy(ns.SpecSkills()) end
-    return ns.db.scaleSkills[scale]
-  end
-  return ns.SpecSkills()
-end
-function ns.SpecSkills(key)
-  key = key or ns.SpecKey()
-  local mine = ns.db.skills and ns.db.skills[key]
-  if mine then return mine end
-  local class, tree = key:match("^(%u+):(%d)$")
-  local p = class and ns.PRESET_SKILLS[class] and ns.PRESET_SKILLS[class][tonumber(tree)]
-  return p and ns.Copy(p) or {}
-end
--- save a skill list: to the scale in use, else as your edit of the spec
-local function SaveSkills(list)
-  local scale = ns.Scales.Active()
-  if scale then ns.db.scaleSkills = ns.db.scaleSkills or {}; ns.db.scaleSkills[scale] = list
-  else ns.db.skills = ns.db.skills or {}; ns.db.skills[ns.SpecKey()] = list end
-end
--- change one skill (name and/or weight); past the end adds one; an empty name removes it
-function ns.SetSkill(i, name, weight)
-  local list = ns.Copy(ns.CurrentSkills())
-  if name ~= nil then name = name:gsub("^%s+", ""):gsub("%s+$", "") end
-  if i > #list then
-    if not name or name == "" then return end
-    list[#list + 1] = { name, weight or 3 }
-  elseif name == "" then
-    table.remove(list, i)
-  else
-    if name then list[i][1] = name end
-    if weight then list[i][2] = weight end
-  end
-  SaveSkills(list)
-end
-function ns.RemoveSkill(i)
-  local list = ns.Copy(ns.CurrentSkills())
-  table.remove(list, i)
-  SaveSkills(list)
-end
--- back to the spec's suggested list
-function ns.ResetSkills()
-  local scale = ns.Scales.Active()
-  if scale then
-    local key = ns.SpecKey()
-    local class, tree = key:match("^(%u+):(%d)$")
-    local p = class and ns.PRESET_SKILLS[class] and ns.PRESET_SKILLS[class][tonumber(tree)]
-    ns.db.scaleSkills[scale] = p and ns.Copy(p) or {}
-  elseif ns.db.skills then
-    ns.db.skills[ns.SpecKey()] = nil
-  end
-end
--- a skill's weight in the list in use (nil = not listed)
-function ns.SkillWeight(name)
-  name = (name or ""):lower()
-  for _, s in ipairs(ns.CurrentSkills()) do
-    if (s[1] or ""):lower() == name then return tonumber(s[2]) or 0 end
-  end
-end
--- the % of your output from skills: yours (saved with the list) or the spec's default
-function ns.SkillPart()
-  local mine = tonumber(ns.CurrentSkills().part)
-  if mine then return mine end
-  local class, tree = ns.SpecKey():match("^(%u+):(%d)$")
-  local p = class and ns.SKILL_PART[class]
-  return p and p[tonumber(tree)] or CASTER_PART
-end
-function ns.SetSkillPart(pct)
-  local list = ns.Copy(ns.CurrentSkills())
-  list.part = pct
-  SaveSkills(list)
-end
--- a skill's share of your output, 0 to 1 (nil = not listed): its weight over the total, times the skill part.
--- family: every listed skill with that word in its name ("Shock" -> Earth Shock + Flame Shock)
-function ns.SkillShare(name, family)
-  -- learned from your damage meter, once there's enough (Learn.lua)
-  if ns.Learn and ns.Learn.Active() then return ns.Learn.Share(name, family) end
-  local w = ns.SkillWeight(name)
-  if not w and family then
-    local word = " " .. (name or ""):lower() .. " "
-    for _, s in ipairs(ns.CurrentSkills()) do
-      if (" " .. (s[1] or ""):lower() .. " "):find(word, 1, true) then w = (w or 0) + (tonumber(s[2]) or 0) end
-    end
-  end
-  if not w then return nil end
-  local total = 0
-  for _, s in ipairs(ns.CurrentSkills()) do total = total + math.max(0, tonumber(s[2]) or 0) end
-  if total <= 0 or w <= 0 then return 0 end
-  return w / total * ns.SkillPart() / 100
-end
--- what a skill's weight means (the tooltip on a skill in /eqt)
-function ns.SkillInfo(name, w)
-  local lines = {}
-  lines[1] = "Weights are relative: a skill's share of your output is its weight over all your skills' weights, times the part that comes from skills."
-  local share = name ~= "" and ns.SkillShare(name)
-  if share and share > 0 then
-    lines[2] = format("%s is about %.0f%% of your output, so +10%% to it is +%.2f%% to your output (as much as +%.2f%% crit at 5).",
-      name, share * 100, share * 10, share * 10)
-  elseif w == 0 then
-    lines[2] = "At 0 it's ignored."
-  end
-  lines[#lines + 1] = "Crit chance on it counts in full for weapon strikes, half for spells. Flat damage and cooldown or cast time cuts are turned into a % of the skill first. Unlisted skills count for nothing."
-  return lines
-end
 
 -- the label shown with verdicts: the custom scale's name, else the spec's
 function ns.ScoringLabel()

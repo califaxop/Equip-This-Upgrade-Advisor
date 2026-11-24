@@ -576,8 +576,16 @@ local function SpellUse(id, f)
   if n then cd = Seconds(n, unit) end
   local dn, du = all:match("over (%d+%.?%d*) (%a+)")
   local dur = dn and IsTimeUnit(du) and Seconds(dn, du) or nil
-  spellCache[key] = { avg = avg, cd = cd, heal = heal, how = how, weapon = weapon, dur = dur }
+  spellCache[key] = { avg = avg, cd = cd, heal = heal, how = how, weapon = weapon, dur = dur, text = all }
   return avg, cd, heal, how, weapon, dur
+end
+-- (for Rotation.lua: the same reads)
+E.KnownSpell, E.SpellUse = KnownSpell, SpellUse
+function E.SpellText(id, f)
+  SpellUse(id, f)
+  local hit = WeaponHit(f)
+  local c = spellCache[id .. ":" .. tostring(hit and math.floor(hit * 10) or "-")]
+  return c and c.text or ""
 end
 
 ---------------------------------------------------------------------------
@@ -612,15 +620,12 @@ end
 
 -- how often a proc goes off a minute: its chance per swing (or per cast, or per crit), as the item says
 -- or the game's tables have it (Procs.lua), else about once.
--- A proc tied to one skill goes off on that skill's casts: its part of your casts (its weight over the list's).
+-- A proc tied to one skill goes off on that skill's casts: how often you use it (Rotation.lua).
 local function PerMin(e, f)
   local spell = e.trigger == "spell" or e.trigger == "spellcrit"
   local per = spell and CASTS_PER_MIN or SwingsPerMin(f)
   if e.skillTrig then
-    local w = ns.SkillWeight(e.skillTrig) or 0
-    local total = 0
-    for _, s in ipairs(ns.CurrentSkills()) do total = total + math.max(0, tonumber(s[2]) or 0) end
-    per = (total > 0) and (CASTS_PER_MIN * w / total) or 0
+    per = ns.Rotation.CastsPerMin(e.skillTrig) or 0
   end
   if e.trigger == "crit" or e.trigger == "spellcrit" then per = per * CritRate(spell) end
   -- the chance: the item's own words, else the game's tables (Procs.lua), else about once a minute
@@ -640,7 +645,7 @@ function E.Value(e, weights, f)
     or (e.trigger == "spell" and "Spell proc") or (e.trigger == "crit" and "Crit proc")
     or (e.trigger == "spellcrit" and "Spell crit proc") or "Chance on hit"
   if e.skillTrig then
-    if not ns.SkillWeight(e.skillTrig) then return 0, format("%s (on %s): not in your skills", what, e.skillTrig) end
+    if not ns.Rotation.CastsPerMin(e.skillTrig) then return 0, format("%s (on %s): not in your rotation", what, e.skillTrig) end
     what = format("%s (on %s)", what, e.skillTrig)
   end
   -- damage per second -> points: weapon DPS for melee, spell damage for casters
@@ -694,15 +699,13 @@ function E.Value(e, weights, f)
     elseif e.kind == "skillMana" then label = format("+%d mana", e.mana)
     else label = format("-%s cost", e.cut) end
     label = label .. " " .. e.spell .. (e.family and " (all)" or "") .. (e.part and " (jumps)" or "")
-    -- counts only if it's in your skill list, by its share of your output (/eqt, Skill Weights)
+    -- counts only if it's in your rotation, by its share of your output (Rotation.lua)
     local share = ns.SkillShare(e.spell, e.family)
-    if not share then return 0, format("%s: not in your skills", label) end
-    if share <= 0 then return 0, format("%s: %s is at 0 in your skills", label, e.spell) end
+    if not share then return 0, format("%s: not in your rotation", label) end
+    if share <= 0 then return 0, format("%s: %s does none of your damage", label, e.spell) end
     if e.kind == "spellMana" then return 0, format("%s: costs aren't counted (only what it does)", label) end
     if e.kind == "skillMana" then
-      local total = 0
-      for _, s in ipairs(ns.CurrentSkills()) do total = total + math.max(0, tonumber(s[2]) or 0) end
-      local casts = CASTS_PER_MIN * (ns.SkillWeight(e.spell) or 0) / math.max(total, 0.01)
+      local casts = ns.Rotation.CastsPerMin(e.spell) or 0
       local mp5 = e.mana * casts / 12
       return mp5 * ns.PointsPer("MP5", weights.MP5), format("+%d mana per %s: ~%.1f casts/min = +%.1f mana per 5 sec",
         e.mana, e.spell, casts, mp5)
@@ -712,9 +715,9 @@ function E.Value(e, weights, f)
     local pct, detail
     local id, cast, cd = KnownSpell(e.spell)
     if not id and e.family then
-      for _, s in ipairs(ns.CurrentSkills()) do
-        if (" " .. s[1]:lower() .. " "):find(" " .. e.spell:lower() .. " ", 1, true) then
-          id, cast, cd = KnownSpell(s[1]); if id then break end
+      for _, name in ipairs(ns.Rotation.Names()) do
+        if (" " .. name:lower() .. " "):find(" " .. e.spell:lower() .. " ", 1, true) then
+          id, cast, cd = KnownSpell(name); if id then break end
         end
       end
     end
@@ -756,7 +759,7 @@ function E.Value(e, weights, f)
     local gain = pct * share -- % added to your whole output
     local pctText = (pct == math.floor(pct)) and tostring(pct) or format("%.1f", pct)
     return gain * ns.OUTPUT_PTS, format("%s: %s+%s%% to it x %.0f%% of your output = +%.2f%% output%s", label,
-      detail and (detail .. " = ") or "", pctText, share * 100, gain, id and "" or " (not learned yet)")
+      detail and (detail .. " = ") or "", pctText, share * 100, gain, id and "" or " (not in your spellbook yet)")
   end
   return 0, nil
 end
@@ -805,13 +808,13 @@ function E.WeaponSkill(e, weights, f)
   return pts, why
 end
 
--- a skill effect worded any way: find your listed skills by name in the line, then read the number
+-- a skill effect worded any way: find your rotation's skills by name in the line, then read the number
 -- next to it and what it changes from the words around it
 local function Norm(x) return " " .. x:lower():gsub("[^%a'%d%%%.]+", " ") .. " " end
 function E.SkillLine(line, weights, f)
   local low = Norm(line.body)
   local skills = {}
-  for _, s in ipairs(ns.CurrentSkills()) do if s[1] and s[1] ~= "" then skills[#skills + 1] = s[1] end end
+  for _, name in ipairs(ns.Rotation.Names()) do skills[#skills + 1] = name end
   table.sort(skills, function(a, b) return #a > #b end) -- ("Lesser Healing Wave" before "Healing Wave")
   local found = {}
   for _, name in ipairs(skills) do

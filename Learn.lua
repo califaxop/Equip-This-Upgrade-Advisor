@@ -2,9 +2,9 @@
 --
 -- After each fight (the meter's numbers are hidden during combat, readable after), your damage per
 -- spell is added up, per character and spec. Recent fights count most: past KEEP_SECONDS of combat,
--- older ones fade out. With MIN_SECONDS of combat recorded, skill shares come from it instead of
--- your Skill Weights: "+10% Stormstrike" counts by Stormstrike's real share of your damage, and the
--- damage model splits your output the way you really fight (auto attack, weapon strikes, spells).
+-- older ones fade out. From MIN_SECONDS of combat on, Rotation.lua blends it into the guide's split,
+-- more the more it has: "+10% Stormstrike" then counts by Stormstrike's real share of your damage, and
+-- the damage model splits your output the way you really fight (auto attack, weapon strikes, spells).
 local _, ns = ...
 local L = {}
 ns.Learn = L
@@ -128,21 +128,20 @@ function L.Reset() if ns.db.learned then ns.db.learned[ns.SpecKey()] = nil end e
 
 -- "/eqt learn": where things stand
 function L.Status()
-  if ns.db.learn == false then return "off: Skill Weights are used (/eqt learn on)" end
-  local ok, why = L.MeterAvailable()
-  if not ok then return "can't learn: " .. why .. ". Skill Weights are used." end
-  local d = L.Data()
-  if not L.Active() then
-    return format("learning: %d fight(s), %ds of combat so far (needs %ds). Skill Weights are used until then.",
-      d.fights or 0, math.floor(d.seconds or 0), L.MIN_SECONDS)
-  end
+  local R = ns.Rotation
+  local split = R.Split()
   local parts = {}
-  for i, s in ipairs(L.Shares()) do
+  for i, p in ipairs(split.parts) do
     if i > 8 then break end
-    parts[#parts + 1] = format("%s %d%%", s[1], math.floor(s[2] * 100 + 0.5))
+    parts[#parts + 1] = format("%s %d%%", p[1], math.floor(p[2] * 100 + 0.5))
   end
-  return format("from your damage meter (%d fights, %d min of combat): %s", d.fights or 0,
-    math.floor((d.seconds or 0) / 60 + 0.5), table.concat(parts, ", "))
+  local now = "your split (" .. R.Source(split) .. "): " .. table.concat(parts, ", ")
+  if ns.db.learn == false then return "off: the guide's rotation is used (/eqt learn on). " .. now end
+  local ok, why = L.MeterAvailable()
+  if not ok then return "can't learn: " .. why .. ". " .. now end
+  local d = L.Data()
+  return format("%d fight(s), %d min of combat recorded (full weight at %d min). %s", d.fights or 0,
+    math.floor((d.seconds or 0) / 60 + 0.5), R.BLEND_SECONDS / 60, now)
 end
 
 local ev = CreateFrame("Frame")
