@@ -324,13 +324,13 @@ function ns.PriorityInfo(key)
   end
   local level = ns.Level(key)
   if level ~= "goal" then
-    lines[#lines + 1] = format("Your change: %s. Default puts it back to %s.", LEVEL_NAME[level], Short(base))
+    lines[#lines + 1] = format("Your value (Forever Upgrades' with your talents: %s).", Short(base))
   end
   if key == "DPS" then lines[#lines + 1] = "Only on weapons (an off-hand's counts half)." end
   if key == "HEALTH" then lines[#lines + 1] = "Items with \"+Health\". 10 Health is about 1 Stamina." end
   if key == "STA" or key == "HEALTH" or key == "ARMOR" then
     lines[#lines + 1] = "Survival in your build counts it through your effective health, on top of this value."
   end
-  lines[#lines + 1] = "Default: as above. Higher: halfway to your most valued stat. Highest: above every other stat. Ignore: worth nothing, in damage and survival. Or type your own value."
+  lines[#lines + 1] = "Type your own value to weigh it more or less (0: worth nothing). Clear the box to put Forever Upgrades' value back."
   return lines
 end

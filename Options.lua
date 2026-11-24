@@ -42,11 +42,11 @@ local function BuildPanel(panel)
 
   -- Your build ---------------------------------------------------------------
   at(UI.Section(panel, "Your build", W_), 26, -278)
-  local n = at(UI.Text(panel, "note", "How much you want damage (or healing) and survival, and what each stat is worth. Values start from Forever Upgrades' simulator for your spec, scaled by your talents. Hover a stat for where its value comes from; type your own, or pick Higher / Highest / Ignore."), 26, -306)
+  local n = at(UI.Text(panel, "note", "Slide toward what you want more of. Each stat's value starts from Forever Upgrades' simulator for your spec, scaled by your talents; hover a stat for where it comes from, or type your own (clear the box to put it back)."), 26, -306)
   n:SetWidth(W_)
   local function changed() Changed(); refreshRows(); now.Refresh() end
   -- the build: a preset, or your own mix on the slider
-  at(UI.Text(panel, "line", "Build"), 26, -357)
+  at(UI.Text(panel, "line", "Build"), 26, -351)
   local buildOpts, buildTip = {}, {}
   for _, b in ipairs(ns.BUILDS) do
     buildOpts[#buildOpts + 1] = { b[1], ns.BuildName(b[1]) }
@@ -54,21 +54,30 @@ local function BuildPanel(panel)
   end
   local build = at(UI.Selector(panel, 230, buildOpts,
     { function() return ns.Priorities().build or "auto" end, function(v) ns.SetBuild(v) end }, changed,
-    table.concat(buildTip, "\n")), 86, -354)
+    table.concat(buildTip, "\n") .. "\nMoving the slider makes it your own mix."), 86, -348)
   rows[#rows + 1] = build; track(build)
-  local mix = UI.Slider(panel, "Survival (the rest is damage / healing)", 330, 0, 1, 0.05,
+  -- More Damage (or Healing) <---> More Survivability
+  local function leftEnd() return (ns.GUIDE[ns.SpecKey()] and ns.GUIDE[ns.SpecKey()].unit == "HPS") and "More Healing" or "More Damage" end
+  local mix = UI.Slider(panel, "", W_, 0, 1, 0.05,
     { function() return ns.SurvivalShare() end, function(v) ns.SetSurvivalShare(v) end },
-    function(v) return format("%d%%", v * 100 + 0.5) end,
-    changed)
-  mix:SetPoint("TOPLEFT", 386, -346)
+    function() return "More Survivability" end, changed)
+  mix:SetPoint("TOPLEFT", 26, -386)
   rows[#rows + 1] = mix; track(mix)
-  -- each stat: your value (a number), and Default / Ignore / Higher / Highest
-  local y0 = -400
+  local leftLbl = at(UI.Text(panel, "value", ""), 26, -386)
+  local mixText = UI.Text(panel, "note", "")
+  mixText:SetPoint("TOP", mix, "BOTTOM", 0, -2)
+  track({ Refresh = function()
+    leftLbl:SetText(leftEnd())
+    local t = ns.SurvivalShare()
+    mixText:SetText(format("%d%% %s  /  %d%% survivability", (1 - t) * 100 + 0.5, leftEnd():gsub("^More ", ""):lower(), t * 100 + 0.5))
+  end })
+  -- each stat's value (type your own; clear it for the default)
+  local y0 = -448
   for i, key in ipairs(ns.STAT_ORDER) do
     local col, row = (i - 1) % 2, math.floor((i - 1) / 2)
-    local x, y = 26 + col * 350, y0 - row * 28
+    local x, y = 26 + col * 360, y0 - row * 28
     local lbl = at(UI.Text(panel, "line", ns.STAT_NAMES[key]), x, y - 3)
-    lbl:SetWidth(150); lbl:SetJustifyH("LEFT"); if lbl.SetWordWrap then lbl:SetWordWrap(false) end
+    lbl:SetWidth(170); lbl:SetJustifyH("LEFT"); if lbl.SetWordWrap then lbl:SetWordWrap(false) end
     local function tip(owner)
       GameTooltip:SetOwner(owner, "ANCHOR_RIGHT")
       GameTooltip:SetText(ns.STAT_NAMES[key], 1, 1, 1)
@@ -79,25 +88,29 @@ local function BuildPanel(panel)
       GameTooltip:Show()
     end
     local hover = CreateFrame("Frame", nil, panel)
-    hover:SetSize(152, 20); hover:SetPoint("TOPLEFT", x - 2, y + 1)
+    hover:SetSize(172, 20); hover:SetPoint("TOPLEFT", x - 2, y + 1)
     hover:EnableMouse(true)
     hover:SetScript("OnEnter", tip)
     hover:SetScript("OnLeave", function() GameTooltip:Hide() end)
-    local box = UI.Edit(panel, 62, {
+    local box = UI.Edit(panel, 70, {
       function() return ns.Short(ns.Weights()[key] or 0) end,
-      function(t) local v = tonumber(t); if v and math.abs(v - (ns.Weights()[key] or 0)) > 1e-6 then ns.SetValue(key, v); changed() end end },
+      function(t)
+        if t == "" then if ns.Level(key) ~= "goal" then ns.SetValue(key, nil); changed() end return end
+        local v = tonumber(t)
+        if v and math.abs(v - (ns.Weights()[key] or 0)) > 1e-6 then ns.SetValue(key, v); changed() end
+      end },
       "", false, true)
-    box:SetPoint("TOPLEFT", x + 152, y + 1)
+    box:SetPoint("TOPLEFT", x + 176, y + 1)
     if box.HookScript then box:HookScript("OnEnter", tip); box:HookScript("OnLeave", function() GameTooltip:Hide() end) end
     rows[#rows + 1] = box; track(box)
-    local sel = UI.Selector(panel, 130, ns.LEVELS,
-      { function() return ns.Level(key) end, function(v) ns.SetLevel(key, v) end }, changed)
-    sel:SetPoint("TOPLEFT", x + 220, y + 2)
-    rows[#rows + 1] = sel; track(sel)
+    -- (your own value: marked)
+    local mark = UI.Text(panel, "note", "")
+    mark:SetPoint("LEFT", box, "RIGHT", 8, 0)
+    track({ Refresh = function() mark:SetText(ns.Level(key) ~= "goal" and "yours" or "") end })
   end
   local yEnd = y0 - math.ceil(#ns.STAT_ORDER / 2) * 28 - 10
   local reset = at(UI.Button(panel, "Reset build", 110, function() ns.ResetPriorities(); changed() end), 26, yEnd)
-  reset.tip = "Back to Auto, with Forever Upgrades' values (and your talents)."
+  reset.tip = "Back to Auto, with Forever Upgrades' values (and your talents): your own values are cleared."
   local fb = UI.Button(panel, "Report a bug / suggest", 170, function()
     UI.ShowLink("EquipThisLinkWindow", "Equip This!: bugs and ideas", "https://github.com/califaxop/Equip-This-Upgrade-Advisor/issues/new/choose")
   end)
