@@ -72,8 +72,8 @@ local function OnItemTooltip(tip, data)
   if not link then return end
   local v, vs = D.Verdict(link)
   if v then
-    tip:AddLine(GOLD .. "Equip This!:|r " .. v)
-    if vs then tip:AddLine(vs) end
+    -- one line, wrapped at the tooltip's own width (it never makes the tooltip wider)
+    tip:AddLine(GOLD .. "Equip This!:|r " .. v .. (vs and (" " .. vs) or ""), 1, 1, 1, true)
     tip:Show()
   end
 end

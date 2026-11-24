@@ -374,6 +374,26 @@ function S.ModelCompare(link, f, weights)
   return { kind = kind, pct = pct, delta = pct, value = gain, vs = vs, inBags = bagLink ~= nil, hand = hand, partner = partner, model = true }
 end
 
+-- An off-hand while you wear a two-hander: the pair it makes with your best one-hander from your bags
+-- (main hand), against the two-hander. Nil when you carry no one-hander.
+function S.PairOffHand(link, f, weights, mh)
+  local Sim = ns.Sim
+  local s = Sim.Cached()
+  local best, partner
+  for _, b in ipairs(BagItems()) do
+    if (b[2] == "INVTYPE_WEAPON" or b[2] == "INVTYPE_WEAPONMAINHAND") and b[1] ~= link then
+      local bf = S.Facts(b[1])
+      if bf and bf.usable then
+        local g = Sim.Gain(b[1], { mh }, weights, "mh", s, link)
+        if g and (not best or g > best) then best, partner = g, b[1] end
+      end
+    end
+  end
+  if not best then return nil end
+  local kind = (math.abs(best) < 0.1) and "same" or (best > 0 and "upgrade" or "downgrade")
+  return { kind = kind, pct = best, delta = best, value = best, vs = mh, partner = partner, model = true }
+end
+
 -- Your whole gear's score: every slot you wear (not shirt or tabard). Upgrades are measured against it,
 -- so a % means the same in every slot ("+2%": 2% stronger overall), however weak the item you'd replace.
 function S.GearTotal(weights)
@@ -404,7 +424,14 @@ end
 function S.Compare(link, weights)
   if weights then return S.CompareWeights(link, weights) end
   local c = compared[link]
-  if c == nil then c = S.CompareWeights(link, ns.Weights()) or false; compared[link] = c end
+  if c == nil then
+    c = S.CompareWeights(link, ns.Weights()) or false
+    -- (kept only when it's final: not "not loaded yet", and not the weights standing in for the
+    -- DPS model when the model should have answered; those are asked again next time)
+    local fallback = c and not c.model and ns.Sim and ns.Sim.Active()
+      and (c.kind == "upgrade" or c.kind == "downgrade" or c.kind == "same" or c.kind == "new")
+    if c and not fallback then compared[link] = c end
+  end
   return c or nil
 end
 function S.ForgetCompared() wipe(compared); wipe(bagGains) end
@@ -437,6 +464,11 @@ function S.CompareWeights(link, weights)
     local mhLoc = mh and C_Item and C_Item.GetItemInfoInstant and select(4, C_Item.GetItemInfoInstant(mh))
     if mhLoc == "INVTYPE_2HWEAPON" then
       if f.equipLoc == "INVTYPE_SHIELD" or f.equipLoc == "INVTYPE_HOLDABLE" or f.equipLoc == "INVTYPE_WEAPONOFFHAND" then
+        -- with the DPS model: paired with your best one-hander from your bags, against your two-hander
+        if ns.Sim and ns.Sim.Active() then
+          local ok, r = pcall(S.PairOffHand, link, f, weights, mh)
+          if ok and r then return r end
+        end
         return { kind = "twohand", value = value }
       end
       if f.equipLoc == "INVTYPE_WEAPON" then list = { 16 } end
@@ -458,6 +490,7 @@ function S.CompareWeights(link, weights)
   if not wearing and ns.Sim and ns.Sim.Active() then
     local ok, r = pcall(S.ModelCompare, link, f, weights)
     if ok and r then return r end
+    S.modelError = ok and "no result (your numbers aren't readable yet?)" or tostring(r) -- (shown by /eqt item)
   end
   -- Your best owned item counts, not only what you wear: a better one in your bags is the one to beat
   -- (so an item that's worse than one you already carry isn't called an upgrade).
