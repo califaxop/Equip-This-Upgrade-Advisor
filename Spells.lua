@@ -3,7 +3,7 @@
 -- cast ms, cooldown ms, duration ms, { { effect, aura, base points, points per level, spell power
 -- coefficient, attack power coefficient, tick ms, points per combo point }, ... } }
 local _, ns = ...
-ns.SPELL_DATA_BUILD = "1.60.1.71037"
+ns.SPELL_DATA_BUILD = "1.60.1.71091"
 ns.SPELLS = {
   [19434] = { "Aimed Shot", 20, 0, 1, 2000, 6000, 0, { { 121, 0, 40, 0, 1, 0, 0, 0 } } },
   [20900] = { "Aimed Shot", 28, 0, 1, 2000, 6000, 0, { { 121, 0, 70, 0, 1, 0, 0, 0 } } },
@@ -580,3 +580,5 @@ ns.SPELLS = {
   [8905] = { "Wrath", 46, 52, 8, 2000, 0, 0, { { 2, 0, 68, 0.9, 0.571, 0, 0, 0 } } },
   [9912] = { "Wrath", 54, 60, 8, 2000, 0, 0, { { 2, 0, 91, 1, 0.571, 0, 0, 0 } } },
 }
+-- weapon imbues: [enchant ID on the weapon] = the spell rank that applies it
+ns.IMBUES = { [283] = 8232, [284] = 8235, [525] = 10486, [1669] = 16362 }

@@ -140,6 +140,11 @@ def build_spells(names, out, build=None):
         if r["SpellID"] in allids and r["DifficultyID"] == "0" and (
                 r["Effect"] in KEEP_EFFECTS or (r["Effect"] == "6" and r["EffectAura"] in KEEP_AURAS)):
             effects[r["SpellID"]].append(r)
+    # weapon imbues (Windfury Weapon...): the enchant on the weapon -> the rank that puts it there
+    imbues = {}
+    for r in table("SpellEffect", build):
+        if r["SpellID"] in allids and r["Effect"] in ("54", "360") and fnum(r["EffectMiscValue_0"]) > 0:
+            imbues[int(fnum(r["EffectMiscValue_0"]))] = int(r["SpellID"])
     lines, kept = [], 0
     for name in sorted(ids):
         for i in sorted(ids[name], key=int):
@@ -165,6 +170,8 @@ def build_spells(names, out, build=None):
         f.write("local _, ns = ...\n")
         f.write(f'ns.SPELL_DATA_BUILD = "{build}"\n')
         f.write("ns.SPELLS = {\n" + "\n".join(lines) + "\n}\n")
+        f.write("-- weapon imbues: [enchant ID on the weapon] = the spell rank that applies it\n")
+        f.write("ns.IMBUES = { " + ", ".join(f"[{k}] = {v}" for k, v in sorted(imbues.items())) + " }\n")
     print(f"wrote {out}: {kept} spell ranks of {len(ids)} spells (Forever build {build})")
     missing = sorted(n for n in wanted if n not in {k.lower() for k in ids})
     if missing:

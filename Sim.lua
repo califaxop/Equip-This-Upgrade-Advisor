@@ -269,13 +269,22 @@ local function WornBonus(names)
   return wornBonus
 end
 
--- Windfury Weapon's bonus attack power on its extra attacks, from your spell's tooltip ("... with 104
--- extra attack power"); 0 when it can't be read
+-- Windfury Weapon's bonus attack power on its extra attacks, from the tooltip of the rank on your weapon
+-- ("... with 119 extra attack power"); 0 when it can't be read
 function WindfuryBonus()
-  if not (C_Spell and C_Spell.GetSpellInfo and C_TooltipInfo and C_TooltipInfo.GetSpellByID) then return 0 end
-  local ok, info = pcall(C_Spell.GetSpellInfo, "Windfury Weapon")
-  if not (ok and type(info) == "table" and Readable(info.spellID)) then return 0 end
-  local okT, data = pcall(C_TooltipInfo.GetSpellByID, info.spellID)
+  if not (C_TooltipInfo and C_TooltipInfo.GetSpellByID) then return 0 end
+  -- the rank on your main hand (its imbue -> the rank that applies it, Spells.lua), else the highest you know
+  local id
+  if GetWeaponEnchantInfo and ns.IMBUES then
+    local ok, has, _, _, enchant = pcall(GetWeaponEnchantInfo)
+    if ok and Readable(has) and has and Readable(enchant) then id = ns.IMBUES[enchant] end
+  end
+  if not id and C_Spell and C_Spell.GetSpellInfo then
+    local ok, info = pcall(C_Spell.GetSpellInfo, "Windfury Weapon")
+    if ok and type(info) == "table" and Readable(info.spellID) then id = info.spellID end
+  end
+  if not id then return 0 end
+  local okT, data = pcall(C_TooltipInfo.GetSpellByID, id)
   if not (okT and type(data) == "table" and type(data.lines) == "table") then return 0 end
   for _, l in ipairs(data.lines) do
     local t = Readable(l.leftText) and l.leftText or ""
