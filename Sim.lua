@@ -74,14 +74,14 @@ function M.Unit() local g = ns.GUIDE and ns.GUIDE[ns.SpecKey()]; return g and g.
 -- You
 ---------------------------------------------------------------------------
 -- A weapon: damage per second, base speed, two-handed, dagger
-local function Weapon(link)
+local function Weapon(link, own)
   local f = link and ns.Score.Facts(link)
   if not (f and f.stats and f.stats.DPS and f.stats.DPS > 0) then return nil end
   local sub = C_Item and C_Item.GetItemInfoInstant and select(7, C_Item.GetItemInfoInstant(link))
   local w = { dps = f.stats.DPS, speed = f.speed or 2.5, twoHand = f.equipLoc == "INVTYPE_2HWEAPON", dagger = sub == 15,
     ranged = f.equipLoc == "INVTYPE_RANGED" or f.equipLoc == "INVTYPE_RANGEDRIGHT" or f.equipLoc == "INVTYPE_THROWN" }
   -- its temporary enchant (an imbue, a poison, a stone, an oil): stones add weapon damage
-  w.temp = ns.Score.TempEnchant and ns.Score.TempEnchant(link) or nil
+  w.temp = ns.Score.TempEnchant and ns.Score.TempEnchant(own or link) or nil
   local e = w.temp and ns.ENCHANTS and ns.ENCHANTS[w.temp]
   if e and (e[3] or 0) > 0 then w.dps = w.dps + e[3] / w.speed end
   return w
@@ -608,9 +608,8 @@ function M.Change(swap, s)
   for _, k in ipairs({ "mh", "oh", "rw" }) do
     if swap[k] ~= nil and not (t.form and k ~= "rw") then -- (Feral: the claws stay)
       local old, new = t[k], swap[k] or nil
-      -- new loot (not yours yet, so it can't have an imbue): you'd put yours on it, so it takes the old
-      -- one's; a weapon of yours is taken as it is
-      if swap.carry and new and not new.temp and old and old.temp then
+      -- a weapon with no imbue of its own: compared with yours on it (the tooltip says so)
+      if new and not new.temp and old and old.temp then
         local c = {}
         for kk, v in pairs(new) do c[kk] = v end
         c.temp = old.temp
@@ -706,9 +705,30 @@ end
 -- ("mh" / "oh" / "rw"; a two-hander clears the off hand)
 -- (`partner`: an off-hand worn with it, when a one-hander replaces a two-hander)
 -- an item's facts with its temporary enchant's proc among its effects (poisons...), for its value
-local function WithTemp(l, skip)
+-- Comparing with your worn item: an item with no enchant of its own is compared with yours on it, and a
+-- weapon with no imbue with your imbue. Returns the link to score (with your enchant), and the names of
+-- what it borrowed ({ "Crusader", "Windfury 2" }) or nil.
+function M.Carry(link, worn)
+  if type(link) ~= "string" or type(worn) ~= "string" then return link, nil end
+  local names, own = {}, link
+  local mine = tonumber(link:match("item:%d+:(%d+)") or "")
+  local theirs = tonumber(worn:match("item:%d+:(%d+)") or "")
+  local E = ns.ENCHANTS or {}
+  if not (mine and mine > 0) and theirs and theirs > 0 and E[theirs] then
+    link = link:gsub("(item:%d+):%d*", "%1:" .. theirs, 1)
+    names[#names + 1] = E[theirs][1]
+  end
+  local f = ns.Score.Facts(link)
+  if f and (f.stats.DPS or 0) > 0 and ns.Score.TempEnchant then
+    local t = ns.Score.TempEnchant(worn)
+    if t and E[t] and not ns.Score.TempEnchant(own) then names[#names + 1] = E[t][1] end
+  end
+  return link, (#names > 0) and names or nil
+end
+
+local function WithTemp(l, skip, own)
   local f = l and ns.Score.Facts(l)
-  local id = f and not skip and ns.Score.TempEnchant and ns.Score.TempEnchant(l)
+  local id = f and not skip and ns.Score.TempEnchant and ns.Score.TempEnchant(own or l)
   local e = id and ns.ENCHANTS and ns.ENCHANTS[id]
   if not (e and e[5]) then return f end
   local g = { effects = {}, stats = {} }
@@ -723,19 +743,21 @@ M.WithTemp = WithTemp
 
 function M.Gain(link, out, weights, hand, s, partner)
   s = s or M.Cached()
+  local own = link
+  link = M.Carry(link, out and out[1]) -- (no enchant of its own: yours)
   local f = ns.Score.Facts(link)
   if not f then return nil end
-  local swap = { out = out, inn = { link }, carry = hand ~= nil and not ns.Score.Owned(link) }
-  if hand then swap[hand] = Weapon(link) or false end
+  local swap = { out = out, inn = { link } }
+  if hand then swap[hand] = Weapon(link, own) or false end
   if f.equipLoc == "INVTYPE_2HWEAPON" then swap.oh = false end
   local pf = partner and ns.Score.Facts(partner)
   if pf then swap.inn[2] = partner; swap.oh = Weapon(partner) or false end
   local change = M.Change(swap, s)
   if not change then return nil end
   local rate = M.Rate(s)
-  -- (new loot takes your imbue: its proc, a poison's, then stays on both sides)
-  local carried = swap.carry and (f.stats.DPS or 0) > 0 and not ns.Score.TempEnchant(link)
-  local gain = change + M.Extra(WithTemp(link), weights, s, rate)
+  -- (a weapon with no imbue takes yours: its proc, a poison's, then stays on both sides)
+  local carried = hand ~= nil and (f.stats.DPS or 0) > 0 and not ns.Score.TempEnchant(own)
+  local gain = change + M.Extra(WithTemp(link, false, own), weights, s, rate)
   if pf then gain = gain + M.Extra(WithTemp(partner), weights, s, rate) end
   for _, l in ipairs(out or {}) do gain = gain - M.Extra(WithTemp(l, carried), weights, s, rate) end
   return gain

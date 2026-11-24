@@ -23,16 +23,20 @@ local function Versus(c)
   return out
 end
 
--- New loot (no imbue yet) is scored with your weapon's imbue on it (Sim.Change): say which
+-- An item with no enchant / imbue of its own is scored with yours on it (Sim.Carry): say which
 local function Carried(link, c)
-  if not (c.model and S.Owned and not S.Owned(link)) or S.TempEnchant(link) then return nil end
+  if not (c.model and ns.Sim and ns.Sim.Carry) then return nil end
   local f = S.Facts(link)
-  if not (f and (f.stats.DPS or 0) > 0) then return nil end
-  local slot = (c.hand == "oh" and 17) or ((f.equipLoc == "INVTYPE_RANGED" or f.equipLoc == "INVTYPE_RANGEDRIGHT" or f.equipLoc == "INVTYPE_THROWN") and 18) or 16
-  local worn = GetInventoryItemLink and GetInventoryItemLink("player", slot)
-  local id = worn and S.TempEnchant(worn)
-  local e = id and ns.ENCHANTS and ns.ENCHANTS[id]
-  return e and (GREY .. "(with your " .. e[1] .. " on it)|r") or nil
+  if not f then return nil end
+  local slot
+  if c.vs and not c.inBags then
+    for i = 1, 19 do if GetInventoryItemLink and GetInventoryItemLink("player", i) == c.vs then slot = i end end
+  end
+  slot = slot or (c.hand == "oh" and 17) or ((f.equipLoc == "INVTYPE_RANGED" or f.equipLoc == "INVTYPE_RANGEDRIGHT" or f.equipLoc == "INVTYPE_THROWN") and 18)
+    or ((f.stats.DPS or 0) > 0 and 16) or (S.SLOTS and S.SLOTS[f.equipLoc] and S.SLOTS[f.equipLoc][1]) or nil
+  local worn = slot and GetInventoryItemLink and GetInventoryItemLink("player", slot)
+  local _, names = ns.Sim.Carry(link, worn)
+  return names and (GREY .. "(with your " .. table.concat(names, " and ") .. " on it)|r") or nil
 end
 
 -- Short: "Downgrade -11.3% DPS + [Savage Boar's Guard] vs [Rage of the Storm]" (with that off-hand, against
