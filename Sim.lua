@@ -238,6 +238,35 @@ function M.CastAmount(id, s, ranged)
   return total + healing, healing > total, raw
 end
 
+-- Bonuses to a skill from the gear you wear ("Increases the damage dealt by your Stormstrike ability by
+-- 10%", "your Shock spells"): { [spell name, lower case] = % } for the abilities in your rotation.
+-- They're part of your numbers now; an item's own bonus still counts when it's compared (Effects.lua).
+local wornBonus
+local function WornBonus(names)
+  if wornBonus then return wornBonus end
+  wornBonus = {}
+  for slot = 1, 18 do
+    local l = GetInventoryItemLink and GetInventoryItemLink("player", slot)
+    local f = l and ns.Score.Facts(l)
+    for _, e in ipairs(f and f.effects or {}) do
+      if e.kind == "skillLine" then
+        local body = (e.body or ""):lower()
+        local pct = tonumber(body:match("by (%d+%.?%d*)%%"))
+        if pct and (body:find("damage") or body:find("healing")) and not (body:find("crit") or body:find("cost") or body:find("chance")) then
+          for _, n in ipairs(names) do
+            local k = n:lower()
+            local fam = k:match("(%a+)$") -- ("your Shock spells": every "... Shock")
+            if body:find(k, 1, true) or (fam and body:find("your " .. fam .. " spells", 1, true)) then
+              wornBonus[k] = (wornBonus[k] or 0) + pct
+            end
+          end
+        end
+      end
+    end
+  end
+  return wornBonus
+end
+
 -- a spell's cooldown, in seconds: the game's, else Forever's tables
 local function Cooldown(id)
   if GetSpellBaseCooldown then
@@ -265,6 +294,9 @@ function M.Play(s, base)
   local ranged = RANGED[key]
   local heals = g.unit == "HPS"
   local parts, known, knownShare, other = {}, 0, 0, {}
+  local names = {}
+  for _, p in ipairs(site) do names[#names + 1] = p[1] end
+  local bonus = WornBonus(names)
   for _, p in ipairs(site) do
     local name, share, cpm = p[1], p[2], p[3]
     local e = { name, 0, "other", cpm, nil, share }
@@ -283,6 +315,8 @@ function M.Play(s, base)
       local id = cpm > 0 and M.Rank(name, s.level)
       if id then
         local amount, _, raw = M.CastAmount(id, s, ranged)
+        local more = 1 + (bonus[name:lower()] or 0) / 100 -- (your gear's bonus to it)
+        amount, raw = amount and amount * more, raw and raw * more
         e[7] = raw
         local cd = Cooldown(id)
         if cd > 0 and cpm > 60 / cd * CAP_SLACK then cpm = 60 / cd end -- (a longer cooldown than the site's sim)
@@ -350,7 +384,7 @@ function M.Cached()
   if not cached or now - (cachedAt or 0) > 1 then cached, cachedAt = M.State(), now end
   return cached
 end
-function M.Forget() cached = nil end
+function M.Forget() cached = nil; wornBonus = nil end
 
 ---------------------------------------------------------------------------
 -- Items
