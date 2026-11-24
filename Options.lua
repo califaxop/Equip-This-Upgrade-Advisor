@@ -37,26 +37,27 @@ local function BuildPanel(panel)
   track(at(UI.Check(panel, "Upgrade or downgrade on item tooltips", S("tooltip"), W_, Changed), 26, -170))
   track(at(UI.Check(panel, "Glow the best quest reward", S("rewards"), W_, Changed), 26, -194))
   track(at(UI.Check(panel, "No upgrade among the rewards: mark the one that sells for most", S("sellFallback"), W_, Changed), 26, -218))
+  local armor = track(at(UI.Check(panel, "From level 40, only my best armor type (mail or plate) can be an upgrade", S("bestArmorOnly"), W_, Changed), 26, -242))
+  armor.tip = "Shamans and hunters: mail; warriors and paladins: plate. Off by default: Forever has no armor specialization, so a lighter piece with better stats really is better."
 
   -- Priorities ---------------------------------------------------------------
-  at(UI.Section(panel, "Your priorities", W_), 26, -254)
-  local n = at(UI.Text(panel, "note", "What you want more of. Normal is Forever Upgrades' value for your spec. Pick a goal, or set stats one by one. Hover a stat for what it's worth."), 26, -282)
+  at(UI.Section(panel, "Your priorities", W_), 26, -278)
+  local n = at(UI.Text(panel, "note", "What you want more of. Pick a goal (Auto: Leveling until the level cap, then Damage), then change any stat on top of it. Hover a stat for what it's worth."), 26, -306)
   n:SetWidth(W_)
   local function changed() Changed(); refreshRows(); now.Refresh() end
-  -- the goal: a one-click set of priorities ("Custom" once you change a stat yourself)
-  at(UI.Text(panel, "line", "Goal"), 26, -321)
+  -- the goal: the base; your stat changes sit on top of it
+  at(UI.Text(panel, "line", "Goal"), 26, -345)
   local goalOpts = {}
   for _, g in ipairs(ns.Goals()) do goalOpts[#goalOpts + 1] = { g[1], g[2] } end
-  goalOpts[#goalOpts + 1] = { "custom", "Custom" }
   local goalTip = {}
   for _, g in ipairs(ns.Goals()) do goalTip[#goalTip + 1] = g[2] .. ": " .. g[3] end
-  goalTip[#goalTip + 1] = "Custom: your own mix (set when you change a stat)."
+  goalTip[#goalTip + 1] = "Your stat changes below stay on top of whichever goal you pick."
   local goal = at(UI.Selector(panel, 220, goalOpts,
-    { function() return ns.Priorities().goal end, function(v) ns.SetGoal(v) end }, changed,
-    table.concat(goalTip, "\n")), 106, -318)
+    { function() return ns.Priorities().goal or "auto" end, function(v) ns.SetGoal(v) end }, changed,
+    table.concat(goalTip, "\n")), 106, -342)
   rows[#rows + 1] = goal; track(goal)
-  -- each stat: Ignore / Normal / Higher / Highest
-  local y0 = -354
+  -- each stat: Default (the goal's) / Ignore / Normal / Higher / Highest
+  local y0 = -378
   for i, key in ipairs(ns.STAT_ORDER) do
     local col, row = (i - 1) % 2, math.floor((i - 1) / 2)
     local x, y = 26 + col * 240, y0 - row * 26
@@ -84,7 +85,7 @@ local function BuildPanel(panel)
   end
   local yEnd = y0 - math.ceil(#ns.STAT_ORDER / 2) * 26 - 10
   local reset = at(UI.Button(panel, "Reset priorities", 130, function() ns.ResetPriorities(); changed() end), 26, yEnd)
-  reset.tip = "Back to Damage: Forever Upgrades' values for your spec, as they are."
+  reset.tip = "Back to Auto, with none of your own stat changes."
   local fb = UI.Button(panel, "Report a bug / suggest", 170, function()
     UI.ShowLink("EquipThisLinkWindow", "Equip This!: bugs and ideas", "https://github.com/califaxop/Equip-This-Upgrade-Advisor/issues/new/choose")
   end)

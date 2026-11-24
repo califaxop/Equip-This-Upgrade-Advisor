@@ -5,11 +5,16 @@ local ev = CreateFrame("Frame")
 ev:RegisterEvent("ADDON_LOADED")
 ev:RegisterEvent("PLAYER_LOGIN")
 -- (TRAIT_*: Forever's talents are trait configs; the others are older clients')
+pcall(ev.RegisterEvent, ev, "BAG_UPDATE_DELAYED") -- (your bags changed: your best owned items may have)
 for _, e in ipairs({ "PLAYER_EQUIPMENT_CHANGED", "CHARACTER_POINTS_CHANGED", "PLAYER_TALENT_UPDATE", "PLAYER_LEVEL_UP",
   "TRAIT_CONFIG_UPDATED", "TRAIT_TREE_CURRENCY_INFO_UPDATED" }) do
   pcall(ev.RegisterEvent, ev, e)
 end
 ev:SetScript("OnEvent", function(_, event, arg1)
+  if event == "BAG_UPDATE_DELAYED" then
+    ns.Score.ForgetBags()
+    return
+  end
   if event == "ADDON_LOADED" and arg1 == ns.name then
     ns.LoadDB()
     ns.CreateOptions()

@@ -9,12 +9,12 @@ local GREEN, RED, GREY, GOLD = "|cff40ff40", "|cffff5050", "|cff9d9d9d", "|cffff
 local ORANGE = "|cffff9933"
 
 -- " vs [Item]" in the item's quality color: what it's measured against
-local function Versus(vs)
+local function Versus(vs, inBags)
   if type(vs) ~= "string" then return "" end
   local name = vs:match("%[(.-)%]")
   if not name then return "" end
   local color = vs:match("^(|c%x%x%x%x%x%x%x%x)") or "|cffffffff"
-  return " " .. GREY .. "vs|r " .. color .. name .. "|r"
+  return " " .. GREY .. "vs|r " .. color .. name .. "|r" .. (inBags and (" " .. GREY .. "(in your bags)|r") or "")
 end
 
 -- "Upgrade +12% vs [Item] (Elemental)" etc., or nil
@@ -35,11 +35,12 @@ function D.Verdict(link)
     return GREY .. "Equipped|r"
   end
   if c.kind == "twohand" then return GREY .. "Off-hand: you use a two-hander|r" end
+  if c.kind == "armortype" then return GREY .. "Not " .. c.best .. ": you wear " .. c.best .. " (your setting)|r" end
   if c.kind == "new" then return format("%sUpgrade %+.1f%%|r %s(empty slot, %s)|r", GREEN, c.pct or 0, GREY, spec) end
-  if c.kind == "same" then return GREY .. "About the same|r" .. Versus(c.vs) .. " " .. GREY .. "(" .. spec .. ")|r" end
+  if c.kind == "same" then return GREY .. "About the same|r" .. Versus(c.vs, c.inBags) .. " " .. GREY .. "(" .. spec .. ")|r" end
   local col = c.kind == "upgrade" and GREEN or RED
   local word = c.kind == "upgrade" and "Upgrade" or "Downgrade"
-  return format("%s%s %+.1f%%|r%s %s(%s)|r", col, word, c.pct, Versus(c.vs), GREY, spec)
+  return format("%s%s %+.1f%%|r%s %s(%s)|r", col, word, c.pct, Versus(c.vs, c.inBags), GREY, spec)
 end
 
 ---------------------------------------------------------------------------

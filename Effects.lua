@@ -587,7 +587,7 @@ end
 local function Secs(x) return (x == math.floor(x)) and tostring(x) or format("%.1f", x) end
 
 -- a stat amount as the tooltip says it: "300 Attack Power", "5% Crit"
-local PCT_STATS = { CRIT = true, HIT = true, HASTE = true, SPELLCRIT = true, SPELLHIT = true, DODGE = true, PARRY = true, BLOCK = true }
+local PCT_STATS = { CRIT = true, HIT = true, HASTE = true, EXPERTISE = true, SPELLCRIT = true, SPELLHIT = true, DODGE = true, PARRY = true, BLOCK = true }
 local function Amount(n, stat)
   local num = (n == math.floor(n)) and tostring(n) or format("%.1f", n)
   local name = (ns.STAT_NAMES[stat] or stat):gsub(" %%$", "") -- ("5% Crit", not "5% Crit %")

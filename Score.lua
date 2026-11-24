@@ -18,6 +18,8 @@ local KEYS = {
   ITEM_MOD_BLOCK_RATING_SHORT = "BLOCK", ITEM_MOD_BLOCK_VALUE_SHORT = "BLOCKVALUE",
   ITEM_MOD_HASTE_RATING_SHORT = "HASTE", ITEM_MOD_HASTE_MELEE_RATING_SHORT = "HASTE",
   ITEM_MOD_HEALTH_SHORT = "HEALTH", ITEM_MOD_HEALTH = "HEALTH",
+  ITEM_MOD_EXPERTISE_RATING_SHORT = "EXPERTISE", ITEM_MOD_SPELL_PENETRATION_SHORT = "SPELLPEN",
+  ITEM_MOD_HEALTH_REGEN_SHORT = "HP5", ITEM_MOD_HEALTH_REGENERATION_SHORT = "HP5",
 }
 
 -- Classic items often put these on "Equip:" lines instead of in the stat list (English client)
@@ -53,8 +55,13 @@ local EQUIP = {
   { "chance to crit by " .. N .. "%%", "CRIT" },
   { "chance to hit by " .. N .. "%%", "HIT" },
   { "hit chance by " .. N .. "%%", "HIT" },
-  -- health
+  -- health, health regeneration
   { "maximum health by (%d+)", "HEALTH" },
+  { "[Rr]estores (%d+) [Hh]ealth per 5 sec", "HP5" },
+  -- expertise, spell penetration
+  { "[Rr]educes chance to be [Dd]odged or [Pp]arried by " .. N .. "%%", "EXPERTISE" },
+  { "[Dd]ecreases the magical resistances of your spell targets by (%d+)", "SPELLPEN" },
+  { "[Yy]our spells pierce (%d+) [Mm]agical [Rr]esistances", "SPELLPEN" },
   -- spell damage and healing (a school's spell damage counts as spell damage)
   { "damage and healing done by magical spells and effects by up to (%d+)", "SP" },
   { "damage and healing done by magical spells and effects of all party members within %d+ yards by up to (%d+)", "SP" },
@@ -145,9 +152,9 @@ end
 -- Stats that are a % on the item ("Improves your chance to hit by 1.0%"). WoW: Forever lists them
 -- in the item's stats as ratings (that 1% as 10 hit rating), so: the % from the item's own line
 -- when it has one; a rating with no such line, turned into a % the way the game does for you.
-local PCT_STATS = { HIT = 6, CRIT = 9, SPELLHIT = 8, SPELLCRIT = 11, DODGE = 3, PARRY = 4, BLOCK = 5, HASTE = 18 } -- (their combat rating IDs)
+local PCT_STATS = { HIT = 6, CRIT = 9, SPELLHIT = 8, SPELLCRIT = 11, DODGE = 3, PARRY = 4, BLOCK = 5, HASTE = 18, EXPERTISE = 24 } -- (their combat rating IDs)
 -- when the game won't say: rating per 1% at level 60 (wowsims/forever, foreverdb.net)
-local RATING_PER_PCT = { HIT = 10, SPELLHIT = 10, CRIT = 14, SPELLCRIT = 14, HASTE = 10, DODGE = 12, PARRY = 15, BLOCK = 5 }
+local RATING_PER_PCT = { HIT = 10, SPELLHIT = 10, CRIT = 14, SPELLCRIT = 14, HASTE = 10, DODGE = 12, PARRY = 15, BLOCK = 5, EXPERTISE = 10 }
 S.RATING_PER_PCT = RATING_PER_PCT
 local function RatingToPct(key, rating)
   local cr = PCT_STATS[key]
@@ -194,7 +201,7 @@ function S.Facts(link)
   if complete then cache[link] = f end
   return f
 end
-function S.ClearCache() wipe(cache); if ns.Effects then ns.Effects.ClearCache() end; end
+function S.ClearCache() wipe(cache); if S.ForgetBags then S.ForgetBags() end; if ns.Effects then ns.Effects.ClearCache() end; end
 
 local WEAPON_LOCS = { INVTYPE_WEAPON = true, INVTYPE_2HWEAPON = true, INVTYPE_WEAPONMAINHAND = true,
   INVTYPE_WEAPONOFFHAND = true, INVTYPE_RANGED = true, INVTYPE_RANGEDRIGHT = true, INVTYPE_THROWN = true }
@@ -231,6 +238,59 @@ end
 
 local PAIRED = { [11] = 12, [12] = 11, [13] = 14, [14] = 13 }
 
+-- Your best armor type from level 40 (Classic's mail and plate): with the setting on, cloth or leather
+-- (and mail, for plate wearers) isn't an upgrade. Off by default: Forever has no armor specialization,
+-- so a better-statted lighter piece really is better. Returns "mail" / "plate" when it's lower.
+local BEST_ARMOR = { SHAMAN = 3, HUNTER = 3, WARRIOR = 4, PALADIN = 4 } -- (armor subclass: 1 cloth, 2 leather, 3 mail, 4 plate)
+local ARMOR_NAME = { [3] = "mail", [4] = "plate" }
+function S.LowerArmor(link, equipLoc)
+  if not (ns.db and ns.db.bestArmorOnly) then return nil end
+  if equipLoc == "INVTYPE_CLOAK" or not (UnitLevel and UnitLevel("player") >= 40) then return nil end
+  local _, class = UnitClass("player")
+  local bestType = BEST_ARMOR[class]
+  if not bestType then return nil end
+  local classID, subID = select(6, C_Item.GetItemInfoInstant(link))
+  if classID == 4 and type(subID) == "number" and subID >= 1 and subID < bestType then return ARMOR_NAME[bestType] end
+end
+
+-- Gear in your bags you could wear: { { link, equipLoc } }, kept until your bags change
+local bagItems
+function S.ForgetBags() bagItems = nil end
+local function BagItems()
+  if bagItems then return bagItems end
+  bagItems = {}
+  local C = C_Container
+  local slotsOf = (C and C.GetContainerNumSlots) or GetContainerNumSlots
+  local linkOf = (C and C.GetContainerItemLink) or GetContainerItemLink
+  if not (slotsOf and linkOf) then return bagItems end
+  for bag = 0, 4 do
+    local ok, n = pcall(slotsOf, bag)
+    for slot = 1, (ok and type(n) == "number") and n or 0 do
+      local okL, l = pcall(linkOf, bag, slot)
+      if okL and type(l) == "string" and l:find("item:", 1, true) then
+        local loc = C_Item and C_Item.GetItemInfoInstant and select(4, C_Item.GetItemInfoInstant(l))
+        if loc and SLOTS[loc] then bagItems[#bagItems + 1] = { l, loc } end
+      end
+    end
+  end
+  return bagItems
+end
+-- equip slots that hold the same things (a robe is a chest, a shield an off hand...)
+local FAMILY = { INVTYPE_ROBE = "INVTYPE_CHEST", INVTYPE_SHIELD = "INVTYPE_WEAPONOFFHAND", INVTYPE_HOLDABLE = "INVTYPE_WEAPONOFFHAND",
+  INVTYPE_WEAPONMAINHAND = "INVTYPE_WEAPON", INVTYPE_RANGEDRIGHT = "INVTYPE_RANGED", INVTYPE_THROWN = "INVTYPE_RANGED" }
+local function Family(loc) return FAMILY[loc] or loc end
+-- your bag items of a kind (not this item), as { { value, link } }: usable ones only
+local function BagScores(loc, exceptId, weights)
+  local out = {}
+  for _, b in ipairs(BagItems()) do
+    if Family(b[2]) == Family(loc) and b[1]:match("item:(%d+)") ~= exceptId then
+      local v, bf = S.Value(b[1], weights)
+      if v and bf and bf.usable then out[#out + 1] = { v, b[1] } end
+    end
+  end
+  return out
+end
+
 -- Your whole gear's score: every slot you wear (not shirt or tabard). Upgrades are measured against it,
 -- so a % means the same in every slot ("+2%": 2% stronger overall), however weak the item you'd replace.
 function S.GearTotal(weights)
@@ -245,7 +305,8 @@ function S.GearTotal(weights)
 end
 
 -- How an item compares with what you wear, for a spec:
--- { kind = "upgrade" | "downgrade" | "same" | "new" | "unusable" | "equipped", pct (of your whole gear), delta, value, vs = link,
+-- { kind = "upgrade" | "downgrade" | "same" | "new" | "unusable" | "equipped", pct (of your whole gear), delta, value,
+--   vs = link (your best owned item it'd replace: worn, or in your bags with inBags = true),
 --   pair = "weaker" | "stronger" | "equal" (equipped rings / trinkets, when you wear two) }
 -- or nil (not gear, or not loaded yet)
 function S.Compare(link, weights) return S.CompareWeights(link, weights or ns.Weights()) end
@@ -257,6 +318,9 @@ function S.CompareWeights(link, weights)
   local slots = SLOTS[f.equipLoc]
   if not slots then return nil end
   if not f.usable then return { kind = "unusable", value = value } end
+  -- (optional) from level 40, armor below your best type isn't an upgrade
+  local best = S.LowerArmor(link, f.equipLoc)
+  if best then return { kind = "armortype", value = value, best = best } end
   -- the item you'd swap out, and its score
   local oldValue, vs, wearing = nil, nil, false
   local function worn(slot) return GetInventoryItemLink and GetInventoryItemLink("player", slot) end
@@ -292,6 +356,35 @@ function S.CompareWeights(link, weights)
       if oldValue == nil or v < oldValue then oldValue, vs = v, cur end -- the weaker ring / trinket
     end
   end
+  -- Your best owned item counts, not only what you wear: a better one in your bags is the one to beat
+  -- (so an item that's worse than one you already carry isn't called an upgrade).
+  local inBags = false
+  if not wearing and oldValue then
+    local id = link:match("item:(%d+)")
+    local pair = f.equipLoc == "INVTYPE_FINGER" or f.equipLoc == "INVTYPE_TRINKET"
+    local dualSlots = f.equipLoc == "INVTYPE_WEAPON" and #slots == 2 and DualWields()
+    if pair then
+      -- rings, trinkets: your best two (worn or in bags); a new one replaces the weaker of them
+      local owned = {}
+      for _, slot in ipairs(slots) do
+        local cur = worn(slot)
+        if cur then owned[#owned + 1] = { S.Value(cur, weights) or 0, cur, true } end
+      end
+      for _, b in ipairs(BagScores(f.equipLoc, id, weights)) do owned[#owned + 1] = { b[1], b[2], false } end
+      table.sort(owned, function(a, b) return a[1] > b[1] end)
+      if #owned >= 2 then oldValue, vs, inBags = owned[2][1], owned[2][2], not owned[2][3]
+      else oldValue, vs = 0, nil end
+    elseif not dualSlots and oldValue > 0 then
+      -- one slot (or a two-hander against main hand + off hand): your best of its kind in your bags.
+      -- An item that's in your bags itself is measured against what you wear ("equip it"), unless
+      -- something else you carry beats it.
+      local carried = false
+      for _, b in ipairs(BagItems()) do if b[1]:match("item:(%d+)") == id then carried = true end end
+      for _, b in ipairs(BagScores(f.equipLoc, id, weights)) do
+        if b[1] > oldValue and (not carried or b[1] > value) then oldValue, vs, inBags = b[1], b[2], true end
+      end
+    end
+  end
   if wearing then
     -- a ring or trinket you wear: is it the weaker of your two (the one a new one replaces)?
     local pair
@@ -311,5 +404,5 @@ function S.CompareWeights(link, weights)
   local delta = value - oldValue
   local pct = delta / total * 100
   local kind = (math.abs(pct) < 0.1) and "same" or (delta > 0 and "upgrade" or "downgrade")
-  return { kind = kind, pct = pct, delta = delta, value = value, vs = vs }
+  return { kind = kind, pct = pct, delta = delta, value = value, vs = vs, inBags = inBags }
 end

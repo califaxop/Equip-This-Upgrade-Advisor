@@ -199,8 +199,11 @@ function UI.Check(parent, label, opt, width, onChange)
     text:SetTextColor(RGB((hover and active) and th.hover or th.line))
   end
   UI.Skin(paint)
-  b:SetScript("OnEnter", function() hover = true; paint() end)
-  b:SetScript("OnLeave", function() hover = false; paint() end)
+  b:SetScript("OnEnter", function(self)
+    hover = true; paint()
+    if self.tip then GameTooltip:SetOwner(self, "ANCHOR_TOP"); GameTooltip:SetText(self.tip, 1, 1, 1, 1, true); GameTooltip:Show() end
+  end)
+  b:SetScript("OnLeave", function(self) hover = false; paint(); if self.tip then GameTooltip:Hide() end end)
   b:SetScript("OnClick", function()
     if not active then return end
     set(not get()); b.Refresh()

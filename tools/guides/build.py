@@ -38,7 +38,7 @@ def stat_map(role):
         "wdps": ("DPS", 1), "armor": ("ARMOR", 1), "bonus_armor": ("ARMOR", 1), "block_value": ("BLOCKVALUE", 1),
         "defense": ("DEF", 1), "dodge": ("DODGE", 12), "parry": ("PARRY", 15), "block": ("BLOCK", 5),
         "hit": ("SPELLHIT" if spell else "HIT", 10), "crit": ("SPELLCRIT" if spell else "CRIT", 14),
-        "haste": ("HASTE", 10),
+        "haste": ("HASTE", 10), "expertise": ("EXPERTISE", 10), "spell_pen": ("SPELLPEN", 1),
     }
 
 

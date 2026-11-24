@@ -23,6 +23,7 @@ ns.DEFAULTS = {
   tooltip = true,         -- the "Equip This!: Upgrade +12%" line on item tooltips
   rewards = true,         -- glow the best quest reward
   sellFallback = true,    -- no upgrade among the rewards: mark the one that sells for most
+  bestArmorOnly = false,  -- from level 40, only mail (shamans, hunters) or plate (warriors, paladins) can be upgrades
   priorities = {},        -- per spec: { goal = "survival", levels = { STA = "highest", ... } } (unset = Damage)
   flareStyle = true,
   euiStyle = true,       -- EllesmereUI look when EllesmereUI is installed (its skinning API)
