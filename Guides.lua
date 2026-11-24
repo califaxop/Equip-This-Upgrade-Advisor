@@ -4,7 +4,7 @@
 local _, ns = ...
 ns.GUIDE = { build = "2026-11-24", source = "Forever Upgrades",
   ["WARRIOR:1"] = { -- Arms Warrior
-    weights = { AGI = 0.65, AP = 0.5, CRIT = 10, DPS = 9, HASTE = 8, HIT = 14, STA = 0.1, STR = 1 },
+    weights = { AGI = 0.65, AP = 0.5, CRIT = 14, DPS = 9, HASTE = 8, HIT = 14, STA = 0.1, STR = 1 },
     rotation = { "Charge", "Battle Shout", "Execute", "Mortal Strike", "Overpower", "Whirlwind", "Slam", "Rend", "Heroic Strike", "Recklessness" },
     levels = {
       [30] = { { "Attack", 0.405, 17.9 }, { "Heroic Strike", 0.222, 6.6 }, { "Execute", 0.098, 3.6 }, { "Slam", 0.096, 3.1 }, { "Overpower", 0.073, 1.5 }, { "Rend", 0.054, 3.5 }, { "Deep Wounds", 0.051, 0.0 } },
@@ -13,7 +13,7 @@ ns.GUIDE = { build = "2026-11-24", source = "Forever Upgrades",
     },
   },
   ["WARRIOR:2"] = { -- Fury Warrior
-    weights = { AGI = 0.7, AP = 0.5, CRIT = 11, DPS = 5, HASTE = 9, HIT = 16, STA = 0.1, STR = 1 },
+    weights = { AGI = 0.7, AP = 0.5, CRIT = 15.4, DPS = 5, HASTE = 9, HIT = 16, STA = 0.1, STR = 1 },
     rotation = { "Bloodrage", "Battle Shout", "Execute", "Bloodthirst", "Reckless Swings", "Whirlwind", "Slam", "Heroic Strike", "Hamstring", "Death Wish" },
     levels = {
       [30] = { { "Attack", 0.504, 24.0 }, { "Heroic Strike", 0.339, 13.9 }, { "Execute", 0.089, 4.1 }, { "Slam", 0.068, 3.0 } },
@@ -22,19 +22,19 @@ ns.GUIDE = { build = "2026-11-24", source = "Forever Upgrades",
     },
   },
   ["WARRIOR:3"] = { -- Protection Warrior
-    weights = { AGI = 0.5, ARMOR = 0.1, BLOCK = 6, BLOCKVALUE = 0.6, DEF = 1.5, DODGE = 10, HIT = 8, PARRY = 9, STA = 1, STR = 0.4 },
+    weights = { AGI = 0.5, ARMOR = 0.1, BLOCK = 3, BLOCKVALUE = 0.6, DEF = 1.5, DODGE = 12, HIT = 8, PARRY = 13.5, STA = 1, STR = 0.4 },
     rotation = { "Defensive Stance", "Shield Block", "Shield Slam", "Revenge", "Sunder Armor", "Shield Wall" },
   },
   ["PALADIN:1"] = { -- Holy Paladin
-    weights = { HASTE = 8, HEAL = 1, INT = 0.6, MP5 = 1.8, SP = 1, SPELLCRIT = 6, SPI = 0.2, STA = 0.1 },
+    weights = { HASTE = 8, HEAL = 1, INT = 0.6, MP5 = 1.8, SP = 1, SPELLCRIT = 8.4, SPI = 0.2, STA = 0.1 },
     rotation = { "Oath of Light", "Holy Shock", "Light's Vigil", "Divine Favor", "Flash of Light" },
   },
   ["PALADIN:2"] = { -- Protection Paladin
-    weights = { ARMOR = 0.1, BLOCK = 6, BLOCKVALUE = 0.5, DEF = 1.4, DODGE = 9, HIT = 8, INT = 0.3, PARRY = 8, SP = 0.6, STA = 1, STR = 0.4 },
+    weights = { ARMOR = 0.1, BLOCK = 3, BLOCKVALUE = 0.5, DEF = 1.4, DODGE = 10.8, HIT = 8, INT = 0.3, PARRY = 12, SP = 0.6, STA = 1, STR = 0.4 },
     rotation = { "Righteous Fury", "Seal of Fury", "Holy Shield", "Holy Strike", "Judgement", "Consecration" },
   },
   ["PALADIN:3"] = { -- Retribution Paladin
-    weights = { AGI = 0.55, AP = 0.5, CRIT = 10, DPS = 9, HASTE = 7, HIT = 13, INT = 0.2, SP = 0.3, STA = 0.1, STR = 1 },
+    weights = { AGI = 0.55, AP = 0.5, CRIT = 14, DPS = 9, HASTE = 7, HIT = 13, INT = 0.2, SP = 0.3, STA = 0.1, STR = 1 },
     rotation = { "Blessing of Might", "Seal of the Crusader", "Holy Strike", "Judgement", "Seal of Command", "Seal of Righteousness", "Hammer of Wrath" },
     levels = {
       [30] = { { "Attack", 0.475, 18.0 }, { "Seal of Command", 0.214, 2.0 }, { "Holy Strike", 0.164, 6.0 }, { "Judgement of Command", 0.147, 0.0 } },
@@ -43,7 +43,7 @@ ns.GUIDE = { build = "2026-11-24", source = "Forever Upgrades",
     },
   },
   ["HUNTER:1"] = { -- Beast Mastery Hunter
-    weights = { AGI = 1, AP = 0.1, CRIT = 8, DPS = 4, HASTE = 8, HIT = 12, INT = 0.2, RAP = 0.45, STA = 0.1 },
+    weights = { AGI = 1, AP = 0.1, CRIT = 11.2, DPS = 4, HASTE = 8, HIT = 12, INT = 0.2, RAP = 0.45, STA = 0.1 },
     rotation = { "Hunter's Mark", "Aspect of the Hawk", "Bestial Wrath", "Rapid Fire", "Summon Hawk", "Multi-Shot", "Serpent Sting", "Auto Shot" },
     levels = {
       [30] = { { "Hawks", 0.281, 0.0 }, { "Auto Shot", 0.266, 27.0 }, { "Pet: melee", 0.241, 0.0 }, { "Pet: Claw", 0.087, 0.0 }, { "Multi-Shot", 0.067, 6.8 }, { "Serpent Sting", 0.059, 2.3 } },
@@ -52,7 +52,7 @@ ns.GUIDE = { build = "2026-11-24", source = "Forever Upgrades",
     },
   },
   ["HUNTER:2"] = { -- Marksmanship Hunter
-    weights = { AGI = 1, CRIT = 10, DPS = 5, HASTE = 9, HIT = 13, INT = 0.9, RAP = 0.5, STA = 0.1 },
+    weights = { AGI = 1, CRIT = 14, DPS = 5, HASTE = 9, HIT = 13, INT = 0.9, RAP = 0.5, STA = 0.1 },
     rotation = { "Hunter's Mark", "Trueshot Aura", "Rapid Fire", "Aimed Shot", "Sniper Shot", "Arcane Shot", "Serpent Sting", "Auto Shot" },
     levels = {
       [30] = { { "Auto Shot", 0.404, 24.0 }, { "Aimed Shot", 0.244, 9.7 }, { "Arcane Shot", 0.188, 7.0 }, { "Serpent Sting", 0.165, 3.3 } },
@@ -61,7 +61,7 @@ ns.GUIDE = { build = "2026-11-24", source = "Forever Upgrades",
     },
   },
   ["HUNTER:3"] = { -- Survival Hunter
-    weights = { AGI = 1, AP = 0.45, CRIT = 9, DPS = 6, HASTE = 8, HIT = 12, PARRY = 4, RAP = 0.1, STA = 0.15, STR = 0.2 },
+    weights = { AGI = 1, AP = 0.45, CRIT = 12.6, DPS = 6, HASTE = 8, HIT = 12, PARRY = 6, RAP = 0.1, STA = 0.15, STR = 0.2 },
     rotation = { "Hunter's Mark", "Aspect of the Beast", "Rapid Fire", "Mongoose Bite", "Raptor Strike", "Strider Kick", "Lacerate" },
     levels = {
       [30] = { { "Raptor Strike", 0.376, 10.0 }, { "Attack", 0.276, 11.0 }, { "Strider Kick", 0.245, 8.0 }, { "Lacerate", 0.103, 3.4 } },
@@ -70,7 +70,7 @@ ns.GUIDE = { build = "2026-11-24", source = "Forever Upgrades",
     },
   },
   ["ROGUE:1"] = { -- Assassination Rogue
-    weights = { AGI = 1, AP = 0.5, CRIT = 10, DPS = 3, HASTE = 8, HIT = 14, STA = 0.1, STR = 0.55 },
+    weights = { AGI = 1, AP = 0.5, CRIT = 14, DPS = 3, HASTE = 8, HIT = 14, STA = 0.1, STR = 0.55 },
     rotation = { "Garrote", "Slice and Dice", "Shank", "Eviscerate", "Mutilate" },
     levels = {
       [30] = { { "Attack", 0.439, 39.6 }, { "Sinister Strike", 0.184, 13.2 }, { "Deadly Poison", 0.134, 0.0 }, { "Garrote", 0.112, 1.0 }, { "Instant Poison", 0.060, 0.0 }, { "Eviscerate", 0.041, 1.5 }, { "Shank", 0.031, 6.0 } },
@@ -79,7 +79,7 @@ ns.GUIDE = { build = "2026-11-24", source = "Forever Upgrades",
     },
   },
   ["ROGUE:2"] = { -- Combat Rogue
-    weights = { AGI = 1, AP = 0.5, CRIT = 9, DPS = 3.5, HASTE = 9, HIT = 15, STA = 0.1, STR = 0.55 },
+    weights = { AGI = 1, AP = 0.5, CRIT = 12.6, DPS = 3.5, HASTE = 9, HIT = 15, STA = 0.1, STR = 0.55 },
     rotation = { "Cheap Shot", "Slice and Dice", "Adrenaline Rush", "Blade Flurry", "Shank", "Eviscerate", "Sinister Strike" },
     levels = {
       [30] = { { "Attack", 0.503, 28.0 }, { "Sinister Strike", 0.305, 14.4 }, { "Deadly Poison", 0.113, 0.0 }, { "Instant Poison", 0.035, 0.0 }, { "Shank", 0.032, 5.9 }, { "Eviscerate", 0.012, 0.5 } },
@@ -88,7 +88,7 @@ ns.GUIDE = { build = "2026-11-24", source = "Forever Upgrades",
     },
   },
   ["ROGUE:3"] = { -- Subtlety Rogue
-    weights = { AGI = 1, AP = 0.55, CRIT = 8, DPS = 3, HASTE = 7, HIT = 12, STA = 0.25, STR = 0.55 },
+    weights = { AGI = 1, AP = 0.55, CRIT = 11.2, DPS = 3, HASTE = 7, HIT = 12, STA = 0.25, STR = 0.55 },
     rotation = { "Premeditation", "Ambush", "Vanish", "Slice and Dice", "Rupture", "Eviscerate", "Hemorrhage", "Ghostly Strike", "Shank" },
     levels = {
       [30] = { { "Attack", 0.443, 39.3 }, { "Backstab", 0.305, 9.6 }, { "Deadly Poison", 0.103, 0.0 }, { "Ambush", 0.070, 1.0 }, { "Instant Poison", 0.037, 0.0 }, { "Shank", 0.031, 6.0 }, { "Eviscerate", 0.011, 0.6 } },
@@ -97,15 +97,15 @@ ns.GUIDE = { build = "2026-11-24", source = "Forever Upgrades",
     },
   },
   ["PRIEST:1"] = { -- Discipline Priest
-    weights = { HASTE = 7, HEAL = 1, INT = 0.6, MP5 = 1.8, SP = 1, SPELLCRIT = 5, SPI = 0.45, STA = 0.1 },
+    weights = { HASTE = 7, HEAL = 1, INT = 0.6, MP5 = 1.8, SP = 1, SPELLCRIT = 7, SPI = 0.45, STA = 0.1 },
     rotation = { "Power Word: Shield", "Penance", "Renew", "Power Infusion", "Inner Focus", "Heal" },
   },
   ["PRIEST:2"] = { -- Holy Priest
-    weights = { HASTE = 7, HEAL = 1, INT = 0.5, MP5 = 1.8, SP = 1, SPELLCRIT = 5, SPI = 0.55, STA = 0.1 },
+    weights = { HASTE = 7, HEAL = 1, INT = 0.5, MP5 = 1.8, SP = 1, SPELLCRIT = 7, SPI = 0.55, STA = 0.1 },
     rotation = { "Power Word: Shield", "Prayer of Mending", "Renew", "Inner Focus", "Heal" },
   },
   ["PRIEST:3"] = { -- Shadow Priest
-    weights = { HASTE = 8, INT = 0.3, SP = 1, SPELLCRIT = 5, SPELLHIT = 12, SPI = 0.2, STA = 0.1 },
+    weights = { HASTE = 8, INT = 0.3, SP = 1, SPELLCRIT = 7, SPELLHIT = 12, SPI = 0.2, STA = 0.1 },
     rotation = { "Shadowform", "Shadow Word: Pain", "Devouring Plague", "Mind Blast", "Shadow Word: Death", "Mind Flay" },
     levels = {
       [30] = { { "Mind Flay", 0.420, 11.5 }, { "Mind Blast", 0.278, 7.0 }, { "Shadow Word: Pain", 0.176, 2.3 }, { "Devouring Plague", 0.126, 2.0 } },
@@ -114,7 +114,7 @@ ns.GUIDE = { build = "2026-11-24", source = "Forever Upgrades",
     },
   },
   ["SHAMAN:1"] = { -- Elemental Shaman
-    weights = { HASTE = 8, INT = 0.4, MP5 = 1.4, SP = 1, SPELLCRIT = 8, SPELLHIT = 12, SPI = 0.1, STA = 0.1 },
+    weights = { HASTE = 8, INT = 0.4, MP5 = 1.4, SP = 1, SPELLCRIT = 11.2, SPELLHIT = 12, SPI = 0.1, STA = 0.1 },
     rotation = { "Call of the Elements", "Lightning Mastery", "Flame Shock", "Chain Lightning", "Lightning Bolt" },
     levels = {
       [30] = { { "Lightning Bolt", 0.679, 25.5 }, { "Flame Shock", 0.194, 3.5 }, { "Searing Totem", 0.127, 2.0 } },
@@ -123,7 +123,7 @@ ns.GUIDE = { build = "2026-11-24", source = "Forever Upgrades",
     },
   },
   ["SHAMAN:2"] = { -- Enhancement Shaman
-    weights = { AGI = 0.65, AP = 0.5, CRIT = 10, DPS = 8, HASTE = 9, HIT = 13, INT = 0.25, SP = 0.2, STA = 0.1, STR = 1 },
+    weights = { AGI = 0.65, AP = 0.5, CRIT = 14, DPS = 8, HASTE = 9, HIT = 13, INT = 0.25, SP = 0.2, STA = 0.1, STR = 1 },
     rotation = { "Windfury Weapon", "Rage of the Farseer", "Stormstrike", "Earth Shock", "Lightning Bolt", "Flame Shock", "Searing Totem" },
     levels = {
       [30] = { { "Attack", 0.326, 19.8 }, { "Stormstrike", 0.275, 10.0 }, { "Earth Shock", 0.174, 8.7 }, { "Windfury Weapon", 0.121, 6.9 }, { "Searing Totem", 0.080, 2.0 }, { "Flame Shock", 0.023, 1.0 } },
@@ -132,11 +132,11 @@ ns.GUIDE = { build = "2026-11-24", source = "Forever Upgrades",
     },
   },
   ["SHAMAN:3"] = { -- Restoration Shaman
-    weights = { HASTE = 7, HEAL = 1, INT = 0.55, MP5 = 2, SP = 1, SPELLCRIT = 5, SPI = 0.2, STA = 0.1 },
+    weights = { HASTE = 7, HEAL = 1, INT = 0.55, MP5 = 2, SP = 1, SPELLCRIT = 7, SPI = 0.2, STA = 0.1 },
     rotation = { "Call of the Elements", "Riptide", "Nature's Swiftness", "Mana Tide Totem", "Water Shield", "Healing Wave", "Chain Heal" },
   },
   ["MAGE:1"] = { -- Arcane Mage
-    weights = { HASTE = 9, INT = 0.5, MP5 = 1.2, SP = 1, SPELLCRIT = 8, SPELLHIT = 11, SPI = 0.3, STA = 0.1 },
+    weights = { HASTE = 9, INT = 0.5, MP5 = 1.2, SP = 1, SPELLCRIT = 11.2, SPELLHIT = 11, SPI = 0.3, STA = 0.1 },
     rotation = { "Arcane Intellect", "Arcane Blast", "Arcane Power", "Arcane Missiles", "Arcane Wrath", "Presence of Mind", "Frostbolt", "Evocation" },
     levels = {
       [30] = { { "Arcane Missiles", 0.754, 9.5 }, { "Arcane Blast", 0.246, 11.4 } },
@@ -145,7 +145,7 @@ ns.GUIDE = { build = "2026-11-24", source = "Forever Upgrades",
     },
   },
   ["MAGE:2"] = { -- Fire Mage
-    weights = { HASTE = 9, INT = 0.4, MP5 = 1.1, SP = 1, SPELLCRIT = 9, SPELLHIT = 12, SPI = 0.2, STA = 0.1 },
+    weights = { HASTE = 9, INT = 0.4, MP5 = 1.1, SP = 1, SPELLCRIT = 12.6, SPELLHIT = 12, SPI = 0.2, STA = 0.1 },
     rotation = { "Pyroblast", "Scorch", "Fireball", "Pyroblast", "Combustion", "Evocation" },
     levels = {
       [30] = { { "Fireball", 0.631, 10.9 }, { "Scorch", 0.237, 11.2 }, { "Pyroblast", 0.085, 1.0 }, { "Ignite", 0.047, 0.0 } },
@@ -154,7 +154,7 @@ ns.GUIDE = { build = "2026-11-24", source = "Forever Upgrades",
     },
   },
   ["MAGE:3"] = { -- Frost Mage
-    weights = { HASTE = 9, INT = 0.4, MP5 = 1.1, SP = 1, SPELLCRIT = 8, SPELLHIT = 11, SPI = 0.2, STA = 0.1 },
+    weights = { HASTE = 9, INT = 0.4, MP5 = 1.1, SP = 1, SPELLCRIT = 11.2, SPELLHIT = 11, SPI = 0.2, STA = 0.1 },
     rotation = { "Ice Barrier", "Frostbolt", "Ice Lance", "Evocation" },
     levels = {
       [30] = { { "Frostbolt", 1.000, 24.0 } },
@@ -163,7 +163,7 @@ ns.GUIDE = { build = "2026-11-24", source = "Forever Upgrades",
     },
   },
   ["WARLOCK:1"] = { -- Affliction Warlock
-    weights = { HASTE = 8, INT = 0.3, SP = 1, SPELLCRIT = 4, SPELLHIT = 12, SPI = 0.15, STA = 0.2 },
+    weights = { HASTE = 8, INT = 0.3, SP = 1, SPELLCRIT = 5.6, SPELLHIT = 12, SPI = 0.15, STA = 0.2 },
     rotation = { "Curse of the Elements", "Amplify Curse", "Corruption", "Bane of Agony", "Siphon Life", "Shadow Bolt", "Wrack", "Life Tap" },
     levels = {
       [30] = { { "Shadow Bolt", 0.455, 15.5 }, { "Bane of Agony", 0.194, 2.3 }, { "Corruption", 0.178, 3.4 }, { "Imp: Firebolt", 0.172, 30.0 } },
@@ -172,7 +172,7 @@ ns.GUIDE = { build = "2026-11-24", source = "Forever Upgrades",
     },
   },
   ["WARLOCK:2"] = { -- Demonology Warlock
-    weights = { HASTE = 8, INT = 0.3, SP = 1, SPELLCRIT = 7, SPELLHIT = 12, SPI = 0.1, STA = 0.3 },
+    weights = { HASTE = 8, INT = 0.3, SP = 1, SPELLCRIT = 9.8, SPELLHIT = 12, SPI = 0.1, STA = 0.3 },
     rotation = { "Demonic Sacrifice", "Curse of the Elements", "Corruption", "Bane of Agony", "Shadow Bolt", "Life Tap" },
     levels = {
       [30] = { { "Shadow Bolt", 0.587, 15.7 }, { "Corruption", 0.220, 3.6 }, { "Bane of Agony", 0.193, 2.4 } },
@@ -181,7 +181,7 @@ ns.GUIDE = { build = "2026-11-24", source = "Forever Upgrades",
     },
   },
   ["WARLOCK:3"] = { -- Destruction Warlock
-    weights = { HASTE = 9, INT = 0.3, SP = 1, SPELLCRIT = 9, SPELLHIT = 12, STA = 0.15 },
+    weights = { HASTE = 9, INT = 0.3, SP = 1, SPELLCRIT = 12.6, SPELLHIT = 12, STA = 0.15 },
     rotation = { "Curse of the Elements", "Soul Fire", "Immolate", "Conflagrate", "Shadowburn", "Incinerate", "Life Tap" },
     levels = {
       [30] = { { "Shadow Bolt", 0.498, 16.5 }, { "Immolate", 0.237, 4.5 }, { "Imp: Firebolt", 0.169, 30.0 }, { "Conflagrate", 0.095, 3.0 } },
@@ -190,7 +190,7 @@ ns.GUIDE = { build = "2026-11-24", source = "Forever Upgrades",
     },
   },
   ["DRUID:1"] = { -- Balance Druid
-    weights = { HASTE = 9, INT = 0.4, MP5 = 1.2, SP = 1, SPELLCRIT = 8, SPELLHIT = 12, SPI = 0.2, STA = 0.1 },
+    weights = { HASTE = 9, INT = 0.4, MP5 = 1.2, SP = 1, SPELLCRIT = 11.2, SPELLHIT = 12, SPI = 0.2, STA = 0.1 },
     rotation = { "Moonkin Form", "Faerie Fire", "Insect Swarm", "Moonfire", "Starfire", "Wrath", "Innervate" },
     levels = {
       [30] = { { "Starfire", 0.651, 14.9 }, { "Moonfire", 0.189, 4.2 }, { "Insect Swarm", 0.160, 4.6 } },
@@ -199,7 +199,7 @@ ns.GUIDE = { build = "2026-11-24", source = "Forever Upgrades",
     },
   },
   ["DRUID:2"] = { -- Feral Combat Druid
-    weights = { AGI = 1.7, AP = 1, CRIT = 6.7, DPS = 13.7, HASTE = 6.1, HIT = 11.2, STR = 2.2 },
+    weights = { AGI = 1.7, AP = 1, CRIT = 9.38, DPS = 13.7, HASTE = 6.1, HIT = 11.2, STR = 2.2 },
     rotation = { "Poised", "Rake", "Shred", "Rip", "Ferocious Bite", "Omen of Clarity" },
     levels = {
       [30] = { { "Attack", 0.444, 61.0 }, { "Shred", 0.263, 9.1 }, { "Rip", 0.162, 3.5 }, { "Rake", 0.131, 6.4 } },
@@ -208,7 +208,7 @@ ns.GUIDE = { build = "2026-11-24", source = "Forever Upgrades",
     },
   },
   ["DRUID:3"] = { -- Restoration Druid
-    weights = { HASTE = 7, HEAL = 1, INT = 0.5, MP5 = 1.8, SP = 1, SPELLCRIT = 4, SPI = 0.5, STA = 0.1 },
+    weights = { HASTE = 7, HEAL = 1, INT = 0.5, MP5 = 1.8, SP = 1, SPELLCRIT = 5.6, SPI = 0.5, STA = 0.1 },
     rotation = { "Wild Growth", "Rejuvenation", "Swiftmend", "Nature's Swiftness", "Regrowth", "Innervate" },
   },
 }

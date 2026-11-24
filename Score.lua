@@ -146,9 +146,15 @@ end
 -- in the item's stats as ratings (that 1% as 10 hit rating), so: the % from the item's own line
 -- when it has one; a rating with no such line, turned into a % the way the game does for you.
 local PCT_STATS = { HIT = 6, CRIT = 9, SPELLHIT = 8, SPELLCRIT = 11, DODGE = 3, PARRY = 4, BLOCK = 5, HASTE = 18 } -- (their combat rating IDs)
-local RATING_PER_PCT = 10 -- (when the game won't say: 1% = 10 rating, as these items show)
+-- when the game won't say: rating per 1% at level 60 (wowsims/forever, foreverdb.net)
+local RATING_PER_PCT = { HIT = 10, SPELLHIT = 10, CRIT = 14, SPELLCRIT = 14, HASTE = 10, DODGE = 12, PARRY = 15, BLOCK = 5 }
+S.RATING_PER_PCT = RATING_PER_PCT
 local function RatingToPct(key, rating)
   local cr = PCT_STATS[key]
+  if GetCombatRatingBonusForCombatRatingValue then -- (the game's own conversion, for any amount)
+    local ok, b = pcall(GetCombatRatingBonusForCombatRatingValue, cr, rating)
+    if ok and Readable(b) and type(b) == "number" and b > 0 then return b end
+  end
   if GetCombatRating and GetCombatRatingBonus then
     local ok1, r = pcall(GetCombatRating, cr)
     local ok2, b = pcall(GetCombatRatingBonus, cr)
@@ -156,7 +162,7 @@ local function RatingToPct(key, rating)
       return rating * b / r -- (% per rating for you, from what you wear now)
     end
   end
-  return rating / RATING_PER_PCT
+  return rating / (RATING_PER_PCT[key] or 10)
 end
 
 local cache = {}

@@ -28,15 +28,16 @@ LEVELS = (("30", ""), ("50", ""), ("60", "dungeon"))
 RENAME = {"melee": "Attack", "windfury": "Windfury Weapon"}
 # "Lightning Bolt (Maelstrom)" is a cast of its own; "(Overload)", "(DoT)", "(off hand)" add damage only
 CAST_SUFFIX = {"maelstrom"}
-# site weight -> Equip This! stat, and the factor to its unit (ratings: 10 per 1%)
+# site weight -> Equip This! stat, and the factor to its unit (ratings per 1% at level 60: hit 10,
+# crit 14, haste 10, dodge 12, parry 15, block 5; wowsims/forever, foreverdb.net)
 def stat_map(role):
     spell = role in ("caster", "healer")
     return {
         "str": ("STR", 1), "agi": ("AGI", 1), "sta": ("STA", 1), "int": ("INT", 1), "spi": ("SPI", 1),
         "ap": ("AP", 1), "rap": ("RAP", 1), "sp": ("SP", 1), "heal": ("HEAL", 1), "mp5": ("MP5", 1),
         "wdps": ("DPS", 1), "armor": ("ARMOR", 1), "bonus_armor": ("ARMOR", 1), "block_value": ("BLOCKVALUE", 1),
-        "defense": ("DEF", 1), "dodge": ("DODGE", 10), "parry": ("PARRY", 10), "block": ("BLOCK", 10),
-        "hit": ("SPELLHIT" if spell else "HIT", 10), "crit": ("SPELLCRIT" if spell else "CRIT", 10),
+        "defense": ("DEF", 1), "dodge": ("DODGE", 12), "parry": ("PARRY", 15), "block": ("BLOCK", 5),
+        "hit": ("SPELLHIT" if spell else "HIT", 10), "crit": ("SPELLCRIT" if spell else "CRIT", 14),
         "haste": ("HASTE", 10),
     }
 
