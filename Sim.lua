@@ -13,7 +13,7 @@
 -- site's share of the total and moves with your auto attack (melee), spells or healing.
 -- An item's value: the % change in that number from wearing it, plus its other stats (Stamina,
 -- Intellect...) through Forever Upgrades' weights and your priorities, plus its effects.
--- Tanks and feral druids are scored by the weights alone.
+-- Tanks: their damage (their threat) from each ability on its cooldown; Feral: your claws in place of a weapon.
 local _, ns = ...
 local M = {}
 ns.Sim = M
@@ -36,8 +36,15 @@ local R = M.RULES
 -- normalized weapon speeds (strikes that say "normalized" use these for attack power)
 local NORMAL = { twoHand = 3.3, dagger = 1.7, oneHand = 2.4, ranged = 2.8 }
 
--- scored by the weights alone: tanks (the site sims damage taken) and feral (form attacks)
-local WEIGHTS_ONLY = { ["WARRIOR:3"] = true, ["PALADIN:2"] = true, ["DRUID:2"] = true }
+-- Tanks: the site's sims for them are about damage taken, so their damage (their threat) comes from
+-- each ability on its real cooldown, times about how often it really goes out: Revenge needs a dodge,
+-- parry or block, rage limits Shield Slam. (use: that share of the cooldown; cpm: casts a minute.) Their
+-- defensive stats count through Forever Upgrades' weights and your priorities.
+local TANK = {
+  ["WARRIOR:3"] = { { "Attack" }, { "Shield Slam", use = 0.7 }, { "Revenge", use = 0.6 }, { "Heroic Strike", cpm = 6 } },
+  ["PALADIN:2"] = { { "Attack" }, { "Holy Strike", use = 0.9 }, { "Consecration", use = 0.8 }, { "Judgement", use = 0.9 } },
+}
+M.TANK = TANK
 -- hunters who fight at range: their weapon strikes use the ranged weapon
 local RANGED = { ["HUNTER:1"] = true, ["HUNTER:2"] = true }
 -- the stats the model works out (the rest go through the weights)
@@ -56,9 +63,10 @@ local function Num(v) return (type(v) == "number" and Readable(v)) and v or 0 en
 local function Copy(s) local t = {} for k, v in pairs(s) do t[k] = type(v) == "table" and Copy(v) or v end return t end
 
 function M.Active()
-  if not (ns.GUIDE and ns.SPELLS) or WEIGHTS_ONLY[ns.SpecKey()] then return false end
-  local g = ns.GUIDE[ns.SpecKey()]
-  return g ~= nil and g.levels ~= nil and UnitAttackPower ~= nil
+  if not (ns.GUIDE and ns.SPELLS) then return false end
+  local key = ns.SpecKey()
+  local g = ns.GUIDE[key]
+  return g ~= nil and (g.levels ~= nil or TANK[key] ~= nil) and UnitAttackPower ~= nil
 end
 function M.Unit() local g = ns.GUIDE and ns.GUIDE[ns.SpecKey()]; return g and g.unit or "DPS" end
 
@@ -84,6 +92,26 @@ local function School(mask)
     i, bit = i + 1, bit * 2
   end
   return best
+end
+
+-- Feral: in Cat or Bear Form your claws replace the weapon (its DPS doesn't count; attack power does).
+-- Their damage is read from your character sheet while you're in the form (kept for your level), else
+-- estimated at about your level in damage per second (Classic's claws).
+function M.FormWeapon(s)
+  ns.db.form = ns.db.form or {}
+  local form = GetShapeshiftFormID and Num(Call(GetShapeshiftFormID)) or 0 -- (1 cat, 5 / 8 bear)
+  local key = (form == 5 or form == 8) and "bear" or "cat"
+  if form == 1 or form == 5 or form == 8 then
+    local lo, hi = Call(UnitDamage, "player")
+    local speed = Call(UnitAttackSpeed, "player")
+    if type(lo) == "number" and type(hi) == "number" and type(speed) == "number" and speed > 0 then
+      local dps = (lo + hi) / 2 / speed - s.ap / R.apPerDps
+      if dps > 0 then ns.db.form[key] = { level = s.level, dps = dps, speed = speed } end
+    end
+  end
+  local known = ns.db.form[key]
+  if known and known.level == s.level then return { dps = known.dps, speed = known.speed, form = true } end
+  return { dps = s.level * 0.9, speed = (key == "bear") and 2.5 or 1.0, form = true }
 end
 
 -- your character right now
@@ -114,6 +142,7 @@ function M.State()
   s.critPerAgi = Num(Call(GetCritChanceFromStat, 2, 100))
   local link = function(slot) return GetInventoryItemLink and GetInventoryItemLink("player", slot) end
   s.mh, s.oh, s.rw = Weapon(link(16)), Weapon(link(17)), Weapon(link(18))
+  if ns.SpecKey() == "DRUID:2" then s.mh, s.oh, s.form = M.FormWeapon(s), nil, true end
   s.wfBonus = (ns.Class() == "SHAMAN") and WindfuryBonus() or 0
   if s.oh and not s.oh.dps then s.oh = nil end
   return s
@@ -226,7 +255,7 @@ function M.CastAmount(id, s, ranged)
   if weapon then
     local w = ranged and s.rw or s.mh
     if w then
-      local speed = normalized and ((w.ranged and NORMAL.ranged) or (w.twoHand and NORMAL.twoHand) or (w.dagger and NORMAL.dagger) or NORMAL.oneHand) or w.speed
+      local speed = (normalized and not w.form) and ((w.ranged and NORMAL.ranged) or (w.twoHand and NORMAL.twoHand) or (w.dagger and NORMAL.dagger) or NORMAL.oneHand) or w.speed
       local ap = ranged and s.rap or s.ap
       local hit = (w.dps * w.speed + ap * speed / R.apPerDps + flat) * pct / 100
       raw = raw + hit
@@ -323,6 +352,43 @@ local function Cooldown(id)
   return d and (d[6] or 0) / 1000 or 0
 end
 
+-- A spell whose damage the game's data hides behind another spell (Consecration's ground effect...): what
+-- your tooltip says one cast does ("X to Y Holy damage", "X Holy damage over 8 sec"), nil if it says no number
+local function TooltipCast(name)
+  if not (C_Spell and C_Spell.GetSpellInfo and C_TooltipInfo and C_TooltipInfo.GetSpellByID) then return nil end
+  local ok, info = pcall(C_Spell.GetSpellInfo, name)
+  if not (ok and type(info) == "table" and Readable(info.spellID)) then return nil end
+  local okT, data = pcall(C_TooltipInfo.GetSpellByID, info.spellID)
+  if not (okT and type(data) == "table" and type(data.lines) == "table") then return nil end
+  local total = 0
+  for _, l in ipairs(data.lines) do
+    local t = (Readable(l.leftText) and l.leftText or ""):gsub(",", ""):lower()
+    if not t:find("summons") then
+      local over = t:match("(%d+) %a* ?damage over %d+")
+      if over then total = total + tonumber(over); t = t:gsub("(%d+) %a* ?damage over %d+", "", 1) end
+      local a, b = t:match("(%d+) to (%d+) %a* ?damage")
+      if a then total = total + (tonumber(a) + tonumber(b)) / 2 end
+    end
+  end
+  return total > 0 and total or nil
+end
+
+-- a tank's rotation at a level: { { name, share (0: worked out), casts a minute } }
+local function TankSite(key, level)
+  local list = {}
+  for _, e in ipairs(TANK[key] or {}) do
+    local cpm = e.cpm or 0
+    if e.use then
+      local id = M.Rank(e[1], level)
+      local cd = id and Cooldown(id) or 0
+      if cd <= 0 and e[1] ~= "Attack" then cd = 10 end -- (no cooldown known: about every 10 sec)
+      cpm = cd > 0 and 60 / cd * e.use or 0
+    end
+    list[#list + 1] = { e[1], 0, cpm }
+  end
+  return list
+end
+
 ---------------------------------------------------------------------------
 -- Your rotation, played with your numbers
 ---------------------------------------------------------------------------
@@ -335,7 +401,7 @@ function M.Play(s, base)
   base = base or s
   local key = ns.SpecKey()
   local g = ns.GUIDE and ns.GUIDE[key]
-  local site = g and g.levels and ns.Rotation.AtLevel(g.levels, s.level)
+  local site = (g and g.levels and ns.Rotation.AtLevel(g.levels, s.level)) or (TANK[key] and TankSite(key, s.level))
   if not site then return nil end
   local ranged = RANGED[key]
   local heals = g.unit == "HPS"
@@ -381,6 +447,16 @@ function M.Play(s, base)
           cpm = cpm * (1 + s.shaste / 100) / (1 + base.shaste / 100)
         end
         if amount and amount > 0 then e[2], e[3], e[4], e[5] = amount * cpm, "spell", cpm, id end
+      elseif cpm > 0 then
+        -- no numbers in the game's data for it: your tooltip's (with a spell's crits and misses)
+        local per = (s == base) and TooltipCast(name) or (base.tipCast and base.tipCast[name])
+        if per then
+          base.tipCast = base.tipCast or {}
+          base.tipCast[name] = per
+          local sc = 0
+          for i = 2, 7 do sc = math.max(sc, s.scrit[i] or 0) end
+          e[2], e[3], e[4], e[7] = per * (1 + sc / 100 * (R.spellCritDamage - 1)) * cpm, "spell", cpm, per
+        end
       end
     end
     if e[3] == "white" or e[3] == "spell" then known, knownShare = known + e[2], knownShare + share end
@@ -484,7 +560,9 @@ function M.Change(swap, s)
   local t = Copy(s)
   for _, l in ipairs(swap.out or {}) do local f = ns.Score.Facts(l); if f then Apply(t, f.stats, -1) end end
   for _, l in ipairs(swap.inn or {}) do local f = ns.Score.Facts(l); if f then Apply(t, f.stats, 1) end end
-  for _, k in ipairs({ "mh", "oh", "rw" }) do if swap[k] ~= nil then t[k] = swap[k] or nil end end
+  for _, k in ipairs({ "mh", "oh", "rw" }) do
+    if swap[k] ~= nil and not (t.form and k ~= "rw") then t[k] = swap[k] or nil end -- (Feral: the claws stay)
+  end
   return (M.Total(t, s) / before - 1) * 100, t
 end
 
@@ -499,6 +577,7 @@ function M.PerUnitNow(key, s)
   if before <= 0 then return 0 end
   local t = Copy(s)
   if key == "DPS" then
+    if t.form then return 0 end -- (Feral: your weapon's damage doesn't reach your claws)
     if t.mh then t.mh.dps = t.mh.dps + n end
     if t.rw and RANGED[ns.SpecKey()] then t.rw.dps = t.rw.dps + n end
   else

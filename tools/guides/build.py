@@ -88,7 +88,7 @@ def split(breakdown):
 #                  { { effect, aura, base points, points per level, spell power coef., attack power coef.,
 #                      tick ms, points per combo point }, ... } }
 # Effects kept: 2 school damage, 10 heal, 31 weapon %, 121 / 58 / 17 weapon damage + flat bonus,
-# 6 apply aura with 3 periodic damage, 8 periodic heal, 69 absorb.
+# 6 apply aura / 27 area on the ground (Consecration) with 3 periodic damage, 8 periodic heal, 69 absorb.
 # ---------------------------------------------------------------------------------------------
 import csv, io, collections
 WAGO = "https://wago.tools/db2/{}/csv?build={}"
@@ -138,7 +138,7 @@ def build_spells(names, out, build=None):
     effects = collections.defaultdict(list)
     for r in table("SpellEffect", build):
         if r["SpellID"] in allids and r["DifficultyID"] == "0" and (
-                r["Effect"] in KEEP_EFFECTS or (r["Effect"] == "6" and r["EffectAura"] in KEEP_AURAS)):
+                r["Effect"] in KEEP_EFFECTS or (r["Effect"] in ("6", "27") and r["EffectAura"] in KEEP_AURAS)):
             effects[r["SpellID"]].append(r)
     # weapon imbues (Windfury Weapon...): the enchant on the weapon -> the rank that puts it there
     imbues = {}
