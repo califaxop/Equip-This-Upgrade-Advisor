@@ -178,14 +178,14 @@ function S.Facts(link)
   for k, v in pairs(extra) do if not stats[k] or PCT_STATS[k] then stats[k] = v end end
   local sell = select(11, (C_Item and C_Item.GetItemInfo or GetItemInfo)(link))
   local subType = C_Item and C_Item.GetItemInfoInstant and select(3, C_Item.GetItemInfoInstant(link))
-  local f = { stats = stats, equipLoc = equipLoc, subType = type(subType) == "string" and subType:lower() or nil, usable = not red, sell = type(sell) == "number" and sell or 0,
+  local f = { id = tonumber(link:match("item:(%d+)")), stats = stats, equipLoc = equipLoc, subType = type(subType) == "string" and subType:lower() or nil, usable = not red, sell = type(sell) == "number" and sell or 0,
     speed = speed, effects = ns.Effects and ns.Effects.Parse(texts) or {} }
   -- Kept for next time only once the item's text was read: one read before it loads has no effect
   -- lines (a "+10% Stormstrike" weapon would score as if it had none, for the whole session).
   if complete then cache[link] = f end
   return f
 end
-function S.ClearCache() wipe(cache); if ns.Effects then ns.Effects.ClearCache() end end
+function S.ClearCache() wipe(cache); if ns.Effects then ns.Effects.ClearCache() end; if ns.ForgetTalents then ns.ForgetTalents() end end
 
 local WEAPON_LOCS = { INVTYPE_WEAPON = true, INVTYPE_2HWEAPON = true, INVTYPE_WEAPONMAINHAND = true,
   INVTYPE_WEAPONOFFHAND = true, INVTYPE_RANGED = true, INVTYPE_RANGEDRIGHT = true, INVTYPE_THROWN = true }

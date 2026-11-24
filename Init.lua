@@ -49,7 +49,13 @@ SlashCmdList.EQUIPTHIS = function(msg)
   msg = msg or ""
   local cmd, rest = msg:match("^%s*(%S*)%s*(.-)%s*$")
   cmd = (cmd or ""):lower()
-  if cmd == "model" then
+  if cmd == "learn" then
+    local arg = rest:lower()
+    if arg == "off" or arg == "on" then ns.db.learn = arg == "on"
+    elseif arg == "reset" then ns.Learn.Reset(); ns.Print("forgot what was learned for " .. ns.SpecName(ns.SpecKey()) .. ".") end
+    ns.Print("damage split: " .. ns.Learn.Status())
+    return
+  elseif cmd == "model" then
     local arg = rest:lower()
     if arg == "off" or arg == "on" then
       ns.db.model = arg == "on"; ns.Score.ClearCache()

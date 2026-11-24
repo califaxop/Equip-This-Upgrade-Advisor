@@ -122,6 +122,63 @@ local function PointsFromTabs()
   return points
 end
 
+-- Your talents by name (lower case) -> rank, or {} if the client won't say. Forever: its trait
+-- tree (each node's chosen entry, its spell's name); older clients: GetTalentInfo. Kept until your
+-- talents change (ns.ForgetTalents).
+local talentRanks
+local function SpellName(id)
+  if C_Spell and C_Spell.GetSpellName then
+    local ok, n = pcall(C_Spell.GetSpellName, id)
+    if ok and type(n) == "string" and not ns.isSecret(n) then return n end
+  end
+  if GetSpellInfo then
+    local ok, n = pcall(GetSpellInfo, id)
+    if ok and type(n) == "string" and not ns.isSecret(n) then return n end
+  end
+end
+local function RanksFromTraits()
+  if not (C_ClassTalents and C_ClassTalents.GetActiveConfigID and C_Traits and C_Traits.GetConfigInfo and C_Traits.GetTreeNodes
+    and C_Traits.GetNodeInfo and C_Traits.GetEntryInfo and C_Traits.GetDefinitionInfo) then return nil end
+  local ok, configID = pcall(C_ClassTalents.GetActiveConfigID)
+  if not (ok and type(configID) == "number" and not ns.isSecret(configID)) then return nil end
+  local ok2, info = pcall(C_Traits.GetConfigInfo, configID)
+  local treeID = ok2 and type(info) == "table" and type(info.treeIDs) == "table" and info.treeIDs[1]
+  if type(treeID) ~= "number" then return nil end
+  local ok3, nodes = pcall(C_Traits.GetTreeNodes, treeID)
+  if not (ok3 and type(nodes) == "table") then return nil end
+  local ranks = {}
+  for _, nodeID in ipairs(nodes) do
+    local okN, node = pcall(C_Traits.GetNodeInfo, configID, nodeID)
+    local rank = okN and type(node) == "table" and (node.activeRank or node.currentRank) or 0
+    if type(rank) == "number" and not ns.isSecret(rank) and rank > 0 then
+      local entryID = (type(node.activeEntry) == "table" and node.activeEntry.entryID) or (type(node.entryIDs) == "table" and node.entryIDs[1])
+      local okE, entry = pcall(C_Traits.GetEntryInfo, configID, entryID)
+      local okD, def = false, nil
+      if okE and type(entry) == "table" and entry.definitionID then okD, def = pcall(C_Traits.GetDefinitionInfo, entry.definitionID) end
+      local name = okD and type(def) == "table" and ((type(def.overrideName) == "string" and def.overrideName ~= "" and def.overrideName) or (def.spellID and SpellName(def.spellID)))
+      if name then ranks[name:lower()] = rank end
+    end
+  end
+  return ranks
+end
+local function RanksFromTabs()
+  if not (GetNumTalentTabs and GetNumTalents and GetTalentInfo) then return nil end
+  local ranks = {}
+  for tab = 1, (GetNumTalentTabs() or 0) do
+    for i = 1, (GetNumTalents(tab) or 0) do
+      local ok, name, _, _, _, rank = pcall(GetTalentInfo, tab, i)
+      if ok and type(name) == "string" and type(rank) == "number" and rank > 0 then ranks[name:lower()] = rank end
+    end
+  end
+  return ranks
+end
+function ns.TalentRanks()
+  if not talentRanks then talentRanks = RanksFromTraits() or RanksFromTabs() or {} end
+  return talentRanks
+end
+function ns.TalentRank(name) return ns.TalentRanks()[(name or ""):lower()] or 0 end
+function ns.ForgetTalents() talentRanks = nil end
+
 function ns.TalentPoints()
   return PointsFromTraits(ns.Class()) or PointsFromTabs()
 end

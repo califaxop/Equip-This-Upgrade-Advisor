@@ -610,7 +610,8 @@ local function CritRate(spell)
   return spell and SPELL_CRIT_RATE or CRIT_RATE
 end
 
--- how often a proc goes off a minute: its stated chance per swing (or per cast, or per crit), else about once.
+-- how often a proc goes off a minute: its chance per swing (or per cast, or per crit), as the item says
+-- or the game's tables have it (Procs.lua), else about once.
 -- A proc tied to one skill goes off on that skill's casts: its part of your casts (its weight over the list's).
 local function PerMin(e, f)
   local spell = e.trigger == "spell" or e.trigger == "spellcrit"
@@ -622,8 +623,10 @@ local function PerMin(e, f)
     per = (total > 0) and (CASTS_PER_MIN * w / total) or 0
   end
   if e.trigger == "crit" or e.trigger == "spellcrit" then per = per * CritRate(spell) end
-  if not e.chance then return e.skillTrig and math.min(per, PPM) or PPM end
-  return e.chance / 100 * per
+  -- the chance: the item's own words, else the game's tables (Procs.lua), else about once a minute
+  local chance = e.chance or (f and f.id and ns.PROC_CHANCE and ns.PROC_CHANCE[f.id])
+  if not chance then return e.skillTrig and math.min(per, PPM) or PPM end
+  return chance / 100 * per
 end
 
 -- one effect: its points for these weights, and a line saying how

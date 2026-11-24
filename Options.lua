@@ -301,6 +301,9 @@ function ns.OpenSkills(onChange)
         win.rows[i].pending = nil
         for k, w in pairs(win.rows[i]) do if k ~= "pending" then w:Hide() end end
       end
+      -- where the shares come from: your damage meter once it's learned enough, else these weights
+      if ns.Learn and ns.Learn.Active() then win.sub:SetText("|cff40ff40shares from your damage meter|r (/eqt learn)")
+      else win.sub:SetText("") end
       local shown = math.max(1, math.min(n, SKILL_ROWS))
       win.content:SetHeight(math.max(1, n * 26))
       win.scroll:SetHeight(shown * 26)

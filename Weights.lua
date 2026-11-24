@@ -268,6 +268,8 @@ end
 -- a skill's share of your output, 0 to 1 (nil = not listed): its weight over the total, times the skill part.
 -- family: every listed skill with that word in its name ("Shock" -> Earth Shock + Flame Shock)
 function ns.SkillShare(name, family)
+  -- learned from your damage meter, once there's enough (Learn.lua)
+  if ns.Learn and ns.Learn.Active() then return ns.Learn.Share(name, family) end
   local w = ns.SkillWeight(name)
   if not w and family then
     local word = " " .. (name or ""):lower() .. " "

@@ -43,6 +43,39 @@ local MELEE = { ["WARRIOR:1"] = true, ["WARRIOR:2"] = true, ["PALADIN:3"] = true
 local DAMAGE = { STR = true, AGI = true, AP = true, CRIT = true, HIT = true, DPS = true, HASTE = true }
 M.DAMAGE = DAMAGE
 
+-- Talents that depend on the weapon (per rank; Classic's values): your live crit and hit already
+-- include what your current weapon gets, so that's taken out, and each setup gets its own.
+--   dmg2h / dmg1h: % damage with a two-hander / one-hander;  oh: % more off-hand damage;
+--   dwHit: % hit while dual wielding;  crit + subs: % crit with those weapon kinds (item subclasses)
+local AXES, POLEARMS, DAGGERS, FISTS = { [0] = true, [1] = true }, { [6] = true }, { [15] = true }, { [13] = true }
+local TALENTS = {
+  WARRIOR = { ["two-handed weapon specialization"] = { dmg2h = 1 }, ["dual wield specialization"] = { oh = 5 },
+              ["axe specialization"] = { crit = 1, subs = AXES }, ["polearm specialization"] = { crit = 1, subs = POLEARMS } },
+  PALADIN = { ["two-handed weapon specialization"] = { dmg2h = 2 }, ["one-handed weapon specialization"] = { dmg1h = 2 } },
+  ROGUE   = { ["dual wield specialization"] = { oh = 10 }, ["dagger specialization"] = { crit = 1, subs = DAGGERS },
+              ["fist weapon specialization"] = { crit = 1, subs = FISTS } },
+  SHAMAN  = { ["dual wield specialization"] = { dwHit = 2 } },
+}
+M.TALENTS = TALENTS
+-- what your talents give: { dmg2h, dmg1h, oh, dwHit, crits = { { pct, subs } }, names = { "Axe Specialization 5/5" } }
+function M.Talents()
+  local t = { dmg2h = 0, dmg1h = 0, oh = 0, dwHit = 0, crits = {}, names = {} }
+  for name, e in pairs(TALENTS[ns.Class()] or {}) do
+    local rank = ns.TalentRank(name)
+    if rank > 0 then
+      for _, k in ipairs({ "dmg2h", "dmg1h", "oh", "dwHit" }) do if e[k] then t[k] = t[k] + e[k] * rank end end
+      if e.crit then t.crits[#t.crits + 1] = { e.crit * rank, e.subs } end
+      t.names[#t.names + 1] = format("%s (rank %d)", (name:gsub("(%a)([%w']*)", function(x, y) return x:upper() .. y end)), rank)
+    end
+  end
+  return t
+end
+local function TalentCrit(t, w)
+  local c = 0
+  if w and w.sub then for _, tc in ipairs(t.crits) do if tc[2][w.sub] then c = c + tc[1] end end end
+  return c
+end
+
 local function Call(fn, ...)
   if type(fn) ~= "function" then return nil end
   local ok, a, b, c = pcall(fn, ...)
@@ -63,7 +96,8 @@ end
 local function Weapon(link)
   local f = link and ns.Score.Facts(link)
   if not (f and f.stats and f.stats.DPS and f.stats.DPS > 0) then return nil end
-  return { dps = f.stats.DPS, speed = f.speed or 2.5, twoHand = f.equipLoc == "INVTYPE_2HWEAPON" }
+  local sub = C_Item and C_Item.GetItemInfoInstant and select(7, C_Item.GetItemInfoInstant(link))
+  return { dps = f.stats.DPS, speed = f.speed or 2.5, twoHand = f.equipLoc == "INVTYPE_2HWEAPON", sub = type(sub) == "number" and sub or nil }
 end
 M.Weapon = Weapon
 
@@ -84,7 +118,20 @@ function M.State()
   s.critPerAgi = Num(Call(GetCritChanceFromStat, 2, 100)) -- (a fraction for 100 Agility = % per 1)
   s.mh = Weapon(GetInventoryItemLink and GetInventoryItemLink("player", 16))
   s.oh = Weapon(GetInventoryItemLink and GetInventoryItemLink("player", 17))
+  -- your weapon talents: take out what your current weapons get (the setup decides, see Crit / Hit)
+  s.tal = M.Talents()
+  s.crit = s.crit - TalentCrit(s.tal, s.mh)
+  if s.mh and s.oh then s.hit = s.hit - s.tal.dwHit; s.ohHit = s.ohHit - s.tal.dwHit end
   return s
+end
+
+local function DW(s) return s.mh ~= nil and s.oh ~= nil end
+local function Crit(s) return s.crit + TalentCrit(s.tal, s.mh) end
+local function Hit(s, off) return (off and s.ohHit or s.hit) + (DW(s) and s.tal.dwHit or 0) end
+-- weapon damage from talents: x(1 + %) with a two-hander / one-hander
+local function TalentDamage(s)
+  if not s.mh then return 1 end
+  return 1 + (s.mh.twoHand and s.tal.dmg2h or s.tal.dmg1h) / 100
 end
 
 -- how much of a white swing lands, on average (misses, dodges and glancing blows out, crits double)
@@ -105,9 +152,11 @@ end
 
 -- your melee damage per second for state `s`
 function M.Dps(s)
-  local dw = s.mh ~= nil and s.oh ~= nil
-  local total = HandDps(s.mh, s.ap, s.haste) * Landing(s.hit, s.crit, dw, s.expertise)
-  if dw then total = total + HandDps(s.oh, s.ap, s.haste) * R.offHand * Landing(s.ohHit, s.crit, true, s.expertise) end
+  local dw = DW(s)
+  local total = HandDps(s.mh, s.ap, s.haste) * TalentDamage(s) * Landing(Hit(s), Crit(s), dw, s.expertise)
+  if dw then
+    total = total + HandDps(s.oh, s.ap, s.haste) * R.offHand * (1 + s.tal.oh / 100) * Landing(Hit(s, true), Crit(s), true, s.expertise)
+  end
   return total
 end
 
@@ -119,7 +168,7 @@ local SWING = { ["stormstrike"] = true, ["heroic strike"] = true, ["mortal strik
   ["whirlwind"] = true, ["crusader strike"] = true, ["lava lash"] = true, ["ghostly strike"] = true, ["riposte"] = true,
   ["raptor strike"] = true, ["mutilate"] = true, ["seal of command"] = true, ["holy strike"] = true }
 local APSKILL = { ["bloodthirst"] = true }
-local WHITE = { ["windfury weapon"] = true, ["windfury"] = true, ["auto attack"] = true, ["attack"] = true,
+local WHITE = { ["windfury weapon"] = true, ["windfury"] = true, ["windfury attack"] = true, ["auto attack"] = true, ["attack"] = true,
   ["rockbiter weapon"] = true, ["flametongue weapon"] = true, ["seal of righteousness"] = true }
 function M.SkillKind(name)
   local n = (name or ""):lower()
@@ -131,9 +180,9 @@ end
 
 -- a skill or ability's hit: misses and dodges, crits, but no glancing or dual-wield penalty
 local function SpecialLanding(s)
-  local miss = math.max(0, R.miss - s.hit) / 100
+  local miss = math.max(0, R.miss - Hit(s)) / 100
   local dodge = math.max(0, R.dodge - s.expertise) / 100
-  local c = math.max(0, math.min(s.crit / 100, 1 - miss - dodge))
+  local c = math.max(0, math.min(Crit(s) / 100, 1 - miss - dodge))
   return 1 - miss - dodge + c * (R.critDamage - 1)
 end
 -- one main-hand swing's damage, on average (a weapon strike's)
@@ -141,13 +190,18 @@ local function Swing(s)
   local w = s.mh
   local speed = w and w.speed or 2.0
   local weaponHit = w and w.dps * speed or 0
-  return (weaponHit + s.ap * speed / R.apPerDps) * SpecialLanding(s)
+  return (weaponHit + s.ap * speed / R.apPerDps) * TalentDamage(s) * SpecialLanding(s)
 end
 M.Swing = Swing
 
--- your output, split: { white = share, parts = { { name, share, kind } ... } } (shares add up to 1)
+-- your output, split: { white = share, parts = { { name, share, kind } ... } } (shares add up to 1),
+-- from your damage meter once it's learned enough, else your Skill Weights
 function M.Split()
   local parts, used = {}, 0
+  if ns.Learn and ns.Learn.Active() then
+    for _, sp in ipairs(ns.Learn.Shares()) do parts[#parts + 1] = { sp[1], sp[2], M.SkillKind(sp[1]) } end
+    return { white = 0, parts = parts, learned = true }
+  end
   for _, sk in ipairs(ns.CurrentSkills()) do
     local share = ns.SkillShare(sk[1])
     if share and share > 0 then
@@ -307,7 +361,7 @@ end
 function M.Report(print)
   local s = M.State()
   print(format("attack power %d (1 Strength = %.2f, 1 Agility = %.2f), crit %.2f%% (1 Agility = %.3f%%), hit %.2f%%, haste %.1f%%",
-    s.ap, s.apPerStr, s.apPerAgi, s.crit, s.critPerAgi, s.hit, s.haste))
+    s.ap, s.apPerStr, s.apPerAgi, Crit(s), s.critPerAgi, Hit(s), s.haste))
   local function sheet(off)
     local lo, hi, olo, ohi = Call(UnitDamage, "player")
     local sp, osp = Call(UnitAttackSpeed, "player")
@@ -329,11 +383,15 @@ function M.Report(print)
       hit, (lo and hi) and format("%.0f", (lo + hi) / 2) or "?", s.mh.speed))
   end
   local split = M.Split()
-  local parts = { format("white hits %d%%", math.floor(split.white * 100 + 0.5)) }
+  local parts = {}
+  if split.white > 0 then parts[1] = format("white hits %d%%", math.floor(split.white * 100 + 0.5)) end
   local how = { swing = "per hit", ap = "attack power", white = "per second", spell = "not melee" }
-  for _, p in ipairs(split.parts) do parts[#parts + 1] = format("%s %d%% (%s)", p[1], math.floor(p[2] * 100 + 0.5), how[p[3]]) end
-  print("your output (Skill Weights): " .. table.concat(parts, ", "))
-  local land, miss, dodge, crit = Landing(s.hit, s.crit, s.mh ~= nil and s.oh ~= nil, s.expertise)
+  for i, p in ipairs(split.parts) do
+    if i <= 10 then parts[#parts + 1] = format("%s %d%% (%s)", p[1], math.floor(p[2] * 100 + 0.5), how[p[3]]) end
+  end
+  print("your output (" .. (split.learned and "your damage meter" or "Skill Weights") .. "): " .. table.concat(parts, ", "))
+  print("weapon talents: " .. (#s.tal.names > 0 and table.concat(s.tal.names, ", ") or "none that depend on the weapon"))
+  local land, miss, dodge, crit = Landing(Hit(s), Crit(s), DW(s), s.expertise)
   print(format("against an enemy your level: %.1f%% miss, %.1f%% dodge, %d%% glancing, %.1f%% crit = %.0f%% of your swings' damage lands",
     miss * 100, dodge * 100, R.glance, crit * 100, land * 100))
   print(format("melee damage per second: %.1f. Worth: +10 Strength %.2f%%, +10 Agility %.2f%%, +10 attack power %.2f%%, +1%% crit %.2f%%, +1%% hit %.2f%%",

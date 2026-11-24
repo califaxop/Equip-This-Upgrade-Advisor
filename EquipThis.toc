@@ -10,9 +10,11 @@
 
 Core.lua
 Weights.lua
+Procs.lua
 Effects.lua
 Score.lua
 Model.lua
+Learn.lua
 Scales.lua
 UI.lua
 Display.lua
