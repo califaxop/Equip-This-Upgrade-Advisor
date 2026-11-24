@@ -353,6 +353,15 @@ local FAMILY = { INVTYPE_ROBE = "INVTYPE_CHEST", INVTYPE_SHIELD = "INVTYPE_WEAPO
   INVTYPE_WEAPONMAINHAND = "INVTYPE_WEAPON", INVTYPE_RANGEDRIGHT = "INVTYPE_RANGED", INVTYPE_THROWN = "INVTYPE_RANGED" }
 local function Family(loc) return FAMILY[loc] or loc end
 function S.BagList() return BagItems() end
+-- is this item yours (worn or in your bags)?
+function S.Owned(link)
+  if type(link) ~= "string" then return false end
+  for slot = 1, 19 do
+    if GetInventoryItemLink and GetInventoryItemLink("player", slot) == link then return true end
+  end
+  for _, b in ipairs(BagItems()) do if b[1] == link then return true end end
+  return false
+end
 -- your bag items of a kind (not this item), as { { value, link } }: usable ones only
 local function BagScores(loc, exceptId, weights)
   local out = {}

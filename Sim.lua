@@ -608,8 +608,9 @@ function M.Change(swap, s)
   for _, k in ipairs({ "mh", "oh", "rw" }) do
     if swap[k] ~= nil and not (t.form and k ~= "rw") then -- (Feral: the claws stay)
       local old, new = t[k], swap[k] or nil
-      -- a weapon with no imbue (new loot): you'd put yours on it, so it takes the old one's
-      if new and not new.temp and old and old.temp then
+      -- new loot (not yours yet, so it can't have an imbue): you'd put yours on it, so it takes the old
+      -- one's; a weapon of yours is taken as it is
+      if swap.carry and new and not new.temp and old and old.temp then
         local c = {}
         for kk, v in pairs(new) do c[kk] = v end
         c.temp = old.temp
@@ -724,7 +725,7 @@ function M.Gain(link, out, weights, hand, s, partner)
   s = s or M.Cached()
   local f = ns.Score.Facts(link)
   if not f then return nil end
-  local swap = { out = out, inn = { link } }
+  local swap = { out = out, inn = { link }, carry = hand ~= nil and not ns.Score.Owned(link) }
   if hand then swap[hand] = Weapon(link) or false end
   if f.equipLoc == "INVTYPE_2HWEAPON" then swap.oh = false end
   local pf = partner and ns.Score.Facts(partner)
@@ -732,9 +733,8 @@ function M.Gain(link, out, weights, hand, s, partner)
   local change = M.Change(swap, s)
   if not change then return nil end
   local rate = M.Rate(s)
-  -- (an incoming weapon with no imbue takes yours: its proc, a poison's, then stays on both sides)
-  local function Bare(l) return l and ns.Score.Facts(l) and (ns.Score.Facts(l).stats.DPS or 0) > 0 and not ns.Score.TempEnchant(l) end
-  local carried = Bare(link) or (pf and Bare(partner))
+  -- (new loot takes your imbue: its proc, a poison's, then stays on both sides)
+  local carried = swap.carry and (f.stats.DPS or 0) > 0 and not ns.Score.TempEnchant(link)
   local gain = change + M.Extra(WithTemp(link), weights, s, rate)
   if pf then gain = gain + M.Extra(WithTemp(partner), weights, s, rate) end
   for _, l in ipairs(out or {}) do gain = gain - M.Extra(WithTemp(l, carried), weights, s, rate) end
