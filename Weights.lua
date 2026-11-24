@@ -187,7 +187,8 @@ function ns.Priorities(key)
   ns.db.priorities = ns.db.priorities or {}
   local p = ns.db.priorities[key]
   if p and p.goal then p.build = OLD_GOAL[p.goal] or p.goal; p.goal = nil end
-  if p then p.levels = p.levels or {}; p.values = p.values or {} end
+  -- (stat levels and values of your own, from older versions: no more; the slider is the control)
+  if p then p.levels = {}; p.values = {} end
   return p or { build = "auto", levels = {}, values = {} }
 end
 local function Save(key, p) ns.db.priorities = ns.db.priorities or {}; ns.db.priorities[key] = p end
@@ -246,10 +247,7 @@ function ns.SetValue(stat, v, key)
   p.levels[stat] = nil
   Save(key, p)
 end
-function ns.HasChanges(key)
-  local p = ns.Priorities(key)
-  return next(p.levels) ~= nil or next(p.values) ~= nil
-end
+function ns.HasChanges() return false end
 function ns.ResetPriorities(key) if ns.db.priorities then ns.db.priorities[key or ns.SpecKey()] = nil end end
 
 -- your spec's values before your own changes: Forever Upgrades', with your talents (your current spec)

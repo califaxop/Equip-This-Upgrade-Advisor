@@ -42,7 +42,7 @@ local function BuildPanel(panel)
 
   -- Your build ---------------------------------------------------------------
   at(UI.Section(panel, "Your build", W_), 26, -278)
-  local n = at(UI.Text(panel, "note", "Slide toward what you want more of. Each stat's value starts from Forever Upgrades' simulator for your spec, scaled by your talents; hover a stat for where it comes from, or type your own (clear the box to put it back)."), 26, -306)
+  local n = at(UI.Text(panel, "note", "Slide toward what you want more of. Stat values come from Forever Upgrades' simulator for your spec, adjusted to your level, talents and gear. /eqt guide lists them."), 26, -306)
   n:SetWidth(W_)
   local function changed() Changed(); refreshRows(); now.Refresh() end
   -- the build: a preset, or your own mix on the slider
@@ -71,46 +71,9 @@ local function BuildPanel(panel)
     local t = ns.SurvivalShare()
     mixText:SetText(format("%d%% %s  /  %d%% survivability", (1 - t) * 100 + 0.5, leftEnd():gsub("^More ", ""):lower(), t * 100 + 0.5))
   end })
-  -- each stat's value (type your own; clear it for the default)
-  local y0 = -448
-  for i, key in ipairs(ns.STAT_ORDER) do
-    local col, row = (i - 1) % 2, math.floor((i - 1) / 2)
-    local x, y = 26 + col * 360, y0 - row * 28
-    local lbl = at(UI.Text(panel, "line", ns.STAT_NAMES[key]), x, y - 3)
-    lbl:SetWidth(170); lbl:SetJustifyH("LEFT"); if lbl.SetWordWrap then lbl:SetWordWrap(false) end
-    local function tip(owner)
-      GameTooltip:SetOwner(owner, "ANCHOR_RIGHT")
-      GameTooltip:SetText(ns.STAT_NAMES[key], 1, 1, 1)
-      for j, line in ipairs(ns.PriorityInfo(key)) do
-        if j > 1 then GameTooltip:AddLine(" ") end
-        GameTooltip:AddLine(line, 0.85, 0.85, 0.85, true)
-      end
-      GameTooltip:Show()
-    end
-    local hover = CreateFrame("Frame", nil, panel)
-    hover:SetSize(172, 20); hover:SetPoint("TOPLEFT", x - 2, y + 1)
-    hover:EnableMouse(true)
-    hover:SetScript("OnEnter", tip)
-    hover:SetScript("OnLeave", function() GameTooltip:Hide() end)
-    local box = UI.Edit(panel, 70, {
-      function() return ns.Short(ns.Weights()[key] or 0) end,
-      function(t)
-        if t == "" then if ns.Level(key) ~= "goal" then ns.SetValue(key, nil); changed() end return end
-        local v = tonumber(t)
-        if v and math.abs(v - (ns.Weights()[key] or 0)) > 1e-6 then ns.SetValue(key, v); changed() end
-      end },
-      "", false, true)
-    box:SetPoint("TOPLEFT", x + 176, y + 1)
-    if box.HookScript then box:HookScript("OnEnter", tip); box:HookScript("OnLeave", function() GameTooltip:Hide() end) end
-    rows[#rows + 1] = box; track(box)
-    -- (your own value: marked)
-    local mark = UI.Text(panel, "note", "")
-    mark:SetPoint("LEFT", box, "RIGHT", 8, 0)
-    track({ Refresh = function() mark:SetText(ns.Level(key) ~= "goal" and "yours" or "") end })
-  end
-  local yEnd = y0 - math.ceil(#ns.STAT_ORDER / 2) * 28 - 10
+  local yEnd = -448
   local reset = at(UI.Button(panel, "Reset build", 110, function() ns.ResetPriorities(); changed() end), 26, yEnd)
-  reset.tip = "Back to Auto, with Forever Upgrades' values (and your talents): your own values are cleared."
+  reset.tip = "Back to Auto: Leveling until the level cap, then Damage (tanks: Tanking)."
   local fb = UI.Button(panel, "Report a bug / suggest", 170, function()
     UI.ShowLink("EquipThisLinkWindow", "Equip This!: bugs and ideas", "https://github.com/califaxop/Equip-This-Upgrade-Advisor/issues/new/choose")
   end)
