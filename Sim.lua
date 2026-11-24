@@ -143,7 +143,9 @@ function M.State()
   local link = function(slot) return GetInventoryItemLink and GetInventoryItemLink("player", slot) end
   s.mh, s.oh, s.rw = Weapon(link(16)), Weapon(link(17)), Weapon(link(18))
   if ns.SpecKey() == "DRUID:2" then s.mh, s.oh, s.form = M.FormWeapon(s), nil, true end
-  s.wfBonus = (ns.Class() == "SHAMAN") and WindfuryBonus() or 0
+  -- Windfury on your main hand? (true / false; nil: the game didn't say). Rockbiter, Flametongue...: no
+  s.windfury = (ns.Class() == "SHAMAN") and M.WindfuryOn() or false
+  s.wfBonus = s.windfury ~= false and WindfuryBonus() or 0
   if s.oh and not s.oh.dps then s.oh = nil end
   return s
 end
@@ -298,6 +300,17 @@ local function WornBonus(names)
   return wornBonus
 end
 
+-- Is Windfury Weapon the imbue on your main hand? true / false (another imbue, or none); nil when the
+-- game doesn't say (then it's counted, as the site's sim does)
+function M.WindfuryOn()
+  if not GetWeaponEnchantInfo then return nil end
+  local ok, has, _, _, enchant = pcall(GetWeaponEnchantInfo)
+  if not (ok and Readable(has)) then return nil end
+  if not has then return false end
+  if not Readable(enchant) or type(enchant) ~= "number" then return nil end
+  return (ns.IMBUES and ns.IMBUES[enchant] ~= nil) or false
+end
+
 -- Windfury Weapon's bonus attack power on its extra attacks, from the tooltip of the rank on your weapon
 -- ("2 extra attacks with 202 extra melee attack power"); 0 when it can't be read
 function WindfuryBonus()
@@ -424,6 +437,8 @@ function M.Play(s, base)
         e[7] = w.dps * w.speed + (r and s.rap or s.ap) * w.speed / R.apPerDps
         e[8] = 60 * (1 + (r and s.rhaste or s.haste) / 100) / w.speed * ((not r and s.oh) and 2 or 1)
       end
+    elseif name == "Windfury Weapon" and s.windfury == false then
+      e[3] = "off" -- (another imbue on your weapon, or none: no Windfury)
     elseif name == "Windfury Weapon" and s.mh and siteSwings > 0 then
       -- extra attacks: your swings a minute x how often the site's sim saw them per swing; each one a
       -- main-hand hit with Windfury's bonus attack power (it can't glance)
