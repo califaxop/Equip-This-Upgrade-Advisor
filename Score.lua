@@ -454,6 +454,28 @@ function S.Base(w)
   return pts, parts
 end
 
+-- What your character brings to its output, in points, from Forever Upgrades' Sim DPS (Guides.lua:
+-- `character`, at levels 30 / 40 / 50 / 60): base stats, its spells' own damage, talents, self-buffs.
+-- Between those levels it's blended; below 30 it shrinks with your level. nil when there's none.
+function S.Character(key, level)
+  local g = ns.GUIDE and ns.GUIDE[key]
+  local c = g and g.character
+  if not c then return nil end
+  level = level or (UnitLevel and UnitLevel("player")) or 60
+  local lv = {}
+  for l in pairs(c) do lv[#lv + 1] = l end
+  table.sort(lv)
+  if #lv == 0 then return nil end
+  if level <= lv[1] then return c[lv[1]] * math.max(level, 1) / lv[1] end
+  for i = 2, #lv do
+    if level <= lv[i] then
+      local a, b = lv[i - 1], lv[i]
+      return c[a] + (c[b] - c[a]) * (level - a) / (b - a)
+    end
+  end
+  return c[lv[#lv]]
+end
+
 -- your build's sides: { { kind = "points" | "eh", w = values, share, total (you and your gear, in points) } }
 function S.Sides()
   if sides then return sides end
@@ -462,13 +484,13 @@ function S.Sides()
   local own = ns.Weights(key)
   local list = {}
   if ns.IsTank(key) then
-    list[1] = { kind = "points", w = own, share = t, label = "survival" }
+    list[1] = { kind = "points", w = own, share = t, label = "survival", own = true }
     local dk = ns.GUIDE and ns.GUIDE[key] and ns.GUIDE[key].damageSpec
     local dw = dk and ns.SiteWeights(dk) or own
     for stat in pairs(dw) do if ns.Ignored(stat, key) then dw[stat] = 0 end end
     list[2] = { kind = "points", w = dw, share = 1 - t, label = "damage" }
   else
-    list[1] = { kind = "points", w = own, share = 1 - t, label = (ns.GUIDE[key] and ns.GUIDE[key].unit == "HPS") and "healing" or "damage" }
+    list[1] = { kind = "points", w = own, share = 1 - t, label = (ns.GUIDE[key] and ns.GUIDE[key].unit == "HPS") and "healing" or "damage", own = true }
     local per = EHPer()
     for stat in pairs(per) do if ns.Ignored(stat, key) then per[stat] = 0 end end
     list[2] = { kind = "eh", w = per, share = t, label = "survival" }
@@ -480,7 +502,11 @@ function S.Sides()
       local stats = 0
       WornEach(function(f, slot) stats = stats + Points(f, side.w, slot) end)
       side.gear = stats
-      side.base, side.baseParts = S.Base(side.w)
+      -- your character: calibrated against Forever Upgrades' Sim DPS (your spec's own side), else
+      -- worked out from your base stats
+      local cal = side.own and S.Character(key)
+      if cal then side.base, side.baseParts, side.calibrated = cal, {}, true
+      else side.base, side.baseParts = S.Base(side.w) end
       stats = stats + side.base
       -- (a floor when the game won't say: about what a character scores at its level, so a first item
       -- isn't "+5000%")

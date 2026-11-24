@@ -69,8 +69,10 @@ local function Guide()
   ns.Print("values (" .. ns.ScoringLabel() .. "): " .. table.concat(bits, ", "))
   for _, side in ipairs(ns.Score.Sides()) do
     if side.kind == "points" and side.share > 0 then
-      ns.Print(format("%s (%d%% of your build): you score %d points, %d from your character (base stats, level, talents) and %d from your gear; an item's %% is of that",
-        side.label, side.share * 100 + 0.5, side.total, side.base or 0, (side.total or 0) - (side.base or 0)))
+      ns.Print(format("%s (%d%% of your build): you score %d points, %d from your character (%s) and %d from your gear; an item's %% is of that",
+        side.label, side.share * 100 + 0.5, side.total, side.base or 0,
+        side.calibrated and "base stats, your spells' own damage, talents: from Forever Upgrades' Sim DPS at your level" or "base stats, level, talents",
+        (side.total or 0) - (side.base or 0)))
     end
   end
   local _, why = ns.Talents.Factors(key)

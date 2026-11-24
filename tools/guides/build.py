@@ -8,12 +8,12 @@
   - the rotation played out at levels 30, 50 and 60: each ability's share of the output (items that
     improve a skill count by it), and the spec's DPS / HPS / EH at each.
 
-    python3 tools/guides/build.py [out=Guides.lua] [Forever build]
+    python3 tools/guides/build.py [out=Guides.lua] [Forever build] [--no-calibrate]
 
 Also writes Enchants.lua next to it: permanent enchants from Forever's own tables (wago.tools), so an
 enchanted item counts its enchant ("+5 Strength", Crusader).
 """
-import json, subprocess, sys, time, datetime
+import json, re, subprocess, sys, time, datetime
 
 SITE = "https://foreverupgrades.com"
 # Forever Upgrades spec id -> Equip This! spec key (class:talent tree)
@@ -53,6 +53,15 @@ def curl(url):
     if r.returncode != 0:
         raise RuntimeError(f"{url}: {r.stderr.decode(errors='replace').strip()}")
     return r.stdout
+
+
+def post(path, body):
+    time.sleep(0.5)
+    r = subprocess.run(["curl", "-sS", "-f", "-m", "300", "-H", "Content-Type: application/json", "--data-binary", "@-",
+                        SITE + path], input=json.dumps(body).encode(), capture_output=True)
+    if r.returncode != 0:
+        raise RuntimeError(f"{path}: {r.stderr.decode(errors='replace').strip()}")
+    return json.loads(r.stdout)
 
 
 def site(path):
@@ -222,6 +231,105 @@ def num(x):
 
 ID_OF = {v: k for k, v in SPECS.items()}
 
+# ---------------------------------------------------------------------------------------------
+# Calibration: how much of a spec's output its gear's score is. The site's Sim DPS plays its BiS
+# gear for a level (the same items and scores its BiS list shows), then again with +100 of the
+# spec's main stat on one more item: the difference is the output per point of score (the main stat
+# is 1 point), so output / that = the whole output in points. Less the gear's own score, that's
+# what the character brings (base stats, its spells' own damage, talents, self-buffs): Equip This!
+# adds it to your gear's score, so an item's % is close to the change in your output.
+# ---------------------------------------------------------------------------------------------
+CALIB_LEVELS = (30, 40, 50, 60)
+MAIN_STAT = {"strength": "ITEM_MOD_STRENGTH_SHORT", "agility": "ITEM_MOD_AGILITY_SHORT", "stamina": "ITEM_MOD_STAMINA_SHORT",
+             "intellect": "ITEM_MOD_INTELLECT_SHORT", "attack power": "ITEM_MOD_ATTACK_POWER_SHORT",
+             "spell power": "ITEM_MOD_SPELL_DAMAGE_DONE_SHORT", "healing power": "ITEM_MOD_SPELL_HEALING_DONE_SHORT"}
+CALIB_RACE = {"WARRIOR": ("Orc", "Horde"), "PALADIN": ("Human", "Alliance"), "HUNTER": ("Orc", "Horde"),
+              "ROGUE": ("Orc", "Horde"), "PRIEST": ("Human", "Alliance"), "SHAMAN": ("Orc", "Horde"),
+              "MAGE": ("Human", "Alliance"), "WARLOCK": ("Orc", "Horde"), "DRUID": ("Tauren", "Horde")}
+
+
+def calibrate(sid, key, spec, main):
+    """{ level: points the character brings } for a spec, or {} if the site's sim won't say"""
+    stat = MAIN_STAT.get((main or "").lower())
+    if not stat:
+        return {}
+    cls = key.split(":")[0]
+    race, faction = CALIB_RACE[cls]
+    out = {}
+    for lvl in CALIB_LEVELS:
+        try:
+            b = site(f"/api/bis/{sid}?list=preraid&level={lvl}")
+        except RuntimeError as e:
+            print(f"  calibration {key} {lvl}: {e}")
+            continue
+
+        def entry(it):
+            return {"id": it["id"], "enchant": 0, "ilvl": it["ilvl"], "name": it["name"], "quality": it["quality"], "req": it["req"]}
+        gear, score = {}, 0.0
+        for sl in b.get("slots") or []:
+            items = sl.get("items") or []
+            if sl["slot"] == "finger":
+                for i, it in enumerate(items[:2]):
+                    gear[f"finger{i + 1}"] = entry(it); score += it.get("score") or 0
+            elif sl["slot"] == "trinket":
+                if items:  # (the second trinket slot holds the calibration item)
+                    gear["trinket1"] = entry(items[0]); score += items[0].get("score") or 0
+            elif items:
+                gear[sl["slot"]] = entry(items[0]); score += items[0].get("score") or 0
+        wp = b.get("weapons") or {}
+        if wp.get("best") == "two_hand" and (wp.get("two_hand") or {}).get("items"):
+            it = wp["two_hand"]["items"][0]; gear["mainhand"] = entry(it); score += it.get("score") or 0
+        else:
+            oh = wp.get("one_hand") or {}
+            for k, sk in (("main", "mainhand"), ("off", "offhand")):
+                if oh.get(k):
+                    it = oh[k][0]; gear[sk] = entry(it); score += it.get("score") or 0
+        rg = b.get("ranged")
+        if isinstance(rg, dict) and rg.get("items"):
+            it = rg["items"][0]; gear["ranged"] = entry(it); score += it.get("score") or 0
+
+        def sim(extra):
+            g = dict(gear)
+            g["trinket2"] = {"id": 999901, "enchant": 0, "ilvl": 1, "name": "Calibration", "quality": 1, "req": 1, "stats": extra}
+            exp = {"addon": "ForeverUpgradesExport 1.0.0", "class": cls, "client": 16001, "faction": faction, "gear": g,
+                   "level": lvl, "name": "Calibration", "race": race, "realm": "-", "spec": spec, "talents": []}
+            r = post("/api/sim-dps", {"addon": "!FUP:1:" + json.dumps(exp, separators=(",", ":")), "spec_id": sid,
+                                      "fight_seconds": 60, "target_level_diff": 3, "race": "", "talent_link": ""})
+            return float((r.get("sim") or {}).get("dps") or 0)
+        try:
+            base, more = sim({}), sim({stat: 100})
+        except (RuntimeError, ValueError) as e:
+            print(f"  calibration {key} {lvl}: {e}")
+            continue
+        per = (more - base) / 100
+        if base <= 0 or per <= 0:
+            print(f"  calibration {key} {lvl}: no change from +100 {main} ({base} -> {more})")
+            continue
+        if base / per <= score:
+            # (the sim's output isn't linear in the score here: tanks' effective health, or a level whose
+            # BiS gear the weights read oddly; Equip This! works the character out itself instead)
+            print(f"  calibration {key} {lvl}: whole {base / per:.0f} pts is under the gear's {score:.0f}: left out")
+            continue
+        out[lvl] = base / per - score
+        print(f"  calibration {key} {lvl}: {base:.1f} -> {more:.1f} for +100 {main}; whole {base / per:.0f} pts, gear {score:.0f}, character {out[lvl]:.0f}")
+    return smooth(out)
+
+
+def smooth(points):
+    """a character's own part shouldn't shrink as it levels: dips between levels (the site's BiS gear
+    changing a lot from one level to the next) are averaged out into a non-decreasing curve"""
+    lv = sorted(points)
+    blocks = [[points[l], 1, [l]] for l in lv]
+    i = 0
+    while i < len(blocks) - 1:
+        if blocks[i][0] > blocks[i + 1][0]:
+            a, b = blocks[i], blocks[i + 1]
+            blocks[i:i + 2] = [[(a[0] * a[1] + b[0] * b[1]) / (a[1] + b[1]), a[1] + b[1], a[2] + b[2]]]
+            i = max(i - 1, 0)
+        else:
+            i += 1
+    return {l: v for v, _, ls in blocks for l in ls}
+
 
 def talent_build(sid):
     """the talents the site's simulator plays the spec with (level 60): { "Mental Dexterity": 3 }"""
@@ -235,8 +343,20 @@ def talent_build(sid):
 
 
 def main():
-    out = sys.argv[1] if len(sys.argv) > 1 else "Guides.lua"
+    args = [a for a in sys.argv[1:] if not a.startswith("--")]
+    out = args[0] if args else "Guides.lua"
     blocks = []
+    # (without calibrating, the last calibration is kept: it's slow, and changes little week to week)
+    kept = {}
+    try:
+        old = open(out).read()
+        for block in re.split(r'\n(?=  \["\w+:\d"\] = \{)', old):
+            k = re.match(r'\s*\["(\w+:\d)"\]', block)
+            c = re.search(r'\n    character = \{ (.*?) \},', block)
+            if k and c:
+                kept[k.group(1)] = c.group(1)
+    except OSError:
+        pass
     for sid, key in SPECS.items():
         g = site(f"/api/class-guide/{sid}")
         role = g.get("role")
@@ -268,6 +388,16 @@ def main():
         if top:
             cells.append(f"[60] = {num(top)}")
         lines.append("    output = { " + ", ".join(cells) + " },")
+        if role != "tank":
+            if "--no-calibrate" in sys.argv:
+                if key in kept:
+                    lines.append("    character = { " + kept[key] + " },")
+            else:
+                cal = calibrate(sid, key, g.get("spec"), g.get("weights_base"))
+                if cal:
+                    lines.append("    character = { " + ", ".join(f"[{k}] = {round(v)}" for k, v in sorted(cal.items())) + " },")
+                elif key in kept:
+                    lines.append("    character = { " + kept[key] + " },")
         if role in DAMAGE_ROLES:
             levels = []
             for lvl, gear in LEVELS:
@@ -289,12 +419,14 @@ def main():
         f.write("-- Per spec: what its simulator measures (unit: DPS, HPS or EH), stat weights (points per unit, the main\n")
         f.write("-- stat at 1), the stat priority, the rotation, the talent build it plays, its output at levels 30 / 50 /\n")
         f.write("-- 60, and (damage and healing specs) the rotation played out: { ability, share of output, casts a minute }.\n")
+        f.write("-- character: at levels 30 / 40 / 50 / 60, what the character itself brings to its output (base stats,\n")
+        f.write("-- its spells' own damage, talents, self-buffs), in points of score (calibrated with the site's Sim DPS).\n")
         f.write("local _, ns = ...\n")
         f.write(f'ns.GUIDE = {{ build = "{stamp}", source = "Forever Upgrades",\n')
         f.write("\n".join(blocks) + "\n}\n")
     print(f"wrote {out}")
     enchants_out = out.replace("Guides.lua", "Enchants.lua") if out.endswith("Guides.lua") else "Enchants.lua"
-    write_enchants(enchants_out, sys.argv[2] if len(sys.argv) > 2 else None)
+    write_enchants(enchants_out, args[1] if len(args) > 1 else None)
 
 
 if __name__ == "__main__":
