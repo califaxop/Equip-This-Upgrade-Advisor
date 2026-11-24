@@ -9,10 +9,10 @@ ns.STAT_NAMES = {
   STR = "Strength", AGI = "Agility", STA = "Stamina", INT = "Intellect", SPI = "Spirit",
   ARMOR = "Armor", AP = "Attack Power", RAP = "Ranged Attack Power",
   SP = "Spell Damage", HEAL = "Healing", MP5 = "Mana per 5 sec",
-  CRIT = "Crit %", HIT = "Hit %", SPELLCRIT = "Spell Crit %", SPELLHIT = "Spell Hit %",
+  CRIT = "Crit %", HIT = "Hit %", HASTE = "Haste %", SPELLCRIT = "Spell Crit %", SPELLHIT = "Spell Hit %",
   DPS = "Weapon DPS", DEF = "Defense", DODGE = "Dodge %", PARRY = "Parry %", BLOCK = "Block %", BLOCKVALUE = "Block Value",
 }
-ns.STAT_ORDER = { "STR", "AGI", "STA", "INT", "SPI", "AP", "RAP", "SP", "HEAL", "MP5", "CRIT", "HIT",
+ns.STAT_ORDER = { "STR", "AGI", "STA", "INT", "SPI", "AP", "RAP", "SP", "HEAL", "MP5", "CRIT", "HIT", "HASTE",
   "SPELLCRIT", "SPELLHIT", "DPS", "ARMOR", "DEF", "DODGE", "PARRY", "BLOCK", "BLOCKVALUE" }
 
 local MELEE    = { STR = 1, AGI = 0.75, STA = 0.2, AP = 0.5, CRIT = 14, HIT = 12, DPS = 4, ARMOR = 0.01 }
@@ -27,7 +27,7 @@ local TANK     = { STA = 1, ARMOR = 0.05, DEF = 1.2, DODGE = 12, PARRY = 12, BLO
 -- in its own unit, so importance is turned into points with a fixed factor: what 1 unit of the
 -- stat is worth next to 1 point of a main stat, at full importance (5). E.g. 1% crit ~ 14 Strength.
 ns.NORM = { STR = 1, AGI = 1, STA = 1, INT = 1, SPI = 1, AP = 0.5, RAP = 0.4, SP = 1, HEAL = 0.6, MP5 = 2,
-  CRIT = 14, HIT = 12, SPELLCRIT = 10, SPELLHIT = 10, DPS = 4, ARMOR = 0.02, DEF = 1.2, DODGE = 12,
+  CRIT = 14, HIT = 12, HASTE = 10, SPELLCRIT = 10, SPELLHIT = 10, DPS = 4, ARMOR = 0.02, DEF = 1.2, DODGE = 12,
   PARRY = 12, BLOCK = 6, BLOCKVALUE = 0.5 }
 local function round2(x) return math.floor(x * 100 + 0.5) / 100 end
 -- What a stat's weight means, in words (the tooltip on each stat in /eqt): at 5 for everyone, then

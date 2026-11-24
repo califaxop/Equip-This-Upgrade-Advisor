@@ -49,22 +49,8 @@ SlashCmdList.EQUIPTHIS = function(msg)
   msg = msg or ""
   local cmd, rest = msg:match("^%s*(%S*)%s*(.-)%s*$")
   cmd = (cmd or ""):lower()
-  if cmd == "learn" then
-    local arg = rest:lower()
-    if arg == "off" or arg == "on" then ns.db.learn = arg == "on"
-    elseif arg == "reset" then ns.Learn.Reset(); ns.Print("forgot what was learned for " .. ns.SpecName(ns.SpecKey()) .. ".") end
-    ns.Print("damage split: " .. ns.Learn.Status())
-    return
-  elseif cmd == "model" then
-    local arg = rest:lower()
-    if arg == "off" or arg == "on" then
-      ns.db.model = arg == "on"; ns.Score.ClearCache()
-      ns.Print("damage model " .. (ns.db.model and "on" or "off (weights only)"))
-    elseif not ns.Model.Active(ns.CurrentWeights()) then
-      ns.Print("the damage model scores melee specs (" .. ns.SpecName(ns.SpecKey()) .. " uses your weights)" .. (ns.db.model == false and "; it's turned off: /eqt model on" or ""))
-    else
-      ns.Model.Report(ns.Print)
-    end
+  if cmd == "guide" then
+    for _, line in ipairs(ns.Rotation.Report()) do ns.Print(line) end
     return
   elseif cmd == "item" then
     local link = rest:match("|H(item:[^|]+)|h") and rest or nil

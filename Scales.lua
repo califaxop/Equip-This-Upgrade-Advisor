@@ -9,7 +9,7 @@ local PAWN = {
   { "STR", "Strength" }, { "AGI", "Agility" }, { "STA", "Stamina" }, { "INT", "Intellect" }, { "SPI", "Spirit" },
   { "ARMOR", "Armor" }, { "AP", "Ap", "AttackPower" }, { "RAP", "Rap", "RangedAttackPower" },
   { "SP", "SpellDamage", "SpellPower" }, { "HEAL", "Healing" }, { "MP5", "Mp5" },
-  { "CRIT", "CritRating", "Crit" }, { "HIT", "HitRating", "Hit" },
+  { "CRIT", "CritRating", "Crit" }, { "HIT", "HitRating", "Hit" }, { "HASTE", "HasteRating", "Haste" },
   { "SPELLCRIT", "SpellCritRating", "SpellCrit" }, { "SPELLHIT", "SpellHitRating", "SpellHit" },
   { "DPS", "Dps", "MeleeDps", "MainHandDps", "RangedDps" },
   { "DEF", "DefenseRating", "Defense" }, { "DODGE", "DodgeRating", "Dodge" }, { "PARRY", "ParryRating", "Parry" },

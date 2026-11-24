@@ -159,18 +159,6 @@ local function BuildPanel(panel)
   local fb = UI.Button(panel, "Report a bug / suggest", 170, function()
     UI.ShowLink("EquipThisLinkWindow", "Equip This!: bugs and ideas", "https://github.com/califaxop/Equip-This-Upgrade-Advisor/issues/new/choose")
   end)
-  -- where your damage split comes from (for the damage model and item effects on skills)
-  -- (in the stat grid's free spot, under Block %)
-  local nStats = #ns.STAT_ORDER
-  local splitBtn = at(UI.Toggle(panel, 216, {
-      { "blend", "Damage split: guide + meter" }, { "guide", "Damage split: guide only" }, { "meter", "Damage split: meter only" } },
-    { function() return ns.db.split or "blend" end, function(v) ns.db.split = v end },
-    function() ns.Score.ClearCache(); Changed() end,
-    "How your damage splits between auto attack and each skill, for the damage model and items that improve a skill.\n\n"
-      .. "Guide + meter: Forever Upgrades' rotation for your spec, with your own spells' damage and cooldowns, then more and more what your damage meter records (all of it after 10 min of combat).\n"
-      .. "Guide only: always the guide's rotation.\nMeter only: your damage meter once it has a minute of combat.\n\n/eqt learn shows the split."),
-    26 + (nStats % 2) * 240, y0 - math.floor(nStats / 2) * 26)
-  track(splitBtn); splitBtn.Refresh()
   fb:SetPoint("LEFT", reset, "RIGHT", 8, 0)
   local hint = at(UI.Text(panel, "note", "/eqt item: how an item was scored"), 26, yEnd - 30)
 

@@ -14,8 +14,6 @@ Weights.lua
 Procs.lua
 Effects.lua
 Score.lua
-Model.lua
-Learn.lua
 Rotation.lua
 Scales.lua
 UI.lua

@@ -16,7 +16,7 @@ local KEYS = {
   ITEM_MOD_DAMAGE_PER_SECOND_SHORT = "DPS", ITEM_MOD_DEFENSE_SKILL_RATING_SHORT = "DEF",
   ITEM_MOD_DODGE_RATING_SHORT = "DODGE", ITEM_MOD_PARRY_RATING_SHORT = "PARRY",
   ITEM_MOD_BLOCK_RATING_SHORT = "BLOCK", ITEM_MOD_BLOCK_VALUE_SHORT = "BLOCKVALUE",
-  ITEM_MOD_HASTE_RATING_SHORT = "HASTE", ITEM_MOD_HASTE_MELEE_RATING_SHORT = "HASTE", -- (the damage model's)
+  ITEM_MOD_HASTE_RATING_SHORT = "HASTE", ITEM_MOD_HASTE_MELEE_RATING_SHORT = "HASTE", 
 }
 
 -- Classic items often put these on "Equip:" lines instead of in the stat list (English client)
@@ -185,7 +185,7 @@ function S.Facts(link)
   if complete then cache[link] = f end
   return f
 end
-function S.ClearCache() wipe(cache); if ns.Effects then ns.Effects.ClearCache() end; if ns.Rotation then ns.Rotation.ClearCache() end; if ns.ForgetTalents then ns.ForgetTalents() end end
+function S.ClearCache() wipe(cache); if ns.Effects then ns.Effects.ClearCache() end; end
 
 local WEAPON_LOCS = { INVTYPE_WEAPON = true, INVTYPE_2HWEAPON = true, INVTYPE_WEAPONMAINHAND = true,
   INVTYPE_WEAPONOFFHAND = true, INVTYPE_RANGED = true, INVTYPE_RANGEDRIGHT = true, INVTYPE_THROWN = true }
@@ -222,80 +222,24 @@ end
 
 local PAIRED = { [11] = 12, [12] = 11, [13] = 14, [14] = 13 }
 
--- How an item compares with what you wear, for a spec:
--- { kind = "upgrade" | "downgrade" | "same" | "new" | "unusable" | "equipped", pct, delta, value, vs = link,
---   pair = "weaker" | "stronger" | "equal" (equipped rings / trinkets, when you wear two) }
--- or nil (not gear, or not loaded yet)
--- With the damage model (melee specs): the change in your damage, in %, from wearing it.
--- Weapons as setups: a one-hander replacing your two-hander comes with your best off hand (if you
--- own one; else it's on its own); if you dual wield, a one-hander is tried in either hand.
--- { kind, gain (% damage), delta = gain, vs = link, hand = "oh" (as your off hand), partner = link, model = true }
-local function ModelCompare(link, f, weights, base)
-  local M = ns.Model
-  local s = M.State()
-  local function worn(slot) return GetInventoryItemLink and GetInventoryItemLink("player", slot) end
-  local function result(gain, vs, extra)
-    if not gain then return nil end
-    local kind = (math.abs(gain) < 0.05) and "same" or (gain > 0 and "upgrade" or "downgrade")
-    local r = { kind = kind, gain = gain, delta = gain, pct = gain, vs = vs, model = true, value = base.value }
-    for k, v in pairs(extra or {}) do r[k] = v end
-    return r
-  end
-  local loc = f.equipLoc
-  local mh, oh = worn(16), worn(17)
-  local mhLoc = mh and C_Item and C_Item.GetItemInfoInstant and select(4, C_Item.GetItemInfoInstant(mh))
-  local dw = DualWields()
-  if loc == "INVTYPE_2HWEAPON" then
-    local out = {}
-    if mh then out[#out + 1] = mh end
-    if oh then out[#out + 1] = oh end
-    return result(M.Gain(link, out, weights, "mh", nil, s), mh or oh)
-  end
-  if loc == "INVTYPE_WEAPON" or loc == "INVTYPE_WEAPONMAINHAND" then
-    if mhLoc == "INVTYPE_2HWEAPON" then
-      local partner = M.BestPartner(link, weights, dw and loc == "INVTYPE_WEAPON", s)
-      return result(M.Gain(link, { mh }, weights, "mh", partner, s), mh, { partner = partner })
+-- Your whole gear's score: every slot you wear (not shirt or tabard). Upgrades are measured against it,
+-- so a % means the same in every slot ("+2%": 2% stronger overall), however weak the item you'd replace.
+function S.GearTotal(weights)
+  local total = 0
+  for slot = 1, 18 do
+    if slot ~= 4 then
+      local l = GetInventoryItemLink and GetInventoryItemLink("player", slot)
+      if l then total = total + (S.Value(l, weights) or 0) end
     end
-    local best, bestHand, vs
-    local g = M.Gain(link, { mh }, weights, "mh", nil, s)
-    best, bestHand, vs = g, "mh", mh
-    if dw and loc == "INVTYPE_WEAPON" then
-      local g2 = M.Gain(link, { oh }, weights, "oh", nil, s)
-      if g2 and (not best or g2 > best) then best, bestHand, vs = g2, "oh", oh end
-    end
-    if not vs then return { kind = "new", gain = best, delta = best, model = true, value = base.value } end
-    return result(best, vs, { hand = bestHand == "oh" and "oh" or nil })
   end
-  if loc == "INVTYPE_SHIELD" or loc == "INVTYPE_HOLDABLE" or loc == "INVTYPE_WEAPONOFFHAND" then
-    local g = M.Gain(link, { oh }, weights, "oh", nil, s)
-    if not oh then return { kind = "new", gain = g, delta = g, model = true, value = base.value } end
-    return result(g, oh)
-  end
-  -- everything else: against what's in that slot (rings, trinkets: the one it'd best replace)
-  local best, vs
-  for _, slot in ipairs(SLOTS[loc]) do
-    local cur = worn(slot)
-    if not cur then
-      local g = M.Gain(link, {}, weights, nil, nil, s)
-      return { kind = "new", gain = g, delta = g, model = true, value = base.value }
-    end
-    local g = M.Gain(link, { cur }, weights, nil, nil, s)
-    if g and (not best or g > best) then best, vs = g, cur end
-  end
-  return result(best, vs)
+  return total
 end
 
-function S.Compare(link, weights)
-  weights = weights or ns.Weights()
-  local c = S.CompareWeights(link, weights)
-  -- the damage model, for melee specs (the cases it doesn't change: as they are)
-  if c and ns.Model and ns.Model.Active(weights) and c.kind ~= "unusable" and c.kind ~= "equipped" and c.kind ~= "twohand" then
-    local f = S.Facts(link)
-    local ok, m = pcall(ModelCompare, link, f, weights, c)
-    if ok and m then return m end
-  end
-  return c
-end
+-- How an item compares with what you wear, for a spec:
+-- { kind = "upgrade" | "downgrade" | "same" | "new" | "unusable" | "equipped", pct (of your whole gear), delta, value, vs = link,
+--   pair = "weaker" | "stronger" | "equal" (equipped rings / trinkets, when you wear two) }
+-- or nil (not gear, or not loaded yet)
+function S.Compare(link, weights) return S.CompareWeights(link, weights or ns.Weights()) end
 
 function S.CompareWeights(link, weights)
   weights = weights or ns.Weights()
@@ -353,9 +297,10 @@ function S.CompareWeights(link, weights)
     end
     return { kind = "equipped", value = value, pair = pair, equipLoc = f.equipLoc }
   end
-  if not oldValue or oldValue <= 0 then return { kind = "new", value = value, delta = value } end
+  local total = math.max(S.GearTotal(weights), 1)
+  if not oldValue or oldValue <= 0 then return { kind = "new", value = value, delta = value, pct = value / total * 100 } end
   local delta = value - oldValue
-  local pct = delta / oldValue * 100
-  local kind = (math.abs(pct) < 1) and "same" or (delta > 0 and "upgrade" or "downgrade")
+  local pct = delta / total * 100
+  local kind = (math.abs(pct) < 0.1) and "same" or (delta > 0 and "upgrade" or "downgrade")
   return { kind = kind, pct = pct, delta = delta, value = value, vs = vs }
 end
