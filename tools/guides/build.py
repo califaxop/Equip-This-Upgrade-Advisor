@@ -1,14 +1,17 @@
 #!/usr/bin/env python3
 """Build Guides.lua: each spec's guide from Forever Upgrades (https://foreverupgrades.com):
-  - stat weights (its "Stat Weights": Equip This!'s spec presets),
-  - the rotation (its priority list, in order; shown by /eqt guide),
-  - for damage specs, the rotation played out (its "Sim DPS" breakdown) at levels 30, 50 and 60:
-    each ability's share of the damage and casts a minute (items that improve a skill count by it).
+  - stat weights (its simulator's "Stat Weights": what each stat does for the spec's DPS, HPS or
+    effective health), in points per unit of each stat, the main stat at 1,
+  - the stat priority (and whether hit has a cap), the rotation, and the role,
+  - the talent build its simulator plays (Equip This! scales the stats those talents feed by your own
+    ranks), and for tanks the class's damage spec (the damage side of a tank's build),
+  - the rotation played out at levels 30, 50 and 60: each ability's share of the output (items that
+    improve a skill count by it), and the spec's DPS / HPS / EH at each.
 
     python3 tools/guides/build.py [out=Guides.lua] [Forever build]
 
-Also writes Spells.lua next to it: every rank of the spells in those rotations from Forever's own spell
-tables (wago.tools), so the addon works out each ability's damage or healing from current data.
+Also writes Enchants.lua next to it: permanent enchants from Forever's own tables (wago.tools), so an
+enchanted item counts its enchant ("+5 Strength", Crusader).
 """
 import json, subprocess, sys, time, datetime
 
@@ -82,18 +85,10 @@ def split(breakdown):
 
 
 # ---------------------------------------------------------------------------------------------
-# Spells.lua: every rank of the spells in the rotations, from Forever's own spell tables
-# (wago.tools, product wowf), refreshed each week so patches are picked up:
-#   [spell ID] = { name, base level, max level, school mask, cast ms, cooldown ms, duration ms,
-#                  { { effect, aura, base points, points per level, spell power coef., attack power coef.,
-#                      tick ms, points per combo point }, ... } }
-# Effects kept: 2 school damage, 10 heal, 31 weapon %, 121 / 58 / 17 weapon damage + flat bonus,
-# 6 apply aura / 27 area on the ground (Consecration) with 3 periodic damage, 8 periodic heal, 69 absorb.
+# Enchants.lua: permanent enchants, from Forever's own tables (wago.tools, product wowf)
 # ---------------------------------------------------------------------------------------------
 import csv, io, collections
 WAGO = "https://wago.tools/db2/{}/csv?build={}"
-KEEP_EFFECTS = {"2", "10", "31", "121", "58", "17"}
-KEEP_AURAS = {"3", "8", "69"}
 
 
 def table(name, build):
@@ -116,70 +111,17 @@ def fmt(x):
     return str(int(x)) if x == int(x) else repr(x)
 
 
-def build_spells(names, out, build=None):
+def write_enchants(out, build=None):
     build = build or latest_build()
-    wanted = {"rockbiter weapon", "flametongue weapon", "frostbrand weapon", "windfury weapon"}
-    for n in names:
-        base = n.split(" (")[0].strip()
-        if base and base.lower() not in ("attack", "melee", "auto shot"):
-            wanted.add(base.lower())
-    player = {r["Spell"] for r in table("SkillLineAbility", build)}
-    ids = collections.defaultdict(list)
-    for r in table("SpellName", build):
-        if r["ID"] in player and r["Name_lang"].lower() in wanted:
-            ids[r["Name_lang"]].append(r["ID"])
-    allids = {i for v in ids.values() for i in v}
-    levels = {r["SpellID"]: r for r in table("SpellLevels", build) if r["SpellID"] in allids and r["DifficultyID"] == "0"}
-    misc = {r["SpellID"]: r for r in table("SpellMisc", build) if r["SpellID"] in allids and r["DifficultyID"] == "0"}
-    casts = {r["ID"]: int(fnum(r["Base"])) for r in table("SpellCastTimes", build)}
-    durs = {r["ID"]: int(fnum(r["Duration"])) for r in table("SpellDuration", build)}
-    cds = {r["SpellID"]: max(int(fnum(r["RecoveryTime"])), int(fnum(r["CategoryRecoveryTime"])))
-           for r in table("SpellCooldowns", build) if r["SpellID"] in allids}
-    effects = collections.defaultdict(list)
-    for r in table("SpellEffect", build):
-        if r["SpellID"] in allids and r["DifficultyID"] == "0" and (
-                r["Effect"] in KEEP_EFFECTS or (r["Effect"] in ("6", "27") and r["EffectAura"] in KEEP_AURAS)):
-            effects[r["SpellID"]].append(r)
-    # weapon imbues (Windfury Weapon...): the enchant on the weapon -> the rank that puts it there
-    imbues = {}
-    for r in table("SpellEffect", build):
-        if r["SpellID"] in allids and r["Effect"] in ("54", "360") and fnum(r["EffectMiscValue_0"]) > 0:
-            imbues[int(fnum(r["EffectMiscValue_0"]))] = int(r["SpellID"])
     enchants = build_enchants(build)
-    lines, kept = [], 0
-    for name in sorted(ids):
-        for i in sorted(ids[name], key=int):
-            effs = sorted(effects.get(i, []), key=lambda r: int(r["EffectIndex"]))
-            if not effs:
-                continue
-            lv, m = levels.get(i, {}), misc.get(i, {})
-            cells = []
-            for r in effs:
-                cells.append("{ %s }" % ", ".join(fmt(v) for v in (
-                    r["Effect"], r["EffectAura"], fnum(r["EffectBasePointsF"]), fnum(r["EffectRealPointsPerLevel"]),
-                    fnum(r["EffectBonusCoefficient"]), fnum(r["BonusCoefficientFromAP"]), fnum(r["EffectAuraPeriod"]),
-                    fnum(r["EffectPointsPerResource"]))))
-            lines.append("  [%s] = { %s, %s, %s, %s, %s, %s, %s, { %s } }," % (
-                i, lua(name), int(fnum(lv.get("BaseLevel"))), int(fnum(lv.get("MaxLevel"))), int(fnum(m.get("SchoolMask"))),
-                casts.get(m.get("CastingTimeIndex"), 0), cds.get(i, 0), durs.get(m.get("DurationIndex"), 0), ", ".join(cells)))
-            kept += 1
     with open(out, "w", newline="\n") as f:
-        f.write("-- Generated by tools/guides/build.py from Forever's own spell tables (wago.tools, product wowf).\n")
-        f.write("-- Every rank of the spells in the rotations: [spell ID] = { name, base level, max level, school mask,\n")
-        f.write("-- cast ms, cooldown ms, duration ms, { { effect, aura, base points, points per level, spell power\n")
-        f.write("-- coefficient, attack power coefficient, tick ms, points per combo point }, ... } }\n")
+        f.write("-- Generated by tools/guides/build.py from Forever's own tables (wago.tools, product wowf).\n")
+        f.write("-- Permanent enchants: [enchant ID] = { name, false, weapon damage, { stat = amount }, proc = { damage,\n")
+        f.write("-- stat, amount, seconds, chance % (0: about once a minute) } }\n")
         f.write("local _, ns = ...\n")
-        f.write(f'ns.SPELL_DATA_BUILD = "{build}"\n')
-        f.write("ns.SPELLS = {\n" + "\n".join(lines) + "\n}\n")
-        f.write("-- weapon imbues: [enchant ID on the weapon] = the spell rank that applies it\n")
-        f.write("ns.IMBUES = { " + ", ".join(f"[{k}] = {v}" for k, v in sorted(imbues.items())) + " }\n")
-        f.write("-- enchants (permanent and temporary: imbues, poisons, stones, oils): [enchant ID] = { name, temporary,\n")
-        f.write("-- weapon damage, { stat = amount }, proc = { damage, stat, amount, seconds, chance % (0: about once a minute) } }\n")
+        f.write(f'ns.ENCHANT_DATA_BUILD = "{build}"\n')
         f.write("ns.ENCHANTS = {\n" + "\n".join(enchants) + "\n}\n")
-    print(f"wrote {out}: {kept} spell ranks of {len(ids)} spells (Forever build {build})")
-    missing = sorted(n for n in wanted if n not in {k.lower() for k in ids})
-    if missing:
-        print("  not player spells (procs, pets, talents' passives: valued by the site's share):", ", ".join(missing))
+    print(f"wrote {out}: {len(enchants)} enchants (Forever build {build})")
 
 
 # what an enchant does, from Forever's tables: SpellItemEnchantment's effects (1: a proc spell, 2: weapon
@@ -242,6 +184,8 @@ def build_enchants(build):
         if not name:
             continue
         temp = fnum(r.get("Duration")) > 0
+        if temp:
+            continue  # (imbues, poisons, stones, oils: buffs, not part of an item)
         dmg, stats, pr = 0, {}, None
         for i in range(3):
             eff, pts, arg = r.get(f"Effect_{i}"), fnum(r.get(f"EffectPointsMin_{i}")), r.get(f"EffectArg_{i}")
@@ -258,8 +202,7 @@ def build_enchants(build):
                 pr = proc(arg)
                 if pr:
                     pr["chance"] = pts
-        windfury = temp and name.startswith("Windfury ") and name[9:].isdigit() # (its attacks: worked out in game)
-        if not (dmg or stats or pr or windfury):
+        if not (dmg or stats or pr):
             continue
         cells = [lua(name), "true" if temp else "false", fmt(dmg),
                  "{ " + ", ".join(f"{k} = {fmt(v)}" for k, v in sorted(stats.items())) + " }"]
@@ -277,9 +220,23 @@ def num(x):
     return ("%.3f" % x).rstrip("0").rstrip(".") if x != int(x) else str(int(x))
 
 
+ID_OF = {v: k for k, v in SPECS.items()}
+
+
+def talent_build(sid):
+    """the talents the site's simulator plays the spec with (level 60): { "Mental Dexterity": 3 }"""
+    d = site(f"/api/rank-sim/{sid}?level=60")
+    ranks = d.get("talents") or {}
+    names = {}
+    for tree in d.get("talent_trees") or []:
+        for t in tree.get("talents") or []:
+            names[t.get("key")] = t.get("name")
+    return {names.get(k, k.replace("_", " ").title()): int(v) for k, v in ranks.items() if int(v) > 0}
+
+
 def main():
     out = sys.argv[1] if len(sys.argv) > 1 else "Guides.lua"
-    blocks, names = [], set()
+    blocks = []
     for sid, key in SPECS.items():
         g = site(f"/api/class-guide/{sid}")
         role = g.get("role")
@@ -290,14 +247,27 @@ def main():
             if m and w.get("value"):
                 weights[m[0]] = max(weights.get(m[0], 0), float(w["value"]) * m[1])
         rot = [r["ability"] for r in g.get("rotation") or []]
-        names.update(rot)
         lines = [f'  ["{key}"] = {{ -- {g["spec"]} {g["class"]}']
-        unit = "HPS" if role == "healer" else "DPS"
-        lines.append(f'    unit = "{unit}",')
+        unit = "HPS" if role == "healer" else ("EH" if role == "tank" else "DPS")
+        lines.append(f'    unit = "{unit}", role = "{role}", hitCap = {"true" if g.get("hit_cap") else "false"},')
+        if role == "tank":
+            # the damage side of a tank's build: the class's damage spec (melee first)
+            sib = [x for x in g.get("siblings") or [] if x.get("role") in ("melee", "ranged", "caster")]
+            sib.sort(key=lambda x: x.get("role") != "melee")
+            if sib and sib[0]["id"] in SPECS:
+                lines.append(f'    damageSpec = "{SPECS[sib[0]["id"]]}",')
         prio = [p.get("stat", "") for p in g.get("stat_priority") or [] if p.get("stat")]
         lines.append("    priority = { " + ", ".join(lua(p) for p in prio) + " },")
         lines.append("    weights = { " + ", ".join(f"{k} = {num(v)}" for k, v in sorted(weights.items())) + " },")
         lines.append("    rotation = { " + ", ".join(lua(r) for r in rot) + " },")
+        tb = talent_build(sid)
+        lines.append("    talents = { " + ", ".join(f"[{lua(n)}] = {r}" for n, r in sorted(tb.items())) + " },")
+        out_by = {k: float(v.get("value") or 0) for k, v in (g.get("dps") or {}).items() if isinstance(v, dict)}
+        cells = [f"[{k}] = {num(out_by[str(k)])}" for k in (30, 50) if str(k) in out_by]
+        top = out_by.get("60-dungeon") or out_by.get("60")
+        if top:
+            cells.append(f"[60] = {num(top)}")
+        lines.append("    output = { " + ", ".join(cells) + " },")
         if role in DAMAGE_ROLES:
             levels = []
             for lvl, gear in LEVELS:
@@ -305,7 +275,6 @@ def main():
                 fight = float((d.get("options") or {}).get("fight_seconds") or 60)
                 parts = split((d.get("sim") or {}).get("breakdown"))
                 cells = ["{ %s, %.3f, %.1f }" % (lua(n), sh, c * 60 / fight) for n, sh, c in parts]
-                names.update(n for n, _, _ in parts)
                 if cells:
                     levels.append(f"      [{lvl}] = {{ {', '.join(cells)} }},")
             if levels:
@@ -317,14 +286,15 @@ def main():
     stamp = datetime.date.today().isoformat()
     with open(out, "w", newline="\n") as f:
         f.write("-- Generated by tools/guides/build.py: each spec's guide from Forever Upgrades (foreverupgrades.com).\n")
-        f.write("-- Per spec: stat weights (points per unit), the rotation in priority order, and (damage specs) the\n")
-        f.write("-- rotation played out at levels 30, 50 and 60: { ability, share of damage, casts a minute }.\n")
+        f.write("-- Per spec: what its simulator measures (unit: DPS, HPS or EH), stat weights (points per unit, the main\n")
+        f.write("-- stat at 1), the stat priority, the rotation, the talent build it plays, its output at levels 30 / 50 /\n")
+        f.write("-- 60, and (damage and healing specs) the rotation played out: { ability, share of output, casts a minute }.\n")
         f.write("local _, ns = ...\n")
         f.write(f'ns.GUIDE = {{ build = "{stamp}", source = "Forever Upgrades",\n')
         f.write("\n".join(blocks) + "\n}\n")
     print(f"wrote {out}")
-    spells_out = out.replace("Guides.lua", "Spells.lua") if out.endswith("Guides.lua") else "Spells.lua"
-    build_spells(names, spells_out, sys.argv[2] if len(sys.argv) > 2 else None)
+    enchants_out = out.replace("Guides.lua", "Enchants.lua") if out.endswith("Guides.lua") else "Enchants.lua"
+    write_enchants(enchants_out, sys.argv[2] if len(sys.argv) > 2 else None)
 
 
 if __name__ == "__main__":

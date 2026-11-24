@@ -40,135 +40,73 @@ local function BuildPanel(panel)
   local armor = track(at(UI.Check(panel, "From level 40, only my best armor type (mail or plate) can be an upgrade", S("bestArmorOnly"), W_, Changed), 26, -242))
   armor.tip = "Shamans and hunters: mail; warriors and paladins: plate. Off by default: Forever has no armor specialization, so a lighter piece with better stats really is better."
 
-  -- Priorities ---------------------------------------------------------------
-  at(UI.Section(panel, "Your priorities", W_), 26, -278)
-  local n = at(UI.Text(panel, "note", "What you want more of. Pick a goal (Auto: Leveling until the level cap, then Damage), then change any stat on top of it. Hover a stat for what it's worth."), 26, -306)
+  -- Your build ---------------------------------------------------------------
+  at(UI.Section(panel, "Your build", W_), 26, -278)
+  local n = at(UI.Text(panel, "note", "How much you want damage (or healing) and survival, and what each stat is worth. Values start from Forever Upgrades' simulator for your spec, scaled by your talents. Hover a stat for where its value comes from; type your own, or pick Higher / Highest / Ignore."), 26, -306)
   n:SetWidth(W_)
   local function changed() Changed(); refreshRows(); now.Refresh() end
-  -- the goal: the base; your stat changes sit on top of it
-  at(UI.Text(panel, "line", "Goal"), 26, -345)
-  local goalOpts = {}
-  for _, g in ipairs(ns.Goals()) do goalOpts[#goalOpts + 1] = { g[1], g[2] } end
-  local goalTip = {}
-  for _, g in ipairs(ns.Goals()) do goalTip[#goalTip + 1] = g[2] .. ": " .. g[3] end
-  goalTip[#goalTip + 1] = "Your stat changes below stay on top of whichever goal you pick."
-  local goal = at(UI.Selector(panel, 220, goalOpts,
-    { function() return ns.Priorities().goal or "auto" end, function(v) ns.SetGoal(v) end }, changed,
-    table.concat(goalTip, "\n")), 106, -342)
-  rows[#rows + 1] = goal; track(goal)
-  -- each stat: Default (the goal's) / Ignore / Normal / Higher / Highest
-  local y0 = -378
+  -- the build: a preset, or your own mix on the slider
+  at(UI.Text(panel, "line", "Build"), 26, -357)
+  local buildOpts, buildTip = {}, {}
+  for _, b in ipairs(ns.BUILDS) do
+    buildOpts[#buildOpts + 1] = { b[1], ns.BuildName(b[1]) }
+    buildTip[#buildTip + 1] = ns.BuildName(b[1]) .. ": " .. b[5]
+  end
+  local build = at(UI.Selector(panel, 200, buildOpts,
+    { function() return ns.Priorities().build or "auto" end, function(v) ns.SetBuild(v) end }, changed,
+    table.concat(buildTip, "\n")), 86, -354)
+  rows[#rows + 1] = build; track(build)
+  local mix = UI.Slider(panel, "Survival (the rest: damage / healing)", 180, 0, 1, 0.05,
+    { function() return ns.SurvivalShare() end, function(v) ns.SetSurvivalShare(v) end },
+    function(v) return format("%d%%", v * 100 + 0.5) end,
+    changed)
+  mix:SetPoint("TOPLEFT", 300, -346)
+  rows[#rows + 1] = mix; track(mix)
+  -- each stat: your value (a number), and Default / Ignore / Higher / Highest
+  local y0 = -400
   for i, key in ipairs(ns.STAT_ORDER) do
     local col, row = (i - 1) % 2, math.floor((i - 1) / 2)
     local x, y = 26 + col * 240, y0 - row * 26
     local lbl = at(UI.Text(panel, "line", ns.STAT_NAMES[key]), x, y - 3)
-    lbl:SetWidth(108); lbl:SetJustifyH("LEFT"); if lbl.SetWordWrap then lbl:SetWordWrap(false) end
+    lbl:SetWidth(96); lbl:SetJustifyH("LEFT"); if lbl.SetWordWrap then lbl:SetWordWrap(false) end
     local function tip(owner)
       GameTooltip:SetOwner(owner, "ANCHOR_RIGHT")
       GameTooltip:SetText(ns.STAT_NAMES[key], 1, 1, 1)
       for j, line in ipairs(ns.PriorityInfo(key)) do
-        if j > 1 then GameTooltip:AddLine(" ") end -- (a gap between the parts: easier to read)
+        if j > 1 then GameTooltip:AddLine(" ") end
         GameTooltip:AddLine(line, 0.85, 0.85, 0.85, true)
       end
       GameTooltip:Show()
     end
     local hover = CreateFrame("Frame", nil, panel)
-    hover:SetSize(110, 20); hover:SetPoint("TOPLEFT", x - 2, y + 1)
+    hover:SetSize(98, 20); hover:SetPoint("TOPLEFT", x - 2, y + 1)
     hover:EnableMouse(true)
     hover:SetScript("OnEnter", tip)
     hover:SetScript("OnLeave", function() GameTooltip:Hide() end)
-    local sel = UI.Selector(panel, 120, ns.LEVELS,
+    local box = UI.Edit(panel, 44, {
+      function() return ns.Short(ns.Weights()[key] or 0) end,
+      function(t) local v = tonumber(t); if v and math.abs(v - (ns.Weights()[key] or 0)) > 1e-6 then ns.SetValue(key, v); changed() end end },
+      "", false, true)
+    box:SetPoint("TOPLEFT", x + 98, y + 1)
+    if box.HookScript then box:HookScript("OnEnter", tip); box:HookScript("OnLeave", function() GameTooltip:Hide() end) end
+    rows[#rows + 1] = box; track(box)
+    local sel = UI.Selector(panel, 92, ns.LEVELS,
       { function() return ns.Level(key) end, function(v) ns.SetLevel(key, v) end }, changed)
-    sel:SetPoint("TOPLEFT", x + 112, y + 2)
-    if sel.HookScript then sel:HookScript("OnEnter", tip); sel:HookScript("OnLeave", function() GameTooltip:Hide() end) end
+    sel:SetPoint("TOPLEFT", x + 144, y + 2)
     rows[#rows + 1] = sel; track(sel)
   end
   local yEnd = y0 - math.ceil(#ns.STAT_ORDER / 2) * 26 - 10
-  local reset = at(UI.Button(panel, "Reset priorities", 130, function() ns.ResetPriorities(); changed() end), 26, yEnd)
-  reset.tip = "Back to Auto, with none of your own stat changes."
+  local reset = at(UI.Button(panel, "Reset build", 110, function() ns.ResetPriorities(); changed() end), 26, yEnd)
+  reset.tip = "Back to Auto, with Forever Upgrades' values (and your talents)."
   local fb = UI.Button(panel, "Report a bug / suggest", 170, function()
     UI.ShowLink("EquipThisLinkWindow", "Equip This!: bugs and ideas", "https://github.com/califaxop/Equip-This-Upgrade-Advisor/issues/new/choose")
   end)
   fb:SetPoint("LEFT", reset, "RIGHT", 8, 0)
-  local dpsBtn = UI.Button(panel, "Your " .. ns.Sim.Unit(), 110, function() ns.OpenDps() end)
-  dpsBtn:SetPoint("LEFT", fb, "RIGHT", 8, 0)
-  dpsBtn.tip = "Your damage (or healing) per second as Equip This! works it out, ability by ability, and what each stat is worth to it."
-  track({ Refresh = function() if dpsBtn.SetLabel then dpsBtn.SetLabel("Your " .. ns.Sim.Unit()) end end })
-  local hint = at(UI.Text(panel, "note", "/eqt item: how an item was scored.  /eqt guide: your spec's rotation.  /eqt dps: this window."), 26, yEnd - 30)
+  local hint = at(UI.Text(panel, "note", "Hold Shift on an item for where its score comes from.  /eqt item: the full working.  /eqt guide: your spec's priority, rotation and values."), 26, yEnd - 30)
+  hint:SetWidth(W_)
 
   panel:HookScript("OnShow", function() for _, w in ipairs(refreshers) do w.Refresh() end end)
   panel.height = -(yEnd - 66)
-end
-
----------------------------------------------------------------------------
--- Your DPS / HPS window: the number, each ability's part, and what each stat is worth
----------------------------------------------------------------------------
-local DPS_ROWS = 12
-function ns.OpenDps()
-  local win = EquipThisDpsWindow
-  if not win then
-    -- a pop-up like the others: solid, over the settings window (dimmed behind it), or mid-screen
-    win = UI.Popup("EquipThisDpsWindow", 430, 130 + DPS_ROWS * 18 + 120)
-    win.title = UI.Text(win, "title", "")
-    win.title:SetPoint("TOPLEFT", 20, -18)
-    win.total = UI.Text(win, "header", "")
-    win.total:SetPoint("LEFT", win.title, "RIGHT", 12, 0)
-    win.stats = UI.Text(win, "note", "")
-    win.stats:SetPoint("TOPLEFT", 20, -44); win.stats:SetWidth(390)
-    -- the table: ability, per cast, a minute, per second, share
-    local cols = { { "Ability", 20, 150, "LEFT" }, { "Per hit", 170, 60, "RIGHT" }, { "A minute", 232, 56, "RIGHT" },
-      { "Per sec", 290, 58, "RIGHT" }, { "Share", 350, 56, "RIGHT" } }
-    for _, c in ipairs(cols) do
-      local h = UI.Text(win, "note", c[1]); h:SetPoint("TOPLEFT", c[2], -68); h:SetWidth(c[3]); h:SetJustifyH(c[4])
-    end
-    win.rows = {}
-    for i = 1, DPS_ROWS do
-      local r = {}
-      for j, c in ipairs(cols) do
-        local fs = UI.Text(win, j == 1 and "line" or "value", "")
-        fs:SetPoint("TOPLEFT", c[2], -68 - i * 18); fs:SetWidth(c[3]); fs:SetJustifyH(c[4]); fs:SetWordWrap(false)
-        r[j] = fs
-      end
-      win.rows[i] = r
-    end
-    local wy = -68 - (DPS_ROWS + 1) * 18 - 6
-    win.worthHead = UI.Section(win, "What stats are worth to it", 390)
-    win.worthHead:SetPoint("TOPLEFT", 20, wy)
-    win.worth = UI.Text(win, "line", "")
-    win.worth:SetPoint("TOPLEFT", 20, wy - 32); win.worth:SetWidth(390); win.worth:SetSpacing(3)
-    win.note = UI.Text(win, "note", "Per hit: an average hit, as your tooltip shows it (with your spell power). Per sec: with crits and misses. *: a summon (totem): its hit from your tooltip, how often from the site's sim. In grey: no numbers of its own (pets, some procs), its part follows the site's sim.")
-    win.note:SetPoint("BOTTOMLEFT", 20, 14); win.note:SetWidth(390)
-    local function fmtN(x) return x >= 100 and format("%d", x + 0.5) or format("%.1f", x) end
-    function win.Refresh()
-      local d, why = ns.Sim.ReportData()
-      win.title:SetText("Your " .. ns.Sim.Unit())
-      for _, r in ipairs(win.rows) do for _, fs in ipairs(r) do fs:SetText("") end end
-      if not d then win.total:SetText(""); win.stats:SetText(why or ""); win.worth:SetText(""); return end
-      win.total:SetText(fmtN(d.total))
-      win.stats:SetText(d.stats)
-      for i, row in ipairs(d.rows) do
-        local r = win.rows[i]
-        if not r then break end
-        r[1]:SetText(row[6] and ("|cff9d9d9d" .. row[1] .. "|r") or (row[7] and (row[1] .. " |cff9d9d9d*|r") or row[1]))
-        r[2]:SetText(row[2] and fmtN(row[2]) or "")
-        r[3]:SetText(row[3] and format("%.1f", row[3]) or "")
-        r[4]:SetText(fmtN(row[4]))
-        r[5]:SetText(format("%d%%", row[5] * 100 + 0.5))
-      end
-      local lines = {}
-      for i, w in ipairs(d.worth) do
-        local cell = format("%s  |cff40ff40+%.2f%%|r", w[1], w[2])
-        if i % 2 == 1 then lines[#lines + 1] = cell else lines[#lines] = lines[#lines] .. "        " .. cell end
-      end
-      win.worth:SetText(table.concat(lines, "\n"))
-    end
-    -- your numbers move with buffs and gear: keep it current while it's open
-    local t = 0
-    win:SetScript("OnUpdate", function(_, el) t = t + el; if t > 1 then t = 0; win.Refresh() end end)
-    win:HookScript("OnShow", function() win.Refresh() end)
-  end
-  win.Refresh()
-  win:Place(); win:Show()
 end
 
 function ns.CreateOptions()

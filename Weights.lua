@@ -1,8 +1,8 @@
--- Stat values. Each spec's come from Forever Upgrades' weights (Guides.lua); the presets below are
--- the fallback. You set priorities on top (Normal / Higher / Highest / Ignore, or a goal: see
--- "Priorities" below). Values are written as points per unit (the main stat is 1; crit and hit
--- per 1%; DPS is weapon damage per second, only on weapons), then shown and edited as importance
--- 0-5 (see ns.NORM). Starting points to tune in /eqt, not gospel.
+-- Stat values: what each stat is worth to you, in points per unit (the spec's main stat at 1; crit, hit
+-- and the like per 1%; DPS is a weapon's damage per second). They start from Forever Upgrades' weights
+-- for your spec (its simulator's own measure of what each stat does for the spec's DPS, HPS or effective
+-- health), scaled by your talents (Talents.lua), with your own changes on top. Your build then mixes
+-- damage (or healing) with survival (Score.lua).
 local _, ns = ...
 
 -- stat keys: what the tooltip line and /eqt item show
@@ -25,36 +25,22 @@ local HEALER   = { INT = 1, SPI = 0.5, HEAL = 0.6, SP = 0.6, MP5 = 1.5, SPELLCRI
 local TANK     = { STA = 1, ARMOR = 0.05, DEF = 1.2, DODGE = 12, PARRY = 12, BLOCK = 6, BLOCKVALUE = 0.3,
                    STR = 0.5, AGI = 0.6, HIT = 4, DPS = 1 }
 
--- Weights are importance, 0 (ignore) to 5 (most), the same scale for every stat. Each stat comes
--- in its own unit, so importance is turned into points with a fixed factor: what 1 unit of the
--- stat is worth next to 1 point of a main stat, at full importance (5). E.g. 1% crit ~ 14 Strength.
+-- What 1 unit of a stat is worth next to 1 point of a main stat, for a typical spec: only used to
+-- compare stats in different units (Higher / Highest: "halfway to your most valued stat").
 ns.NORM = { STR = 1, AGI = 1, STA = 1, HEALTH = 0.1, INT = 1, SPI = 1, AP = 0.5, RAP = 0.4, SP = 1, HEAL = 0.6, MP5 = 2,
   CRIT = 14, HIT = 12, HASTE = 10, EXPERTISE = 12, SPELLPEN = 1, HP5 = 2, SPELLCRIT = 10, SPELLHIT = 10, DPS = 4, ARMOR = 0.02, DEF = 1.2, DODGE = 12,
   PARRY = 12, BLOCK = 6, BLOCKVALUE = 0.5 }
-local function round2(x) return math.floor(x * 100 + 0.5) / 100 end
 local PRIMARY = { "STR", "AGI", "INT" }
-local function Short(x) x = math.floor(x * 10 + 0.5) / 10; return (x == math.floor(x)) and tostring(x) or format("%.1f", x) end
--- a weight as typed: 3.75 -> "3.75", 4.5 -> "4.5", 5 -> "5"
-local function Wt(x) return (format("%.2f", x or 0):gsub("0+$", ""):gsub("%.$", "")) end
+local function Short(x) x = math.floor(x * 100 + 0.5) / 100; return (x == math.floor(x)) and tostring(x) or (format("%.2f", x):gsub("0$", "")) end
+ns.Short = Short
 local function Unit(key)
-  if key == "DPS" then return "+1 weapon DPS" end
-  if (ns.STAT_NAMES[key] or ""):find("%%") then return "+1%" end
-  return "+1"
+  if key == "DPS" then return "per 1 weapon DPS" end
+  if (ns.STAT_NAMES[key] or ""):find("%%") then return "per 1%" end
+  return "per point"
 end
-
--- points per unit of a stat, for an importance
-function ns.PointsPer(key, importance) return (importance or 0) * (ns.NORM[key] or 0) / 5 end
--- points-per-unit weights (Pawn-style) -> importance 0-5, the top stat at 5; and the factor used
-function ns.ToImportance(points)
-  local raw, top = {}, 0
-  for k, v in pairs(points) do
-    if ns.NORM[k] then raw[k] = v / ns.NORM[k]; if raw[k] > top then top = raw[k] end end
-  end
-  local f = top > 0 and 5 / top or 0
-  local out = {}
-  for k, v in pairs(raw) do out[k] = round2(v * f) end
-  return out, f
-end
+ns.UnitOf = Unit
+-- (weights are points per unit now; older code asks for them through this)
+function ns.PointsPer(_, w) return w or 0 end
 
 local function with(base, changes)
   local t = ns.Copy(base)
@@ -92,14 +78,12 @@ function ns.SpecName(key)
   return p and p[1] or key
 end
 
--- What gear is scored with: your spec's values, with your priorities
-function ns.CurrentWeights() return ns.Weights() end
 ---------------------------------------------------------------------------
 -- Skills: your damage split (auto attack and each skill) comes from Rotation.lua. An item effect on a
 -- skill ("+10% Stormstrike") counts by that skill's share of your output: +10% to a skill that's 20% of
 -- it is +2% output, and +1% output counts as ns.OUTPUT_PTS points (as much as +1% crit at 5).
 ---------------------------------------------------------------------------
-ns.OUTPUT_PTS = 14
+ns.OUTPUT_PTS = 14 -- (set for each scoring: 1% of your gear's score, Score.lua)
 -- Specs without a guide rotation (Rotation.lua) use these: the part of your output from skills (melee
 -- ~50%, the rest white hits; hunters ~60%, the rest Auto Shot; casters and healers ~95%), split by weight.
 local MELEE_PART, HUNTER_PART, CASTER_PART = 50, 60, 95
@@ -140,194 +124,213 @@ ns.PRESET_SKILLS = {
               S5("Healing Touch", 5, "Rejuvenation", 5, "Regrowth", 4) },
 }
 
--- a spec's preset, as importance (0-5), and the factor it was scaled by
-function ns.PresetImportance(key)
+-- a spec's weights from Forever Upgrades (Guides.lua), else the built-in ones: points per unit
+function ns.SiteWeights(key)
   local class, tree = key:match("^(%u+):(%d)$")
   local p = class and ns.PRESETS[class] and ns.PRESETS[class][tonumber(tree)]
-  -- Forever Upgrades' stat weights for the spec (Guides.lua), else the built-in ones
   local g = ns.GUIDE and ns.GUIDE[key] and ns.GUIDE[key].weights
-  return ns.ToImportance((g and next(g)) and g or (p and p[2]) or MELEE)
+  local w = ns.Copy((g and next(g)) and g or (p and p[2]) or MELEE)
+  w.HEALTH = w.HEALTH or (w.STA and w.STA / 10) -- (10 Health = 1 Stamina)
+  return w
 end
 
+-- the spec's role on Forever Upgrades: "melee", "caster", "ranged", "healer" or "tank"
+function ns.Role(key)
+  key = key or ns.SpecKey()
+  local g = ns.GUIDE and ns.GUIDE[key]
+  if g and g.role then return g.role end
+  return (ns.PRESETS[key:match("^(%u+)")] and key:match(":(%d)$") and "melee") or "melee"
+end
+function ns.IsTank(key) return ns.Role(key) == "tank" end
 ---------------------------------------------------------------------------
--- Priorities: what you want more of, in two layers.
---  1. A goal sets the base. Auto (the default): Leveling below the level cap, Damage at it.
---     Leveling raises what keeps you alive and drinking less: Stamina and Health x3, Armor,
---     Intellect, Spirit and mana per 5 x2 (Pawn Forever's leveling multipliers, from GearQuest).
---     Damage: Forever Upgrades' values as they are. Survival / Mana / Balanced lift a few stats.
---  2. Your own changes, stat by stat, on top: Ignore / Normal (Forever Upgrades' value) / Higher
---     (halfway to your spec's most valued stat) / Highest (above every Normal stat). Default
---     leaves the stat to the goal. Your changes stay when the goal changes (Auto at the cap too).
+-- Your build: what you want more of, in two layers.
+--  1. How damage (or healing) and survival mix. A tank's own weights are survival (effective health)
+--     and its damage comes from the class's damage spec. Builds: Damage, Leveling, Balanced, Survival
+--     (Tanking for tanks), or your own mix. Auto: Leveling until the level cap, then Damage (tanks:
+--     Tanking).
+--  2. Your own values, stat by stat, on top: a number of your own, or Ignore / Higher (halfway to your
+--     most valued stat) / Highest (above every other stat). Default leaves the stat as Forever
+--     Upgrades has it for you (with your talents).
 ---------------------------------------------------------------------------
-ns.LEVELS = { { "goal", "Default" }, { "ignore", "Ignore" }, { "normal", "Normal" }, { "higher", "Higher" }, { "highest", "Highest" } }
+ns.LEVELS = { { "goal", "Default" }, { "ignore", "Ignore" }, { "higher", "Higher" }, { "highest", "Highest" }, { "custom", "Your value" } }
 local LEVEL_NAME = {}
 for _, l in ipairs(ns.LEVELS) do LEVEL_NAME[l[1]] = l[2] end
 ns.LEVEL_NAME = LEVEL_NAME
-local TOP = 5         -- a spec's most valued stat (its values are scaled so it's 5)
-local HIGHEST = 7.5   -- above any Normal or Higher stat
 
-ns.GOALS = {
-  { "auto", "Auto", "Leveling until the level cap, then Damage. Switches by itself." },
-  { "leveling", "Leveling", "Forever Upgrades' values, with Stamina and Health x3 and Armor, Intellect, Spirit and mana per 5 x2: easier fights, less drinking." },
-  { "damage", "Damage", "Forever Upgrades' values for your spec, as they are." },
-  { "survival", "Survival", "More health and armor to take more hits: Stamina and Health first, then Armor, health regeneration and avoidance." },
-  { "mana", "Mana", "Longer before you drink: Intellect first, then Spirit and mana per 5 sec." },
-  { "balanced", "Balanced", "A bit of everything: more Stamina, Health and Armor, and Intellect and mana per 5 sec if you use mana." },
+-- { id, name, survival share (non-tanks), survival share (tanks), description }
+ns.BUILDS = {
+  { "auto", "Auto", nil, nil, "Leveling until the level cap, then Damage (tanks: Tanking). Switches by itself." },
+  { "damage", "Damage", 0, 0, "All damage (or healing): Forever Upgrades' values for your spec." },
+  { "leveling", "Leveling", 0.25, 0.5, "Mostly damage, with a quarter survival (health and armor): easier fights while you level. Tanks: half and half." },
+  { "balanced", "Balanced", 0.5, 0.75, "Half damage, half survival." },
+  { "survival", "Survival", 1, 1, "All survival: effective health from Stamina, health and armor (tanks: Forever Upgrades' tanking values)." },
+  { "custom", "Your mix", nil, nil, "Your own mix of damage and survival (the slider)." },
 }
-local GOAL_NAME = {}
-for _, g in ipairs(ns.GOALS) do GOAL_NAME[g[1]] = g[2] end
--- Leveling: these stats' values multiplied
-local LEVELING = { STA = 3, HEALTH = 3, ARMOR = 2, INT = 2, SPI = 2, MP5 = 2 }
-ns.LEVELING = LEVELING
--- the other goals: priority levels
-local GOAL_LEVELS = {
-  survival = { STA = "highest", HEALTH = "highest", ARMOR = "higher", HP5 = "higher", DEF = "higher", DODGE = "higher", PARRY = "higher", BLOCK = "higher" },
-  mana = { INT = "highest", SPI = "higher", MP5 = "higher" },
-  balanced = { STA = "higher", HEALTH = "higher", ARMOR = "higher", HP5 = "higher", INT = "higher", MP5 = "higher" },
-}
-local MANA_STATS = { INT = true, SPI = true, MP5 = true }
-local NO_MANA = { WARRIOR = true, ROGUE = true }
--- the goals that make sense for your class (no Mana goal for warriors and rogues)
-function ns.Goals()
-  local list = {}
-  for _, g in ipairs(ns.GOALS) do
-    if not (g[1] == "mana" and NO_MANA[ns.Class()]) then list[#list + 1] = g end
-  end
-  return list
+local BUILD = {}
+for _, b in ipairs(ns.BUILDS) do BUILD[b[1]] = b end
+function ns.BuildName(id, key)
+  if id == "survival" and ns.IsTank(key) then return "Tanking" end
+  return BUILD[id] and BUILD[id][2] or id
 end
 
--- the level cap (Auto switches from Leveling to Damage there)
+-- the level cap (Auto switches there)
 function ns.MaxLevel()
   local cap = (GetMaxLevelForPlayerExpansion and GetMaxLevelForPlayerExpansion()) or (GetMaxPlayerLevel and GetMaxPlayerLevel())
   return (type(cap) == "number" and cap > 0) and cap or 60
 end
 
--- your priorities for a spec: { goal = "auto" | "leveling" | ..., levels = { STAT = level } } (your changes)
+-- your choices for a spec: { build = "auto" | "damage" | ..., survival = 0-1 (your mix), levels = { STAT = level },
+-- values = { STAT = your number } }
+local OLD_GOAL = { mana = "damage", custom = "damage" } -- (2.5-3.x goals)
 function ns.Priorities(key)
   key = key or ns.SpecKey()
   ns.db.priorities = ns.db.priorities or {}
   local p = ns.db.priorities[key]
-  if p and p.goal == "custom" then p.goal = "damage" end -- (2.5.0's "your own mix": your changes over Damage)
-  return p or { goal = "auto", levels = {} }
-end
--- the goal in effect: Auto as Leveling or Damage
-function ns.Goal(key)
-  local g = ns.Priorities(key).goal or "auto"
-  if g == "auto" then
-    local level = UnitLevel and UnitLevel("player") or 1
-    return (level < ns.MaxLevel()) and "leveling" or "damage", true
-  end
-  return g, false
+  if p and p.goal then p.build = OLD_GOAL[p.goal] or p.goal; p.goal = nil end
+  if p then p.levels = p.levels or {}; p.values = p.values or {} end
+  return p or { build = "auto", levels = {}, values = {} }
 end
 local function Save(key, p) ns.db.priorities = ns.db.priorities or {}; ns.db.priorities[key] = p end
-function ns.SetGoal(goal, key)
+
+-- the build in effect (Auto as Leveling / Damage / Tanking), and whether it came from Auto
+function ns.Build(key)
+  key = key or ns.SpecKey()
+  local b = ns.Priorities(key).build or "auto"
+  if b == "auto" then
+    local level = UnitLevel and UnitLevel("player") or 1
+    if level < ns.MaxLevel() then return "leveling", true end
+    return ns.IsTank(key) and "survival" or "damage", true
+  end
+  return b, false
+end
+function ns.SetBuild(id, key)
   key = key or ns.SpecKey()
   local p = ns.Copy(ns.Priorities(key))
-  p.goal = goal
+  if id == "custom" and p.survival == nil then p.survival = ns.SurvivalShare(key) end
+  p.build = id
   Save(key, p)
 end
-function ns.Level(stat, key) return ns.Priorities(key).levels[stat] or "goal" end
+-- how much of your build is survival, 0-1
+function ns.SurvivalShare(key)
+  key = key or ns.SpecKey()
+  local b = ns.Build(key)
+  if b == "custom" then return math.max(0, math.min(1, ns.Priorities(key).survival or 0)) end
+  local e = BUILD[b]
+  return e and ((ns.IsTank(key) and e[4]) or e[3]) or 0
+end
+function ns.SetSurvivalShare(x, key)
+  key = key or ns.SpecKey()
+  local p = ns.Copy(ns.Priorities(key))
+  p.build, p.survival = "custom", math.max(0, math.min(1, x))
+  Save(key, p)
+end
+
+function ns.Level(stat, key)
+  local p = ns.Priorities(key)
+  if p.values[stat] then return "custom" end
+  return p.levels[stat] or "goal"
+end
 function ns.SetLevel(stat, level, key)
   key = key or ns.SpecKey()
   local p = ns.Copy(ns.Priorities(key))
-  p.levels[stat] = (level ~= "goal") and level or nil
+  p.levels[stat] = (level ~= "goal" and level ~= "custom") and level or nil
+  if level ~= "custom" then p.values[stat] = nil
+  elseif not p.values[stat] then p.values[stat] = ns.Weights(key)[stat] or 0 end
   Save(key, p)
 end
-function ns.HasChanges(key) return next(ns.Priorities(key).levels) ~= nil end
+-- your own number for a stat (nil: back to Default)
+function ns.SetValue(stat, v, key)
+  key = key or ns.SpecKey()
+  local p = ns.Copy(ns.Priorities(key))
+  p.values[stat] = (type(v) == "number" and v >= 0) and v or nil
+  p.levels[stat] = nil
+  Save(key, p)
+end
+function ns.HasChanges(key)
+  local p = ns.Priorities(key)
+  return next(p.levels) ~= nil or next(p.values) ~= nil
+end
 function ns.ResetPriorities(key) if ns.db.priorities then ns.db.priorities[key or ns.SpecKey()] = nil end end
 
--- a stat's value (importance) at a priority level, from its Normal value
-local function AtLevel(base, level)
-  if level == "ignore" then return 0 end
-  if level == "higher" then return (base + TOP) / 2 end
-  if level == "highest" then return HIGHEST + base / 10 end -- (several at Highest keep the site's order)
-  return base
-end
-
--- the values in use for a spec: Forever Upgrades' (Normal), the goal, then your changes
-function ns.Weights(key)
+-- your spec's values before your own changes: Forever Upgrades', with your talents (your current spec)
+function ns.BaseWeights(key)
   key = key or ns.SpecKey()
-  local site = ns.PresetImportance(key)
-  site.HEALTH = site.HEALTH or site.STA -- (10 Health = 1 Stamina: the same importance)
-  local w = ns.Copy(site)
-  local goal = ns.Goal(key)
-  if goal == "leveling" then
-    -- (Armor: most damage specs' values leave it out; from Pawn's Forever scales, 1 Armor is worth
-    -- about 0.005 of your main stat, before the x2)
-    if (w.ARMOR or 0) <= 0 then
-      local main = 0
-      for _, k in ipairs(PRIMARY) do main = math.max(main, ns.PointsPer(k, w[k])) end
-      if main > 0 and ns.NORM.ARMOR > 0 then w.ARMOR = 0.005 * main * 5 / ns.NORM.ARMOR end
-    end
-    for stat, m in pairs(LEVELING) do if w[stat] then w[stat] = w[stat] * m end end
-  else
-    for stat, level in pairs(GOAL_LEVELS[goal] or {}) do
-      if not (MANA_STATS[stat] and NO_MANA[ns.Class()]) then w[stat] = AtLevel(site[stat] or 0, level) end
-    end
+  local w = ns.SiteWeights(key)
+  if key == ns.SpecKey() and ns.Talents then
+    local f = ns.Talents.Factors(key)
+    for stat, x in pairs(f) do if w[stat] then w[stat] = w[stat] * x end end
+    if f.STA and w.HEALTH then w.HEALTH = w.HEALTH * f.STA end
   end
-  for stat, level in pairs(ns.Priorities(key).levels) do w[stat] = AtLevel(site[stat] or 0, level) end
   return w
 end
 
--- the label shown with verdicts: the spec, the goal (if not plain Damage) and "your changes"
+-- a stat's value at a level, from its Default value (in its own unit), against the spec's top stat
+local function AtLevel(base, level, key, top)
+  if level == "ignore" then return 0 end
+  local norm = ns.NORM[key] or 1
+  local imp = base / norm
+  if level == "higher" then return (imp + top) / 2 * norm end
+  if level == "highest" then return (top * 1.5 + imp / 10) * norm end -- (several at Highest keep their order)
+  return base
+end
+
+-- the values in use for a spec (its own side: damage / healing, or a tank's survival): your talents,
+-- then your changes
+function ns.Weights(key)
+  key = key or ns.SpecKey()
+  local base = ns.BaseWeights(key)
+  local top = 0
+  for k, v in pairs(base) do if ns.NORM[k] then top = math.max(top, v / ns.NORM[k]) end end
+  local w = ns.Copy(base)
+  local p = ns.Priorities(key)
+  for stat, level in pairs(p.levels) do w[stat] = AtLevel(base[stat] or 0, level, stat, top) end
+  for stat, v in pairs(p.values) do w[stat] = v end
+  return w
+end
+function ns.CurrentWeights() return ns.Weights() end
+-- stats you've set to Ignore: nothing on either side of your build
+function ns.Ignored(stat, key) return ns.Priorities(key).levels[stat] == "ignore" end
+
+-- the label shown with verdicts: the spec, the build, "your changes"
 function ns.ScoringLabel()
-  local goal = ns.Goal()
-  local label = ns.SpecName(ns.SpecKey())
-  if goal ~= "damage" then label = label .. ", " .. (GOAL_NAME[goal] or goal) end
-  if ns.HasChanges() then label = label .. (goal ~= "damage" and " + your changes" or ", your changes") end
+  local key = ns.SpecKey()
+  local b = ns.Build(key)
+  local label = ns.SpecName(key) .. ", " .. ns.BuildName(b, key)
+  if b == "custom" then
+    local t = ns.SurvivalShare(key)
+    label = label .. format(" (%d%% survival)", t * 100 + 0.5)
+  end
+  if ns.HasChanges() then label = label .. " + your changes" end
   return label
 end
 
--- The tooltip on a stat in /eqt, in short parts: what it's worth, what the levels do,
--- and how items are scored.
+-- The tooltip on a stat in /eqt: its value and where it comes from
 function ns.PriorityInfo(key)
   local lines = {}
-  local name = (ns.STAT_NAMES[key] or key):gsub(" %%$", "")
-  local unit = Unit(key)
-  local label = (unit == "+1%" or unit == "+1") and (unit .. " " .. name) or unit
   local spec = ns.SpecKey()
-  local weights = ns.Weights(spec)
-  local pts = ns.PointsPer(key, weights[key])
-  local Sim = ns.Sim
-  if Sim and Sim.Active() and Sim.MODEL[key] then
-    -- worked out from your spells and numbers (Sim.lua)
-    local ok, per = pcall(Sim.PerUnit, key)
-    if ok and per then
-      local n = (unit == "+1%" or key == "DPS") and 1 or 10
-      local label10 = (n == 10) and ("+10 " .. name) or label
-      lines[#lines + 1] = format("Worth: %s = %+.2f%% %s for you now (from your spells and numbers).", label10, per * n, Sim.Unit())
+  local site = ns.SiteWeights(spec)[key] or 0
+  local base = ns.BaseWeights(spec)[key] or 0
+  local now = ns.Weights(spec)[key] or 0
+  local unit = Unit(key)
+  lines[#lines + 1] = format("Value: %s %s (your main stat is 1).", Short(now), unit)
+  lines[#lines + 1] = format("Forever Upgrades: %s %s, from its simulator for %s.", Short(site), unit, ns.SpecName(spec))
+  if math.abs(base - site) > 1e-6 then
+    local _, why = ns.Talents.Factors(spec)
+    local parts = {}
+    for _, w in ipairs(why) do
+      if w[1] == key then parts[#parts + 1] = format("%s %d/%d", w[2], w[3], w[4]) end
     end
-    if ns.Level(key) ~= "goal" or (weights[key] or 0) ~= (ns.PresetImportance(spec)[key] or 0) then
-      lines[#lines + 1] = "Your priority scales that up or down."
-    end
-  elseif pts <= 0 then
-    lines[#lines + 1] = "Items get nothing for it."
-  else
-    local best, bestPts
-    for _, k in ipairs(PRIMARY) do
-      local p = ns.PointsPer(k, weights[k])
-      if p > 0 and (not bestPts or p > bestPts) then best, bestPts = k, p end
-    end
-    if best and best ~= key then
-      lines[#lines + 1] = format("Worth: %s counts as much as +%s %s.", label, Short(pts / bestPts), ns.STAT_NAMES[best])
-    else
-      lines[#lines + 1] = format("Worth: your main stat; other stats are measured against %s.", label)
-    end
+    lines[#lines + 1] = format("Your talents: %s (%s). It rises as you take them.", Short(base), table.concat(parts, ", "))
   end
-  if key == "DPS" then lines[#lines + 1] = "Only on weapons. Damage procs and extra attacks count through it too." end
+  local level = ns.Level(key)
+  if level ~= "goal" then
+    lines[#lines + 1] = format("Your change: %s. Default puts it back to %s.", LEVEL_NAME[level], Short(base))
+  end
+  if key == "DPS" then lines[#lines + 1] = "Only on weapons (an off-hand's counts half)." end
   if key == "HEALTH" then lines[#lines + 1] = "Items with \"+Health\". 10 Health is about 1 Stamina." end
-  local goal, auto = ns.Goal(spec)
-  local gname = (GOAL_NAME[goal] or goal) .. (auto and " (Auto)" or "")
-  if ns.Level(key) ~= "goal" then
-    lines[#lines + 1] = format("Your change: %s. Default puts it back to your goal, %s.", LEVEL_NAME[ns.Level(key)], gname)
-  elseif goal == "leveling" and LEVELING[key] then
-    lines[#lines + 1] = format("Default: your goal, %s, counts it x%d while you level.", gname, LEVELING[key])
-  else
-    lines[#lines + 1] = format("Default: as your goal, %s, has it.", gname)
+  if key == "STA" or key == "HEALTH" or key == "ARMOR" then
+    lines[#lines + 1] = "Survival in your build counts it through your effective health, on top of this value."
   end
-  lines[#lines + 1] = "Normal: Forever Upgrades' value. Higher: halfway to your spec's most valued stat. Highest: worth more than every Normal stat, so items with more of it win. Ignore: worth nothing."
-  lines[#lines + 1] = (Sim and Sim.Active())
-    and format("An item's value: the change in your %s from wearing it, plus its other stats (Stamina, Intellect...) by these values, plus its effects.", Sim.Unit())
-    or "An item's score adds up its stats by these values, plus its effects. \"Upgrade +2%\": your whole gear scores 2% higher with it."
+  lines[#lines + 1] = "Default: as above. Higher: halfway to your most valued stat. Highest: above every other stat. Ignore: worth nothing, in damage and survival. Or type your own value."
   return lines
 end

@@ -5,20 +5,19 @@
 Equip This! scores gear for your class and spec, marks upgrades on item tooltips, and glows the best quest reward so you never have to guess.
 
 ## Highlights
+- **Forever Upgrades' numbers:** every spec's stat weights come from [Forever Upgrades](https://foreverupgrades.com)' simulator (what each stat does for the spec's DPS, HPS or tanking effective health), refreshed every week. An item scores its stats times those values, plus its effects, as a % of your whole gear: "Upgrade +2.4% DPS vs [your item]". The same % means the same in every slot.
+- **Your talents count:** the site's weights assume a full level-60 talent build. Talents that change what a stat is worth (Mental Dexterity turning Intellect into attack power, Flurry, Careful Aim, Spiritual Guidance...) are checked against yours: until you have them, those stats count less, and they rise as you take them.
+- **Your build:** mix damage (or healing) with survival: Damage, Leveling (the default while you level: a quarter survival), Balanced, Survival, or your own mix on a slider. Survival is your effective health: what Stamina, health and armor add to it. Tanks are the other way round: their own values are tanking, and their damage comes from the class's damage spec.
+- **Your own values:** every stat's value is shown and can be typed over, or set to Higher, Highest or Ignore. Hover a stat for where its value comes from (the site's value, your talents, your change). Verdicts say "DPS", "HPS" or "EH" while your build is all one of them with no changes of yours.
+- **Caps:** hit, spell hit and expertise count up to their cap (against your level while leveling, against bosses at 60), measured against your gear and talents without the item being replaced; a tank's defense counts fully up to crit immunity at 60.
+- **Shift for the working:** hold Shift on an item to see where its score comes from ("Weapon DPS -8.2%, Strength +1.1%...") and any effect it doesn't count.
 - **Quest rewards:** the best upgrade among the choices glows. No upgrade? The one that sells for most gets a coin.
-- **Tooltips:** short verdicts: "Upgrade +2.4% DPS vs [your item]", "Downgrade", "Equipped" or "Can't use it" (the spec and goal it's scored for are in `/eqt`). The % is of your whole gear's score, so it means the same in every slot: +2.4% is 2.4% stronger overall.
-- **Your real DPS (or HPS):** gear is scored by what it does to your damage or healing per second: "Upgrade +2.4% DPS". Equip This! plays Forever Upgrades' rotation for your spec (which abilities, and how often, from its simulator at your level) with each spell's numbers from Forever's own spell tables (your rank's damage or healing, spell power and attack power coefficients, weapon %, cooldowns: refreshed every week, so patches are picked up even before the site's sim is) and your live attack power, spell power, healing, crit, hit, haste and weapons. Other stats (Stamina, Intellect, Spirit...) count by Forever Upgrades' weights and your priorities; item effects on top. The "Your DPS" window (`/eqt dps`) shows the numbers, ability by ability; `/eqt guide` the site's stat priority and rotation. Tanks are scored by their damage (their threat: each ability on its real cooldown) plus their defensive stats through the weights; Feral by its claws in Cat or Bear Form (a weapon's DPS doesn't count for it).
-- **Real proc rates:** "Chance on hit" items use their proc chance from the game's own tables where it has one (Ironfoe: 6% per swing); others count as about once a minute.
-- **Made for leveling:** the default goal, Auto, values what keeps you going while you level (Stamina and Health x3; Armor, Intellect, Spirit and mana per 5 x2, as Pawn Forever does) and switches to Forever Upgrades' damage values by itself at the level cap.
-- **Your priorities:** pick another goal in `/eqt` (Leveling, Damage, Survival, Mana, Balanced), then set any stat to Ignore, Normal, Higher or Highest on top of it: your changes stay when the goal changes. "Upgrade +6% (Enhancement, Survival)". Normal is Forever Upgrades' value; Highest makes a stat worth more than every Normal one, so items with more of it win.
-- **Your spec:** picked from your talents, or set it yourself.
-- **Item effects count:** procs on hit, on spell cast or on crit (about once a minute unless the item says otherwise; procs tied to one skill go off with that skill's casts) and Use effects: damage as DPS (weapon DPS for melee, spell damage for casters), stat buffs ("+300 Attack Power", "+5% crit chance", "+132 spell damage") by how long they're up, mana as mana per 5, haste as extra swings or casts, weapon skill ("Increased Swords +5") as +0.04% hit and crit per point (and softer glancing blows on raid bosses at 60) when you use that weapon. Procs when you're hit and on kills aren't counted. Checked against every effect line on Forever's gear.
-- **Your skills:** items that name a skill ("+10% Stormstrike", "+1% crit chance of Healing Wave", "-1 sec cooldown", "+3 sec duration", "+30 healing", "your Shock spells"), however they're worded, count by that skill's share of your output, so +10% to a skill that's 20% of your damage is +2% output, valued like +2% crit. Skills outside your rotation count for nothing. `/eqt item` shows the working.
-- **Smart comparisons:** against your best item for the slot, worn or in your bags ("vs [Helm] (in your bags)"), rings and trinkets against the weaker of your best two, two-handers against main hand + off hand. Optional: from level 40, only your best armor type (mail or plate) can be an upgrade.
+- **Item effects count:** procs on hit, on spell cast or on crit (with the game's proc chances where it has them; about once a minute otherwise), Use effects, and "+10% Stormstrike"-style skill bonuses by that skill's share of your rotation (from Forever Upgrades' sim at your level). Enchants count too; an item with no enchant of its own is compared with yours on it, and says so.
+- **Smart comparisons:** against your best item for the slot, worn or in your bags, rings and trinkets against the weaker of your two, two-handers against main hand + off hand, a one-hander replacing a two-hander paired with your best off-hand from your bags (and an off-hand's weapon DPS counting half). Optional: from level 40, only your best armor type (mail or plate) can be an upgrade.
 
 ## Quick start
 1. Install and play: Equip This! works out of the box.
-2. Type `/eqt` to check your spec and set your priorities.
+2. Type `/eqt` to check your spec and set your build.
 
 ## Commands
 | Command | Does |
@@ -26,15 +25,14 @@ Equip This! scores gear for your class and spec, marks upgrades on item tooltips
 | `/eqt` (or `/equipthis`) | Open settings |
 | `/eqt item <item>` | How an item was scored (shift-click it into the command) |
 | `/eqt spec` | Which spec gear is scored for |
-| `/eqt dps` (or `/eqt hps`) | A small window with your DPS / HPS as Equip This! works it out, ability by ability, and what each stat is worth (also the "Your DPS" button in `/eqt`) |
-| `/eqt guide` | Your spec's stat priority, rotation and damage split |
+| `/eqt guide` | Your spec's stat priority, rotation, output split, your values, and the talents still missing from them |
 
 ## Good to know
-- Stat values come from Forever Upgrades' simulations; your priorities move them up or down.
+- Stat values come from Forever Upgrades' simulations, made with level-60 gear and talents; your talents and your own changes adjust them.
 - Equip-line stats (crit, hit, spell damage, mp5) are read from English item tooltips.
 
 ## Credits
-Stat priorities, stat weights and rotations per spec: [Forever Upgrades](https://foreverupgrades.com). Spell data: Forever's own game tables, via [wago.tools](https://wago.tools).
+Stat priorities, stat weights and rotations per spec: [Forever Upgrades](https://foreverupgrades.com). Talent builds and their texts: Forever Upgrades and Forever's own game tables. Enchants: Forever's own tables, via [wago.tools](https://wago.tools).
 
 ## Updates
 New versions come out every **Wednesday at 12:00 UTC** (8 PM Philippine time, 8 AM US Eastern). Urgent fixes ship sooner.
@@ -43,6 +41,7 @@ New versions come out every **Wednesday at 12:00 UTC** (8 PM Philippine time, 8 
 Found a bug or have an idea? [Open an issue](https://github.com/califaxop/Equip-This-Upgrade-Advisor/issues/new/choose): there's a short form for each. The settings window has a "Report a bug / suggest" button with this link too.
 
 ## Recent changes
+- **4.0.0:** Rebuilt around Forever Upgrades' numbers. Items score their stats times the site's weights for your spec (plus effects), as a % of your gear, with your talents scaling the stats they feed, hit / expertise / defense caps against your gear, and a build that mixes damage and survival (Damage, Leveling, Balanced, Survival or your own mix). Every stat's value can be typed over or set Higher / Highest / Ignore. Hold Shift on an item for where its score comes from. The DPS simulator and the Your DPS window are gone (and with them buffs, imbues and live stats: the same gear always scores the same).
 - **3.0.2:** Enchants and imbues now count. Permanent enchants add their stats, weapon damage or proc (Crusader, +Strength, sharpening). Temporary ones (shaman imbues, poisons, stones, oils) stay on the weapon they're on: comparing your Windfury two-hander with a Rockbiter one-hander in your bags swaps Windfury for Rockbiter. An item with no enchant or imbue of its own is compared with yours on it, and the tooltip says so ("with your Crusader and Windfury 2 on it"). Rockbiter's attack power is read from its tooltip, with your talents.
 - **3.0.1:** Windfury counts only while it's the imbue on your main hand (not with Rockbiter, Flametongue or none).
 - **3.0.0:** Gear is now scored by your real DPS or HPS: Forever Upgrades' rotation played with your spells (from Forever's own, weekly-refreshed spell data: damage, coefficients, weapon %, cooldowns) and your live stats, so "Upgrade +2.4% DPS" is what the item does for you. A patch that changes a spell (Stormstrike's 8 sec cooldown and 100% weapon damage) counts right away. Weapons are compared as setups, and dual wielders see which hand suits a one-hander. New "Your DPS" window (button in `/eqt`, or `/eqt dps`) shows the numbers ability by ability and what each stat is worth, live; `/eqt guide` adds the stat priority. Tanks are scored by their damage (threat) plus their defensive stats by weight, and Feral by its form's claws.

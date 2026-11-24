@@ -172,7 +172,7 @@ local function RatingToPct(key, rating)
   return rating / (RATING_PER_PCT[key] or 10)
 end
 
--- Enchants (Spells.lua: ns.ENCHANTS, from Forever's tables). An item is read without its enchant, then
+-- Enchants (Enchants.lua: ns.ENCHANTS, from Forever's tables). An item is read without its enchant, then
 -- the enchant's own effect is added (so it's never counted twice): stats ("+5 Strength", wizard oil's
 -- spell power...), weapon damage (stones, "+3 Damage") and procs (Crusader, Fiery Weapon, poisons).
 local function Unenchanted(link) return (link:gsub("(item:%d+):%d*", "%1:", 1)) end
@@ -196,7 +196,7 @@ end
 
 local cache = {}
 -- { stats = { STR = 5, ... }, equipLoc = "INVTYPE_...", usable = bool, sell = copper } or nil (not loaded yet)
--- (with its permanent enchant; temporary ones: S.FactsWithTemp)
+-- (with its permanent enchant)
 function S.Facts(link)
   if type(link) ~= "string" then return nil end
   if cache[link] then return cache[link] end
@@ -229,69 +229,16 @@ function S.Facts(link)
   return f
 end
 
--- A weapon's temporary enchant (a shaman imbue, a poison, a stone, an oil): the enchant ID, or nil.
--- On you: the game says (GetWeaponEnchantInfo); in your bags: its tooltip's line ("Rockbiter 5 (59 min)").
-local tempByName
-local function TempByName(name)
-  if not tempByName then
-    tempByName = {}
-    for id, e in pairs(ns.ENCHANTS or {}) do if e[2] then tempByName[e[1]] = id end end
-  end
-  return tempByName[name]
+function S.ClearCache()
+  wipe(cache); S.ForgetCompared(); if S.ForgetBags then S.ForgetBags() end
+  if ns.Talents then ns.Talents.Forget() end
+  if ns.Effects then ns.Effects.ClearCache() end
 end
-local tempCache = {}
-function S.ForgetTemp() wipe(tempCache) end
-function S.TempEnchant(link)
-  if type(link) ~= "string" then return nil end
-  local c = tempCache[link]
-  if c ~= nil then return c or nil end
-  local id
-  local worn = { [16] = 1, [17] = 2 }
-  for slot, n in pairs(worn) do
-    local l = GetInventoryItemLink and GetInventoryItemLink("player", slot)
-    if l == link and GetWeaponEnchantInfo then
-      local r = { pcall(GetWeaponEnchantInfo) }
-      local has, ench = r[n == 1 and 2 or 6], r[n == 1 and 5 or 9]
-      if r[1] and Readable(has) and has and Readable(ench) then id = ench end
-    end
-  end
-  if not id and C_TooltipInfo and C_TooltipInfo.GetBagItem then
-    for _, b in ipairs(S.BagList()) do
-      if b[1] == link then
-        local ok, data = pcall(C_TooltipInfo.GetBagItem, b[3], b[4])
-        for _, l in ipairs(ok and type(data) == "table" and data.lines or {}) do
-          local t = Readable(l.leftText) and l.leftText or ""
-          local name = t:match("^(.-) %(%d+ %a+%)$")
-          if name then
-            id = TempByName(name)
-            if id then break end
-          end
-        end
-        break
-      end
-    end
-  end
-  tempCache[link] = id or false
-  return id
-end
-function S.ClearCache() wipe(cache); S.ForgetCompared(); if S.ForgetBags then S.ForgetBags() end; if ns.Sim then ns.Sim.Forget() end; if ns.Effects then ns.Effects.ClearCache() end; end
 
 local WEAPON_LOCS = { INVTYPE_WEAPON = true, INVTYPE_2HWEAPON = true, INVTYPE_WEAPONMAINHAND = true,
   INVTYPE_WEAPONOFFHAND = true, INVTYPE_RANGED = true, INVTYPE_RANGEDRIGHT = true, INVTYPE_THROWN = true }
-
--- an item's score for a spec (weights): its stats times their weights; DPS only on weapons
-function S.Value(link, weights)
-  local f = S.Facts(link)
-  if not f then return nil end
-  local total = 0
-  for k, v in pairs(f.stats) do
-    -- weights are importance 0-5; ns.PointsPer turns them into points per unit of the stat
-    if k ~= "DPS" or WEAPON_LOCS[f.equipLoc] then total = total + v * ns.PointsPer(k, weights[k]) end
-  end
-  -- procs, Use effects, "+X% to a spell": what they add for this spec (0 if it can't use them)
-  if ns.Effects then total = total + (ns.Effects.Points(f, weights) or 0) end
-  return total, f
-end
+local RANGED_LOC = { INVTYPE_RANGED = true, INVTYPE_RANGEDRIGHT = true, INVTYPE_THROWN = true }
+local OFF_LOC = { INVTYPE_WEAPONOFFHAND = true, INVTYPE_SHIELD = true, INVTYPE_HOLDABLE = true }
 
 -- the slots an item can go in
 local SLOTS = {
@@ -328,7 +275,7 @@ end
 
 -- Gear in your bags you could wear: { { link, equipLoc } }, kept until your bags change
 local bagItems
-function S.ForgetBags() bagItems = nil; S.ForgetCompared(); if S.ForgetTemp then S.ForgetTemp() end end
+function S.ForgetBags() bagItems = nil; S.ForgetCompared() end
 local function BagItems()
   if bagItems then return bagItems end
   bagItems = {}
@@ -353,266 +300,400 @@ local FAMILY = { INVTYPE_ROBE = "INVTYPE_CHEST", INVTYPE_SHIELD = "INVTYPE_WEAPO
   INVTYPE_WEAPONMAINHAND = "INVTYPE_WEAPON", INVTYPE_RANGEDRIGHT = "INVTYPE_RANGED", INVTYPE_THROWN = "INVTYPE_RANGED" }
 local function Family(loc) return FAMILY[loc] or loc end
 function S.BagList() return BagItems() end
--- your bag items of a kind (not this item), as { { value, link } }: usable ones only
-local function BagScores(loc, exceptId, weights)
-  local out = {}
-  for _, b in ipairs(BagItems()) do
-    if Family(b[2]) == Family(loc) and b[1]:match("item:(%d+)") ~= exceptId then
-      local v, bf = S.Value(b[1], weights)
-      if v and bf and bf.usable then out[#out + 1] = { v, b[1] } end
-    end
-  end
-  return out
+---------------------------------------------------------------------------
+-- Scoring. An item's value is a % of your build's measure, from your gear:
+--  - its stats times your values (Weights.lua) plus its effects (Effects.lua), as a % of what your
+--    whole gear scores that way; for each side of your build (damage or healing, and for tanks the
+--    class's damage spec),
+--  - survival: the % it adds to your effective health (health, and armor's cut of physical damage);
+--    for tanks, their own values are survival (Forever Upgrades' tanking weights),
+--  mixed by your build (Damage, Leveling, Balanced, Survival, or your mix).
+-- Hit, spell hit, expertise (and a tank's defense at the level cap) count up to their cap, measured
+-- against your gear and talents without the items being replaced.
+---------------------------------------------------------------------------
+local function Num(v) return (type(v) == "number" and Readable(v)) and v or 0 end
+local function Call(fn, ...)
+  if not fn then return nil end
+  local r = { pcall(fn, ...) }
+  if not r[1] then return nil end
+  return select(2, unpack(r))
 end
 
--- With the DPS / HPS model: the % change from wearing an item, against your best owned one.
--- Weapons as setups: a two-hander replaces main hand + off hand; a one-hander replaces the main hand
--- (or, if you dual wield, whichever hand it does more in); rings and trinkets the one they beat most.
--- { kind, pct, delta, value (its gain), vs, inBags, hand = "oh", partner = off-hand link, model = true }
-local RANGED_LOC = { INVTYPE_RANGED = true, INVTYPE_RANGEDRIGHT = true, INVTYPE_THROWN = true }
-local OFF_LOC = { INVTYPE_WEAPONOFFHAND = true, INVTYPE_SHIELD = true, INVTYPE_HOLDABLE = true }
-function S.ModelCompare(link, f, weights)
-  local Sim = ns.Sim
-  local s = Sim.Cached()
-  local function worn(slot) return GetInventoryItemLink and GetInventoryItemLink("player", slot) end
-  local function loc2(l) return C_Item and C_Item.GetItemInfoInstant and select(4, C_Item.GetItemInfoInstant(l)) end
-  local function gainOf(l, lf)
-    local loc = lf.equipLoc
-    if loc == "INVTYPE_2HWEAPON" then
-      local out, mh, oh = {}, worn(16), worn(17)
-      if mh then out[#out + 1] = mh end
-      if oh then out[#out + 1] = oh end
-      return Sim.Gain(l, out, weights, "mh", s), mh or oh
-    elseif loc == "INVTYPE_WEAPON" or loc == "INVTYPE_WEAPONMAINHAND" then
-      local mh = worn(16)
-      if mh and loc2(mh) == "INVTYPE_2HWEAPON" then
-        -- replacing your two-hander: with your best off-hand from your bags (a shield, a held item,
-        -- or a second weapon if you dual wield), else on its own
-        local best, partner = Sim.Gain(l, { mh }, weights, "mh", s), nil
-        for _, b in ipairs(BagItems()) do
-          local bl = b[1]
-          if bl ~= l and (OFF_LOC[b[2]] or (b[2] == "INVTYPE_WEAPON" and DualWields())) then
-            local bf = S.Facts(bl)
-            if bf and bf.usable then
-              local g = Sim.Gain(l, { mh }, weights, "mh", s, bl)
-              if g and (not best or g > best) then best, partner = g, bl end
-            end
-          end
-        end
-        return best, mh, nil, nil, partner
-      end
-      local g, vs, hand = Sim.Gain(l, mh and { mh } or {}, weights, "mh", s), mh, nil
-      if loc == "INVTYPE_WEAPON" and DualWields() and not (mh and loc2(mh) == "INVTYPE_2HWEAPON") then
-        local oh = worn(17)
-        local g2 = Sim.Gain(l, oh and { oh } or {}, weights, "oh", s)
-        if g2 and (not g or g2 > g) then g, vs, hand = g2, oh, "oh" end
-      end
-      return g, vs, hand
-    elseif OFF_LOC[loc] then
-      local oh = worn(17)
-      return Sim.Gain(l, oh and { oh } or {}, weights, "oh", s), oh
-    elseif RANGED_LOC[loc] then
-      local rw = worn(18)
-      return Sim.Gain(l, rw and { rw } or {}, weights, "rw", s), rw
-    end
-    local best, vs, empty
-    for _, slot in ipairs(SLOTS[loc] or {}) do
-      local cur = worn(slot)
-      local g = Sim.Gain(l, cur and { cur } or {}, weights, nil, s)
-      if g and (not best or g > best) then best, vs, empty = g, cur, cur == nil end
-    end
-    return best, vs, nil, empty
-  end
-  local gain, vs, hand, empty, partner = gainOf(link, f)
-  if not gain then return nil end
-  if vs == nil then empty = true end
-  -- your best owned item of the kind: one in your bags that does more is the one to beat
-  -- (an item in your bags itself is measured against what you wear, unless another beats it)
-  local id = link:match("item:(%d+)")
-  local carried = false
-  for _, b in ipairs(BagItems()) do if b[1]:match("item:(%d+)") == id then carried = true end end
-  local bagBest, bagLink = 0, nil
-  for _, b in ipairs(BagItems()) do
-    if Family(b[2]) == Family(f.equipLoc) and b[1]:match("item:(%d+)") ~= id then
-      local bf = S.Facts(b[1])
-      if bf and bf.usable then
-        local g = S.BagGain(b[1], function() return (gainOf(b[1], bf)) end)
-        if g and g > bagBest and (not carried or g > gain) then bagBest, bagLink = g, b[1] end
-      end
-    end
-  end
-  local pct = gain - bagBest
-  if bagLink then vs, hand, empty, partner = bagLink, nil, false, nil end
-  if empty and pct > 0 then return { kind = "new", pct = pct, delta = pct, value = gain, model = true } end
-  local kind = (math.abs(pct) < 0.1) and "same" or (pct > 0 and "upgrade" or "downgrade")
-  return { kind = kind, pct = pct, delta = pct, value = gain, vs = vs, inBags = bagLink ~= nil, hand = hand, partner = partner, model = true }
+local sides, totals -- (kept until something changes: S.ClearCache)
+
+-- your hit, spell hit and expertise in %, and defense skill from gear and talents, as the game has them
+function S.Totals()
+  if totals then return totals end
+  local function cr(id) return GetCombatRatingBonus and Num(Call(GetCombatRatingBonus, id)) or 0 end
+  totals = {
+    HIT = cr(CR_HIT_MELEE or 6) + Num(Call(GetHitModifier)),
+    SPELLHIT = cr(CR_HIT_SPELL or 8) + Num(Call(GetSpellHitModifier)),
+    EXPERTISE = cr(CR_EXPERTISE or 24),
+    DEF = Num(select(2, Call(UnitDefense, "player"))),
+  }
+  return totals
 end
 
--- An off-hand while you wear a two-hander: the pair it makes with your best one-hander from your bags
--- (main hand), against the two-hander. Nil when you carry no one-hander.
-function S.PairOffHand(link, f, weights, mh)
-  local Sim = ns.Sim
-  local s = Sim.Cached()
-  local best, partner
-  for _, b in ipairs(BagItems()) do
-    if (b[2] == "INVTYPE_WEAPON" or b[2] == "INVTYPE_WEAPONMAINHAND") and b[1] ~= link then
-      local bf = S.Facts(b[1])
-      if bf and bf.usable then
-        local g = Sim.Gain(b[1], { mh }, weights, "mh", s, link)
-        if g and (not best or g > best) then best, partner = g, b[1] end
-      end
-    end
+-- the caps in force for a spec: { stat = { cap, worth past it (x), for how far past it } }
+-- (level cap, against bosses three levels up: melee 9%, spell 16%, dodge 6.5%; a tank's defense +140
+-- for crit immunity. Below it, against your level: 5%, 4%, 5%. Dual wielders' white swings miss 19%
+-- more, so hit past the cap still helps them a little.)
+function S.Caps(key)
+  key = key or ns.SpecKey()
+  local g = ns.GUIDE and ns.GUIDE[key] or {}
+  local atMax = (UnitLevel and UnitLevel("player") or 1) >= ns.MaxLevel()
+  local caps = {}
+  if g.hitCap ~= false or not g.role then
+    local dw = DualWields() and (ns.Class() == "ROGUE" or ns.Class() == "WARRIOR")
+    caps.HIT = { atMax and 9 or 5, dw and 0.3 or 0, dw and 19 or 0 }
+    caps.SPELLHIT = { atMax and 16 or 4, 0, 0 }
   end
-  if not best then return nil end
-  local kind = (math.abs(best) < 0.1) and "same" or (best > 0 and "upgrade" or "downgrade")
-  return { kind = kind, pct = best, delta = best, value = best, vs = mh, partner = partner, model = true }
+  caps.EXPERTISE = { atMax and 6.5 or 5, 0, 0 }
+  if ns.IsTank(key) and atMax then caps.DEF = { 140, 0.2, 1000 } end
+  return caps
+end
+-- how much of x counts at full value under a cap
+local function Useful(x, c)
+  if x <= c[1] then return math.max(0, x) end
+  return c[1] + math.min(x - c[1], c[3]) * c[2]
+end
+S.Useful = Useful
+
+-- how much of a weapon's DPS counts in a slot: in full in the main hand, half in the off hand; a
+-- ranged weapon's only for hunters (and theirs only: a melee weapon's barely, except Survival's)
+local function WeaponShare(f, slot)
+  if not WEAPON_LOCS[f.equipLoc] then return 0 end
+  local hunter = ns.Class() == "HUNTER"
+  if RANGED_LOC[f.equipLoc] or slot == 18 then return hunter and 1 or 0 end
+  if hunter then return ns.SpecKey() == "HUNTER:3" and 0.5 or 0.1 end
+  return slot == 17 and 0.5 or 1
 end
 
--- Your whole gear's score: every slot you wear (not shirt or tabard). Upgrades are measured against it,
--- so a % means the same in every slot ("+2%": 2% stronger overall), however weak the item you'd replace.
-function S.GearTotal(weights)
-  local total = 0
+-- an item's points with a set of values, in a slot; capped stats against `other` (your totals
+-- without the items it replaces). Returns the points and { stat = points }.
+local function Points(f, w, slot, other, caps)
+  local pts, parts = 0, {}
+  for k, v in pairs(f.stats) do
+    local x = w[k] or 0
+    if x ~= 0 then
+      local amount = (k == "DPS") and v * WeaponShare(f, slot) or v
+      local c = caps and caps[k]
+      local val
+      if c and other then
+        local o = other[k] or 0
+        val = (Useful(o + amount, c) - Useful(o, c)) * x
+      else
+        val = amount * x
+      end
+      if val ~= 0 then pts = pts + val; parts[k] = (parts[k] or 0) + val end
+    end
+  end
+  return pts, parts
+end
+
+-- survival: % more effective health per unit of each stat, from your health and armor now
+-- (effective health = health / (1 - armor's cut); 1 Stamina = 10 health, 1 Agility = 2 armor)
+local function EHPer()
+  local level = UnitLevel and UnitLevel("player") or 60
+  local h = math.max(1, Num(Call(UnitHealthMax, "player")))
+  local a = Num(select(2, Call(UnitArmor, "player")))
+  local k = 400 + 85 * level
+  return { STA = 1000 / h, HEALTH = 100 / h, ARMOR = 100 / (a + k), AGI = 200 / (a + k) }
+end
+
+local function WornEach(fn)
   for slot = 1, 18 do
     if slot ~= 4 then
       local l = GetInventoryItemLink and GetInventoryItemLink("player", slot)
-      if l then total = total + (S.Value(l, weights) or 0) end
+      local f = l and S.Facts(l)
+      if f then fn(f, slot) end
     end
   end
-  return total
 end
 
--- How an item compares with what you wear, for a spec:
--- { kind = "upgrade" | "downgrade" | "same" | "new" | "unusable" | "equipped", pct (of your whole gear), delta, value,
---   vs = link (your best owned item it'd replace: worn, or in your bags with inBags = true),
---   pair = "weaker" | "stronger" | "equal" (equipped rings / trinkets, when you wear two) }
--- or nil (not gear, or not loaded yet)
--- (kept until something changes: your gear, bags, level, talents or settings; hovering an item
--- refreshes its tooltip several times a second, and the DPS model is too much work for that)
+-- your build's sides: { { kind = "points" | "eh", w = values, share, total (your gear's points) } }
+function S.Sides()
+  if sides then return sides end
+  local key = ns.SpecKey()
+  local t = ns.SurvivalShare(key)
+  local own = ns.Weights(key)
+  local list = {}
+  if ns.IsTank(key) then
+    list[1] = { kind = "points", w = own, share = t, label = "survival" }
+    local dk = ns.GUIDE and ns.GUIDE[key] and ns.GUIDE[key].damageSpec
+    local dw = dk and ns.SiteWeights(dk) or own
+    for stat in pairs(dw) do if ns.Ignored(stat, key) then dw[stat] = 0 end end
+    list[2] = { kind = "points", w = dw, share = 1 - t, label = "damage" }
+  else
+    list[1] = { kind = "points", w = own, share = 1 - t, label = (ns.GUIDE[key] and ns.GUIDE[key].unit == "HPS") and "healing" or "damage" }
+    local per = EHPer()
+    for stat in pairs(per) do if ns.Ignored(stat, key) then per[stat] = 0 end end
+    list[2] = { kind = "eh", w = per, share = t, label = "survival" }
+  end
+  -- what your gear scores on each points side (its stats, then its effects with 1% of that as +1% output)
+  for _, side in ipairs(list) do
+    if side.kind == "points" then
+      local stats = 0
+      WornEach(function(f, slot) stats = stats + Points(f, side.w, slot) end)
+      -- (a floor for little or no gear: about what a character's gear scores at its level, so a first
+      -- item isn't "+5000%")
+      local floor = 3 * (UnitLevel and UnitLevel("player") or 1) * math.max(side.w.STR or 0, side.w.AGI or 0, side.w.INT or 0, side.w.SP or 0, side.w.HEAL or 0, side.w.STA or 0, 0.5)
+      side.statsTotal = math.max(stats, floor, 1)
+      local eff = 0
+      if ns.Effects then
+        local saved = ns.OUTPUT_PTS
+        ns.OUTPUT_PTS = side.statsTotal / 100
+        WornEach(function(f) local ok, p = pcall(ns.Effects.Points, f, side.w); if ok then eff = eff + (p or 0) end end)
+        ns.OUTPUT_PTS = saved
+      end
+      side.total = math.max(stats + eff, side.statsTotal)
+    end
+  end
+  sides = list
+  return list
+end
+
+-- An item's value in a slot, in % of your build's measure: total, facts, { stat = % } (EFFECTS: its
+-- effects), and the effect lines. `other`: your capped totals without the items it would replace.
+function S.ValueIn(link, slot, other)
+  local f = S.Facts(link)
+  if not f then return nil end
+  local caps = S.Caps()
+  local total, parts, why = 0, {}, nil
+  for _, side in ipairs(S.Sides()) do
+    if side.share > 0 then
+      if side.kind == "eh" then
+        for k, v in pairs(f.stats) do
+          local x = side.w[k]
+          if x and x ~= 0 then
+            local pct = v * x * side.share
+            total = total + pct
+            parts[k] = (parts[k] or 0) + pct
+          end
+        end
+      else
+        local pts, p = Points(f, side.w, slot, other, caps)
+        local e, y = 0, nil
+        if ns.Effects and #(f.effects or {}) > 0 then
+          local saved = ns.OUTPUT_PTS
+          ns.OUTPUT_PTS = side.statsTotal / 100
+          local ok, ep, ey = pcall(ns.Effects.Points, f, side.w)
+          ns.OUTPUT_PTS = saved
+          if ok then e, y = ep or 0, ey end
+        end
+        local scale = 100 / side.total * side.share
+        total = total + (pts + e) * scale
+        for k, v in pairs(p) do parts[k] = (parts[k] or 0) + v * scale end
+        if e ~= 0 then parts.EFFECTS = (parts.EFFECTS or 0) + e * scale end
+        if y and #y > 0 then why = why or y end
+      end
+    end
+  end
+  return total, f, parts, why
+end
+-- (the value with no caps context, in the item's first slot)
+function S.Value(link)
+  local f = S.Facts(link)
+  if not f then return nil end
+  local slots = SLOTS[f.equipLoc]
+  local v = S.ValueIn(link, slots and slots[1] or 0)
+  return v, f
+end
+
+-- your capped totals without these items
+local function Without(links)
+  local o = {}
+  for k, v in pairs(S.Totals()) do o[k] = v end
+  for _, l in ipairs(links) do
+    local f = l and S.Facts(l)
+    if f then for k in pairs(o) do o[k] = o[k] - (f.stats[k] or 0) end end
+  end
+  return o
+end
+
+-- An item with no enchant of its own is compared with your enchant on it (the one on the item it'd
+-- replace): an enchant can be put on it. Returns the link to score and the enchant's name, or nil.
+function S.Carry(link, worn)
+  if type(link) ~= "string" or type(worn) ~= "string" then return link, nil end
+  local mine = tonumber(link:match("item:%d+:(%d+)") or "")
+  local theirs = tonumber(worn:match("item:%d+:(%d+)") or "")
+  local E = ns.ENCHANTS or {}
+  if not (mine and mine > 0) and theirs and theirs > 0 and E[theirs] then
+    return (link:gsub("(item:%d+):%d*", "%1:" .. theirs, 1)), E[theirs][1]
+  end
+  return link, nil
+end
+
+-- the % change from wearing `items` ({ { link, slot } }) in place of `out` (links in their slots):
+-- gain, and { stat = % } of the difference
+local function Swap(items, out)
+  local outLinks = {}
+  for _, o in ipairs(out) do outLinks[#outLinks + 1] = o[1] end
+  local other = Without(outLinks)
+  local gain, parts, why = 0, {}, nil
+  for _, it in ipairs(items) do
+    local v, _, p, y = S.ValueIn(it[1], it[2], other)
+    if not v then return nil end
+    gain = gain + v
+    for k, x in pairs(p) do parts[k] = (parts[k] or 0) + x end
+    why = why or y
+  end
+  for _, o in ipairs(out) do
+    local v, _, p = S.ValueIn(o[1], o[2], other)
+    gain = gain - (v or 0)
+    for k, x in pairs(p or {}) do parts[k] = (parts[k] or 0) - x end
+  end
+  return gain, parts, why
+end
+
+local function worn(slot) return GetInventoryItemLink and GetInventoryItemLink("player", slot) end
+local function locOf(l) return l and C_Item and C_Item.GetItemInfoInstant and select(4, C_Item.GetItemInfoInstant(l)) end
+
+-- An item's best gain against what you wear, as a setup: a two-hander replaces main hand + off hand;
+-- a one-hander replaces the main hand (or the off hand, if you dual wield and it does more there), and
+-- replacing a two-hander it's paired with your best off-hand from your bags; an off-hand while you
+-- wear a two-hander is paired with your best one-hander from your bags; rings and trinkets replace the
+-- weaker of the two. Returns gain, vs (the item replaced), hand ("oh"), partner, empty slot, parts,
+-- effect lines, the enchant it was given.
+local function GainOf(link, f)
+  local loc = f.equipLoc
+  local function with(slot, out, extra)
+    local cur = out[1] and out[1][1]
+    local l, ench = S.Carry(link, cur)
+    local items = { { l, slot } }
+    if extra then items[2] = extra end
+    local g, p, y = Swap(items, out)
+    return g, p, y, ench
+  end
+  local mh, oh = worn(16), worn(17)
+  if loc == "INVTYPE_2HWEAPON" then
+    local out = {}
+    if mh then out[#out + 1] = { mh, 16 } end
+    if oh then out[#out + 1] = { oh, 17 } end
+    local g, p, y, e = with(16, out)
+    return g, mh or oh, nil, nil, #out == 0, p, y, e
+  elseif loc == "INVTYPE_WEAPON" or loc == "INVTYPE_WEAPONMAINHAND" then
+    if mh and locOf(mh) == "INVTYPE_2HWEAPON" then
+      local best, bp, by, be = with(16, { { mh, 16 } })
+      local partner
+      for _, b in ipairs(BagItems()) do
+        local bl = b[1]
+        if bl ~= link and (OFF_LOC[b[2]] or (b[2] == "INVTYPE_WEAPON" and DualWields())) then
+          local bf = S.Facts(bl)
+          if bf and bf.usable then
+            local g, p, y, e = with(16, { { mh, 16 } }, { bl, 17 })
+            if g and (not best or g > best) then best, bp, by, be, partner = g, p, y, e, bl end
+          end
+        end
+      end
+      return best, mh, nil, partner, false, bp, by, be
+    end
+    local g, p, y, e = with(16, mh and { { mh, 16 } } or {})
+    local vs, hand = mh, nil
+    if loc == "INVTYPE_WEAPON" and DualWields() then
+      local g2, p2, y2, e2 = with(17, oh and { { oh, 17 } } or {})
+      if g2 and (not g or g2 > g) then g, p, y, e, vs, hand = g2, p2, y2, e2, oh, "oh" end
+    end
+    return g, vs, hand, nil, vs == nil, p, y, e
+  elseif OFF_LOC[loc] then
+    if mh and locOf(mh) == "INVTYPE_2HWEAPON" then
+      local best, bp, by, partner
+      for _, b in ipairs(BagItems()) do
+        if b[2] == "INVTYPE_WEAPON" or b[2] == "INVTYPE_WEAPONMAINHAND" then
+          local bf = S.Facts(b[1])
+          if bf and bf.usable then
+            local g, p, y = Swap({ { link, 17 }, { b[1], 16 } }, { { mh, 16 } })
+            if g and (not best or g > best) then best, bp, by, partner = g, p, y, b[1] end
+          end
+        end
+      end
+      if not best then return nil, nil, "twohand" end
+      return best, mh, nil, partner, false, bp, by
+    end
+    local g, p, y, e = with(17, oh and { { oh, 17 } } or {})
+    return g, oh, nil, nil, oh == nil, p, y, e
+  elseif RANGED_LOC[loc] or loc == "INVTYPE_RELIC" then
+    local rw = worn(18)
+    local g, p, y, e = with(18, rw and { { rw, 18 } } or {})
+    return g, rw, nil, nil, rw == nil, p, y, e
+  end
+  -- other slots; rings and trinkets: the weaker of the two you wear (an empty one first)
+  local best, vs, empty, bp, by, be
+  for _, slot in ipairs(SLOTS[loc] or {}) do
+    local cur = worn(slot)
+    local g, p, y, e = with(slot, cur and { { cur, slot } } or {})
+    if g and (not best or g > best) then best, vs, empty, bp, by, be = g, cur, cur == nil, p, y, e end
+  end
+  return best, vs, nil, nil, empty, bp, by, be
+end
+
+-- How an item compares with what you own:
+-- { kind = "upgrade" | "downgrade" | "same" | "new" | "unusable" | "equipped" | "twohand" | "armortype",
+--   pct (of your build's measure), vs = link (worn, or in your bags with inBags), hand = "oh", partner,
+--   pair = "weaker" | "stronger" | "equal" (equipped rings / trinkets), parts = { stat = % }, why = effect
+--   lines, enchant = the name of yours it was given } or nil (not gear, or not loaded yet)
 local compared, bagGains = {}, {}
--- a bag item's own gain (the same whichever item is hovered): kept with the comparisons
 function S.BagGain(link, fn)
   local g = bagGains[link]
   if g == nil then g = fn() or false; bagGains[link] = g end
   return g or nil
 end
-function S.Compare(link, weights)
-  if weights then return S.CompareWeights(link, weights) end
+function S.ForgetCompared() wipe(compared); wipe(bagGains); sides = nil; totals = nil end
+function S.Compare(link)
   local c = compared[link]
   if c == nil then
-    c = S.CompareWeights(link, ns.Weights()) or false
-    -- (kept only when it's final: not "not loaded yet", and not the weights standing in for the
-    -- DPS model when the model should have answered; those are asked again next time)
-    local fallback = c and not c.model and ns.Sim and ns.Sim.Active()
-      and (c.kind == "upgrade" or c.kind == "downgrade" or c.kind == "same" or c.kind == "new")
-    if c and not fallback then compared[link] = c end
+    c = S.CompareNow(link) or false
+    if c then compared[link] = c end
   end
   return c or nil
 end
-function S.ForgetCompared() wipe(compared); wipe(bagGains) end
 
-function S.CompareWeights(link, weights)
-  weights = weights or ns.Weights()
-  local value, f = S.Value(link, weights)
-  if not value then return nil end
+function S.CompareNow(link)
+  local f = S.Facts(link)
+  if not f then return nil end
   local slots = SLOTS[f.equipLoc]
   if not slots then return nil end
-  if not f.usable then return { kind = "unusable", value = value } end
-  -- (optional) from level 40, armor below your best type isn't an upgrade
+  if not f.usable then return { kind = "unusable" } end
   local best = S.LowerArmor(link, f.equipLoc)
-  if best then return { kind = "armortype", value = value, best = best } end
-  -- the item you'd swap out, and its score
-  local oldValue, vs, wearing = nil, nil, false
-  local function worn(slot) return GetInventoryItemLink and GetInventoryItemLink("player", slot) end
-  if f.equipLoc == "INVTYPE_2HWEAPON" then
-    -- a two-hander replaces main hand + off hand
-    local mh, oh = worn(16), worn(17)
-    if mh and (mh == link or mh:match("item:(%d+)") == link:match("item:(%d+)")) then wearing = 16 end
-    if mh or oh then
-      oldValue = (mh and S.Value(mh, weights) or 0) + (oh and S.Value(oh, weights) or 0); vs = mh or oh
-    end
-  else
-    local list = slots
-    -- wearing a two-hander: the off hand isn't free. Off-hand items can't go with it; a
-    -- one-hander would have to replace the two-hander
-    local mh = worn(16)
-    local mhLoc = mh and C_Item and C_Item.GetItemInfoInstant and select(4, C_Item.GetItemInfoInstant(mh))
-    if mhLoc == "INVTYPE_2HWEAPON" then
-      if f.equipLoc == "INVTYPE_SHIELD" or f.equipLoc == "INVTYPE_HOLDABLE" or f.equipLoc == "INVTYPE_WEAPONOFFHAND" then
-        -- with the DPS model: paired with your best one-hander from your bags, against your two-hander
-        if ns.Sim and ns.Sim.Active() then
-          local ok, r = pcall(S.PairOffHand, link, f, weights, mh)
-          if ok and r then return r end
-        end
-        return { kind = "twohand", value = value }
-      end
-      if f.equipLoc == "INVTYPE_WEAPON" then list = { 16 } end
-    end
-    if f.equipLoc == "INVTYPE_WEAPON" and not DualWields() then list = { 16 } end
-    local id = link:match("item:(%d+)")
-    for _, slot in ipairs(list) do
-      local cur = worn(slot)
-      if cur and (cur == link or cur:match("item:(%d+)") == id) then wearing = slot end
-    end
-    for _, slot in ipairs(list) do
-      local cur = worn(slot)
-      local v = cur and S.Value(cur, weights) or 0
-      if not cur then oldValue, vs = 0, nil; break end -- an empty slot: it's an upgrade
-      if oldValue == nil or v < oldValue then oldValue, vs = v, cur end -- the weaker ring / trinket
-    end
-  end
-  -- your DPS / HPS, worked out from your spells (Sim.lua): the change from wearing it
-  if not wearing and ns.Sim and ns.Sim.Active() then
-    local ok, r = pcall(S.ModelCompare, link, f, weights)
-    if ok and r then return r end
-    S.modelError = ok and "no result (your numbers aren't readable yet?)" or tostring(r) -- (shown by /eqt item)
-  end
-  -- Your best owned item counts, not only what you wear: a better one in your bags is the one to beat
-  -- (so an item that's worse than one you already carry isn't called an upgrade).
-  local inBags = false
-  if not wearing and oldValue then
-    local id = link:match("item:(%d+)")
-    local pair = f.equipLoc == "INVTYPE_FINGER" or f.equipLoc == "INVTYPE_TRINKET"
-    local dualSlots = f.equipLoc == "INVTYPE_WEAPON" and #slots == 2 and DualWields()
-    if pair then
-      -- rings, trinkets: your best two (worn or in bags); a new one replaces the weaker of them
-      local owned = {}
-      for _, slot in ipairs(slots) do
-        local cur = worn(slot)
-        if cur then owned[#owned + 1] = { S.Value(cur, weights) or 0, cur, true } end
-      end
-      for _, b in ipairs(BagScores(f.equipLoc, id, weights)) do owned[#owned + 1] = { b[1], b[2], false } end
-      table.sort(owned, function(a, b) return a[1] > b[1] end)
-      if #owned >= 2 then oldValue, vs, inBags = owned[2][1], owned[2][2], not owned[2][3]
-      else oldValue, vs = 0, nil end
-    elseif not dualSlots and oldValue > 0 then
-      -- one slot (or a two-hander against main hand + off hand): your best of its kind in your bags.
-      -- An item that's in your bags itself is measured against what you wear ("equip it"), unless
-      -- something else you carry beats it.
-      local carried = false
-      for _, b in ipairs(BagItems()) do if b[1]:match("item:(%d+)") == id then carried = true end end
-      for _, b in ipairs(BagScores(f.equipLoc, id, weights)) do
-        if b[1] > oldValue and (not carried or b[1] > value) then oldValue, vs, inBags = b[1], b[2], true end
-      end
-    end
-  end
-  if wearing then
-    -- a ring or trinket you wear: is it the weaker of your two (the one a new one replaces)?
-    local pair
-    local other = PAIRED[wearing]
-    if other and (f.equipLoc == "INVTYPE_FINGER" or f.equipLoc == "INVTYPE_TRINKET") then
-      local o = worn(other)
-      local mine = worn(wearing)
-      if o and mine then
-        local a, b = S.Value(mine, weights) or 0, S.Value(o, weights) or 0
+  if best then return { kind = "armortype", best = best } end
+  local id = link:match("item:(%d+)")
+  -- worn already?
+  for _, slot in ipairs(slots) do
+    local cur = worn(slot)
+    if cur and (cur == link or cur:match("item:(%d+)") == id) then
+      local pair
+      local o = PAIRED[slot] and worn(PAIRED[slot])
+      if o and (f.equipLoc == "INVTYPE_FINGER" or f.equipLoc == "INVTYPE_TRINKET") then
+        local a, b = S.ValueIn(cur, slot) or 0, S.ValueIn(o, PAIRED[slot]) or 0
         pair = (math.abs(a - b) < 0.01) and "equal" or (a < b and "weaker" or "stronger")
       end
+      return { kind = "equipped", pair = pair, equipLoc = f.equipLoc }
     end
-    return { kind = "equipped", value = value, pair = pair, equipLoc = f.equipLoc }
   end
-  local total = math.max(S.GearTotal(weights), 1)
-  if not oldValue or oldValue <= 0 then return { kind = "new", value = value, delta = value, pct = value / total * 100 } end
-  local delta = value - oldValue
-  local pct = delta / total * 100
-  local kind = (math.abs(pct) < 0.1) and "same" or (delta > 0 and "upgrade" or "downgrade")
-  return { kind = kind, pct = pct, delta = delta, value = value, vs = vs, inBags = inBags }
+  local gain, vs, hand, partner, empty, parts, why, ench = GainOf(link, f)
+  if hand == "twohand" then return { kind = "twohand" } end
+  if not gain then return nil end
+  -- your best owned item counts, not only what you wear: a better one of its kind in your bags is the
+  -- one to beat (an item in your bags itself is measured against what you wear, unless another beats it)
+  local bagBest, bagLink = 0, nil
+  local carried = false
+  for _, b in ipairs(BagItems()) do if b[1]:match("item:(%d+)") == id then carried = true end end
+  for _, b in ipairs(BagItems()) do
+    if Family(b[2]) == Family(f.equipLoc) and b[1]:match("item:(%d+)") ~= id then
+      local bf = S.Facts(b[1])
+      if bf and bf.usable then
+        local g = S.BagGain(b[1], function() return (GainOf(b[1], bf)) end)
+        if g and g > bagBest and (not carried or g > gain) then bagBest, bagLink = g, b[1] end
+      end
+    end
+  end
+  local pct = gain - bagBest
+  -- effects it doesn't count (procs when you're hit, on kills)
+  local unread
+  for _, e in ipairs(f.effects or {}) do if e.kind == "note" then unread = e.why end end
+  if bagLink then vs, hand, empty, partner, ench = bagLink, nil, false, nil, nil end
+  if empty and pct > 0 then return { kind = "new", pct = pct, parts = parts, why = why, enchant = ench, unread = unread } end
+  local kind = (math.abs(pct) < 0.1) and "same" or (pct > 0 and "upgrade" or "downgrade")
+  return { kind = kind, pct = pct, vs = vs, inBags = bagLink ~= nil, hand = hand, partner = partner,
+    parts = (not bagLink) and parts or nil, why = why, enchant = ench, unread = unread }
 end

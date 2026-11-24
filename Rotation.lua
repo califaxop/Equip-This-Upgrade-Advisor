@@ -59,11 +59,6 @@ end
 -- your split: { { name, share, cpm }, ... } biggest first, shares adding up to 1; and whether it's the site's
 function R.Split(key)
   key = key or ns.SpecKey()
-  -- worked out with your spells and numbers (Sim.lua), when your spec has the model
-  if key == ns.SpecKey() and ns.Sim and ns.Sim.Active() then
-    local ok, parts = pcall(ns.Sim.Breakdown)
-    if ok and parts and #parts > 0 then return parts, true end
-  end
   local g = ns.GUIDE and ns.GUIDE[key]
   local parts = g and g.levels and AtLevel(g.levels, UnitLevel and UnitLevel("player") or 60)
   if parts and #parts > 0 then return parts, true end
@@ -124,9 +119,7 @@ function R.Report()
     bits[#bits + 1] = p[3] > 0 and format("%s %d%% (%.1f/min)", p[1], math.floor(p[2] * 100 + 0.5), p[3])
       or format("%s %d%%", p[1], math.floor(p[2] * 100 + 0.5))
   end
-  local live = ns.Sim and ns.Sim.Active()
-  local head = (live and ("your " .. ns.Sim.Unit() .. " split (your spells and numbers; /eqt dps for the detail): "))
-    or (site and "damage split (Forever Upgrades' sim at your level): " or "split (built-in): ")
+  local head = site and "output split (Forever Upgrades' sim at your level): " or "split (built-in): "
   lines[#lines + 1] = head .. table.concat(bits, ", ")
   return lines
 end

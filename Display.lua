@@ -23,25 +23,41 @@ local function Versus(c)
   return out
 end
 
--- An item with no enchant / imbue of its own is scored with yours on it (Sim.Carry): say which
-local function Carried(link, c)
-  if not (c.model and ns.Sim and ns.Sim.Carry) then return nil end
-  local f = S.Facts(link)
-  if not f then return nil end
-  local slot
-  if c.vs and not c.inBags then
-    for i = 1, 19 do if GetInventoryItemLink and GetInventoryItemLink("player", i) == c.vs then slot = i end end
+-- what the % is of: "DPS" / "HPS" / "EH" when your build is all one of them and has no changes of yours,
+-- else nothing (a mix, or your own values)
+function D.Unit()
+  local key = ns.SpecKey()
+  if ns.HasChanges(key) then return "" end
+  local t = ns.SurvivalShare(key)
+  local own = (ns.GUIDE[key] and ns.GUIDE[key].unit) or "DPS"
+  if ns.IsTank(key) then
+    if t >= 1 then return "EH" end
+    if t <= 0 then return "DPS" end
+  else
+    if t <= 0 then return own end
+    if t >= 1 then return "EH" end
   end
-  slot = slot or (c.hand == "oh" and 17) or ((f.equipLoc == "INVTYPE_RANGED" or f.equipLoc == "INVTYPE_RANGEDRIGHT" or f.equipLoc == "INVTYPE_THROWN") and 18)
-    or ((f.stats.DPS or 0) > 0 and 16) or (S.SLOTS and S.SLOTS[f.equipLoc] and S.SLOTS[f.equipLoc][1]) or nil
-  local worn = slot and GetInventoryItemLink and GetInventoryItemLink("player", slot)
-  local _, names = ns.Sim.Carry(link, worn)
-  return names and (GREY .. "(with your " .. table.concat(names, " and ") .. " on it)|r") or nil
+  return ""
 end
 
--- Short: "Downgrade -11.3% DPS + [Savage Boar's Guard] vs [Rage of the Storm]" (with that off-hand, against
--- your two-hander). The spec and goal
--- it's scored for are in /eqt ("Scoring gear for").
+local STAT_SHORT = { EFFECTS = "Effects" }
+-- the biggest parts of a comparison: "Weapon DPS -8.2%, Strength -1.1%, Stamina +0.2%"
+function D.Parts(c, n)
+  local list = {}
+  for k, v in pairs(c.parts or {}) do
+    if math.abs(v) >= 0.05 then list[#list + 1] = { k, v } end
+  end
+  table.sort(list, function(a, b) return math.abs(a[2]) > math.abs(b[2]) end)
+  local out = {}
+  for i = 1, math.min(n or 4, #list) do
+    local k, v = list[i][1], list[i][2]
+    local name = STAT_SHORT[k] or (ns.STAT_NAMES[k] or k):gsub(" %%$", "")
+    out[#out + 1] = format("%s %s%+.1f%%|r", name, v > 0 and GREEN or RED, v)
+  end
+  return out
+end
+
+-- Short: "Downgrade -11.3% DPS vs [Rage of the Storm]" (paired with an off-hand, against your two-hander)
 function D.Verdict(link)
   local c = S.Compare(link)
   if not c then return nil end
@@ -53,19 +69,19 @@ function D.Verdict(link)
     if c.pair == "equal" then return GREY .. "Equipped - your " .. what .. "s are equal|r" end
     return GREY .. "Equipped|r"
   end
-  if c.kind == "twohand" then return GREY .. "Off-hand: you use a two-hander|r" end
+  if c.kind == "twohand" then return GREY .. "Off-hand: you use a two-hander (no one-hander in your bags to pair it with)|r" end
   if c.kind == "armortype" then return GREY .. "Not " .. c.best .. " (your setting)|r" end
-  local unit = c.model and (" " .. ns.Sim.Unit()) or ""
-  if c.kind == "new" then return format("%sUpgrade %+.1f%%%s|r %s(empty slot)|r", GREEN, c.pct or 0, unit, GREY) end
-  if c.kind == "same" then return GREY .. "About the same|r", Versus(c) end
+  local u = D.Unit()
+  local unit = (u ~= "") and (" " .. u) or ""
+  local tail = c.enchant and (" " .. GREY .. "(with your " .. c.enchant .. " on it)|r") or ""
+  if c.kind == "new" then return format("%sUpgrade %+.1f%%%s|r %s(empty slot)|r%s", GREEN, c.pct or 0, unit, GREY, tail) end
+  if c.kind == "same" then return GREY .. "About the same|r" .. tail, Versus(c) end
   local col = c.kind == "upgrade" and GREEN or RED
   local word = c.kind == "upgrade" and "Upgrade" or "Downgrade"
   local lead = ""
   local partner = Named(c.partner)
   if partner then lead = GREY .. "paired with|r " .. partner .. " " .. GREY .. "-|r " end
-  local tail = (c.hand == "oh") and (" " .. GREY .. "(off-hand)|r") or ""
-  local carried = Carried(link, c)
-  if carried then tail = tail .. " " .. carried end
+  if c.hand == "oh" then tail = " " .. GREY .. "(off-hand)|r" .. tail end
   return format("%s%s%s %+.1f%%%s|r%s", lead, col, word, c.pct, unit, tail), Versus(c)
 end
 
@@ -92,6 +108,14 @@ local function OnItemTooltip(tip, data)
   if v then
     -- one line, wrapped at the tooltip's own width (it never makes the tooltip wider)
     tip:AddLine(GOLD .. "Equip This!:|r " .. v .. (vs and (" " .. vs) or ""), 1, 1, 1, true)
+    -- holding Shift: where it comes from, and effects it couldn't read
+    if IsShiftKeyDown and IsShiftKeyDown() then
+      local c = S.Compare(link)
+      local parts = c and D.Parts(c, 5) or {}
+      if #parts > 0 then tip:AddLine(GREY .. "From:|r " .. table.concat(parts, ", "), 1, 1, 1, true) end
+      if c and c.unread then tip:AddLine(ORANGE .. "Not counted: " .. c.unread .. "|r", 1, 1, 1, true) end
+      tip:AddLine(GREY .. "For " .. ns.ScoringLabel() .. "|r", 1, 1, 1, true)
+    end
     tip:Show()
   end
 end
@@ -175,14 +199,13 @@ function D.MarkRewards()
   if not (ns.db and ns.db.rewards) then return end
   local n = GetNumQuestChoices and GetNumQuestChoices() or 0
   if n < 2 then return end -- one reward (or none): nothing to choose
-  local weights = ns.CurrentWeights()
   local best, bestDelta, rich, richSell, missing = nil, 0, nil, 0, false
   for i = 1, n do
     local link = GetQuestItemLink and GetQuestItemLink("choice", i)
-    local c = link and S.Compare(link, weights)
+    local c = link and S.Compare(link)
     local f = link and S.Facts(link)
     if link and not f then missing = true end
-    if c and (c.kind == "upgrade" or c.kind == "new") and (c.delta or 0) > bestDelta then best, bestDelta = i, c.delta end
+    if c and (c.kind == "upgrade" or c.kind == "new") and (c.pct or 0) > bestDelta then best, bestDelta = i, c.pct end
     if f and f.sell > richSell then rich, richSell = i, f.sell end
   end
   if missing and not pendingLoad then -- item data still loading: try again in a moment

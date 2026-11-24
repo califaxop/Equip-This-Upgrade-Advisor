@@ -19,7 +19,7 @@ ev:SetScript("OnEvent", function(_, event, arg1)
     ns.LoadDB()
     ns.CreateOptions()
   elseif event == "PLAYER_LOGIN" then
-    ns.Print("loaded. Type |cffffff00/eqt|r to check your spec and priorities.")
+    ns.Print("loaded. Type |cffffff00/eqt|r for your spec and build.")
     ns.Display.HookTooltips()
     ns.Display.HookRewards()
   elseif event ~= "ADDON_LOADED" then
@@ -37,19 +37,40 @@ local function Explain(link)
     local v = f.stats[k]
     if v then
       local shown = (v == math.floor(v)) and tostring(v) or format("%.1f", v)
-      parts[#parts + 1] = format("%s %s (importance %s)", shown, ns.STAT_NAMES[k], tostring(w[k] or 0))
+      parts[#parts + 1] = format("%s %s (x%s)", shown, ns.STAT_NAMES[k], ns.Short(w[k] or 0))
     end
   end
   ns.Print(link .. " - " .. (f.equipLoc or "?") .. (f.usable and "" or ", can't use it"))
   ns.Print("stats: " .. (#parts > 0 and table.concat(parts, ", ") or "none read"))
   local _, why = ns.Effects.Points(f, w)
   for _, line in ipairs(why or {}) do ns.Print("effect: " .. line) end
-  local v = ns.Score.Value(link, w)
-  ns.Score.modelError = nil
   local verdict, vs = ns.Display.Verdict(link)
   if verdict and vs then verdict = verdict .. " " .. vs end
-  if ns.Score.modelError then ns.Print("DPS model: " .. ns.Score.modelError .. " (stat weights used instead)") end
-  ns.Print(format("score %.1f for %s%s", v or 0, ns.ScoringLabel(), verdict and (" - " .. verdict) or ""))
+  ns.Print(format("for %s%s", ns.ScoringLabel(), verdict and (": " .. verdict) or ""))
+  local c = ns.Score.Compare(link)
+  if c and c.parts then
+    local p = ns.Display.Parts(c, 8)
+    if #p > 0 then ns.Print("from: " .. table.concat(p, ", ")) end
+  end
+end
+
+-- /eqt guide: the spec's priority, rotation, values and your talents' effect on them
+local function Guide()
+  for _, line in ipairs(ns.Rotation.Report()) do ns.Print(line) end
+  local key = ns.SpecKey()
+  local w = ns.Weights(key)
+  local list = {}
+  for _, k in ipairs(ns.STAT_ORDER) do
+    if (w[k] or 0) > 0 then list[#list + 1] = { k, w[k] / (ns.NORM[k] or 1) } end
+  end
+  table.sort(list, function(a, b) return a[2] > b[2] end)
+  local bits = {}
+  for _, e in ipairs(list) do bits[#bits + 1] = format("%s %s", ns.STAT_NAMES[e[1]]:gsub(" %%$", ""), ns.Short(w[e[1]])) end
+  ns.Print("values (" .. ns.ScoringLabel() .. "): " .. table.concat(bits, ", "))
+  local _, why = ns.Talents.Factors(key)
+  for _, t in ipairs(why) do
+    ns.Print(format("talent: %s %d/%d - %s counts less until you have it", t[2], t[3], t[4], ns.STAT_NAMES[t[1]] or t[1]))
+  end
 end
 
 SLASH_EQUIPTHIS1, SLASH_EQUIPTHIS2 = "/equipthis", "/eqt"
@@ -57,12 +78,8 @@ SlashCmdList.EQUIPTHIS = function(msg)
   msg = msg or ""
   local cmd, rest = msg:match("^%s*(%S*)%s*(.-)%s*$")
   cmd = (cmd or ""):lower()
-  if cmd == "dps" or cmd == "hps" then
-    local ok = pcall(ns.OpenDps)
-    if not ok then ns.Sim.Report(ns.Print) end
-    return
-  elseif cmd == "guide" then
-    for _, line in ipairs(ns.Rotation.Report()) do ns.Print(line) end
+  if cmd == "guide" then
+    Guide()
     return
   elseif cmd == "item" then
     local link = rest:match("|H(item:[^|]+)|h") and rest or nil

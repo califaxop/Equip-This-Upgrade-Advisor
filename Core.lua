@@ -24,7 +24,7 @@ ns.DEFAULTS = {
   rewards = true,         -- glow the best quest reward
   sellFallback = true,    -- no upgrade among the rewards: mark the one that sells for most
   bestArmorOnly = false,  -- from level 40, only mail (shamans, hunters) or plate (warriors, paladins) can be upgrades
-  priorities = {},        -- per spec: { goal = "survival", levels = { STA = "highest", ... } } (unset = Damage)
+  priorities = {},        -- per spec: { build = "leveling", survival = 0.25, levels = { STA = "highest" }, values = { SP = 0.6 } }
   flareStyle = true,
   euiStyle = true,       -- EllesmereUI look when EllesmereUI is installed (its skinning API)
 }
@@ -46,7 +46,7 @@ function ns.LoadDB()
   -- (2.5.0: no more Skill Weights, damage model or damage-meter learning)
   -- (and no more 0-5 weights or custom scales: priorities instead)
   for _, k in ipairs({ "skills", "scaleSkills", "model", "learn", "learned", "learnSeen", "split",
-    "weights", "scales", "scale", "importanceV" }) do ns.db[k] = nil end
+    "weights", "scales", "scale", "importanceV", "form" }) do ns.db[k] = nil end
 end
 
 ---------------------------------------------------------------------------
