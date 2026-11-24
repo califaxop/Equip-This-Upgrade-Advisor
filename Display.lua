@@ -17,8 +17,8 @@ end
 -- " vs [Item]" (+ the off-hand it'd be paired with; "(bags)" when your best is in your bags)
 local function Versus(c)
   local vs = Named(c.vs)
-  if not vs then return "" end
-  local out = " " .. GREY .. "vs|r " .. vs
+  if not vs then return nil end
+  local out = GREY .. "vs|r " .. vs
   if c.inBags then out = out .. " " .. GREY .. "(bags)|r" end
   return out
 end
@@ -27,7 +27,7 @@ end
 -- your two-hander). The spec and goal
 -- it's scored for are in /eqt ("Scoring gear for").
 function D.Verdict(link)
-  local c = S.Compare(link, ns.CurrentWeights())
+  local c = S.Compare(link)
   if not c then return nil end
   if c.kind == "unusable" then return GREY .. "Can't use it|r" end
   if c.kind == "equipped" then
@@ -41,14 +41,14 @@ function D.Verdict(link)
   if c.kind == "armortype" then return GREY .. "Not " .. c.best .. " (your setting)|r" end
   local unit = c.model and (" " .. ns.Sim.Unit()) or ""
   if c.kind == "new" then return format("%sUpgrade %+.1f%%%s|r %s(empty slot)|r", GREEN, c.pct or 0, unit, GREY) end
-  if c.kind == "same" then return GREY .. "About the same|r" .. Versus(c) end
+  if c.kind == "same" then return GREY .. "About the same|r", Versus(c) end
   local col = c.kind == "upgrade" and GREEN or RED
   local word = c.kind == "upgrade" and "Upgrade" or "Downgrade"
-  local extra = ""
-  if c.hand == "oh" then extra = " " .. GREY .. "(off-hand)|r" end
+  local lead = ""
   local partner = Named(c.partner)
-  if partner then extra = " " .. GREY .. "+|r " .. partner end
-  return format("%s%s %+.1f%%%s|r%s%s", col, word, c.pct, unit, extra, Versus(c))
+  if partner then lead = GREY .. "paired with|r " .. partner .. " " .. GREY .. "-|r " end
+  local tail = (c.hand == "oh") and (" " .. GREY .. "(off-hand)|r") or ""
+  return format("%s%s%s %+.1f%%%s|r%s", lead, col, word, c.pct, unit, tail), Versus(c)
 end
 
 ---------------------------------------------------------------------------
@@ -70,9 +70,10 @@ local function OnItemTooltip(tip, data)
     end
   end
   if not link then return end
-  local v = D.Verdict(link)
+  local v, vs = D.Verdict(link)
   if v then
     tip:AddLine(GOLD .. "Equip This!:|r " .. v)
+    if vs then tip:AddLine(vs) end
     tip:Show()
   end
 end

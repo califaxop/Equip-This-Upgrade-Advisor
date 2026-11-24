@@ -201,7 +201,7 @@ function S.Facts(link)
   if complete then cache[link] = f end
   return f
 end
-function S.ClearCache() wipe(cache); if S.ForgetBags then S.ForgetBags() end; if ns.Sim then ns.Sim.Forget() end; if ns.Effects then ns.Effects.ClearCache() end; end
+function S.ClearCache() wipe(cache); S.ForgetCompared(); if S.ForgetBags then S.ForgetBags() end; if ns.Sim then ns.Sim.Forget() end; if ns.Effects then ns.Effects.ClearCache() end; end
 
 local WEAPON_LOCS = { INVTYPE_WEAPON = true, INVTYPE_2HWEAPON = true, INVTYPE_WEAPONMAINHAND = true,
   INVTYPE_WEAPONOFFHAND = true, INVTYPE_RANGED = true, INVTYPE_RANGEDRIGHT = true, INVTYPE_THROWN = true }
@@ -255,7 +255,7 @@ end
 
 -- Gear in your bags you could wear: { { link, equipLoc } }, kept until your bags change
 local bagItems
-function S.ForgetBags() bagItems = nil end
+function S.ForgetBags() bagItems = nil; S.ForgetCompared() end
 local function BagItems()
   if bagItems then return bagItems end
   bagItems = {}
@@ -362,7 +362,7 @@ function S.ModelCompare(link, f, weights)
     if Family(b[2]) == Family(f.equipLoc) and b[1]:match("item:(%d+)") ~= id then
       local bf = S.Facts(b[1])
       if bf and bf.usable then
-        local g = gainOf(b[1], bf)
+        local g = S.BagGain(b[1], function() return (gainOf(b[1], bf)) end)
         if g and g > bagBest and (not carried or g > gain) then bagBest, bagLink = g, b[1] end
       end
     end
@@ -392,7 +392,22 @@ end
 --   vs = link (your best owned item it'd replace: worn, or in your bags with inBags = true),
 --   pair = "weaker" | "stronger" | "equal" (equipped rings / trinkets, when you wear two) }
 -- or nil (not gear, or not loaded yet)
-function S.Compare(link, weights) return S.CompareWeights(link, weights or ns.Weights()) end
+-- (kept until something changes: your gear, bags, level, talents or settings; hovering an item
+-- refreshes its tooltip several times a second, and the DPS model is too much work for that)
+local compared, bagGains = {}, {}
+-- a bag item's own gain (the same whichever item is hovered): kept with the comparisons
+function S.BagGain(link, fn)
+  local g = bagGains[link]
+  if g == nil then g = fn() or false; bagGains[link] = g end
+  return g or nil
+end
+function S.Compare(link, weights)
+  if weights then return S.CompareWeights(link, weights) end
+  local c = compared[link]
+  if c == nil then c = S.CompareWeights(link, ns.Weights()) or false; compared[link] = c end
+  return c or nil
+end
+function S.ForgetCompared() wipe(compared); wipe(bagGains) end
 
 function S.CompareWeights(link, weights)
   weights = weights or ns.Weights()

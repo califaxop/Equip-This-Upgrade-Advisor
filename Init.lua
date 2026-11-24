@@ -45,7 +45,8 @@ local function Explain(link)
   local _, why = ns.Effects.Points(f, w)
   for _, line in ipairs(why or {}) do ns.Print("effect: " .. line) end
   local v = ns.Score.Value(link, w)
-  local verdict = ns.Display.Verdict(link)
+  local verdict, vs = ns.Display.Verdict(link)
+  if verdict and vs then verdict = verdict .. " " .. vs end
   ns.Print(format("score %.1f for %s%s", v or 0, ns.ScoringLabel(), verdict and (" - " .. verdict) or ""))
 end
 

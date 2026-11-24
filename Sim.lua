@@ -341,10 +341,23 @@ function M.Play(s, base)
   return { parts = parts, total = total / 60, heals = heals, ranged = ranged }
 end
 
+-- (your state, kept for a second: tooltips ask often; and what's worked out from it, kept with it)
+local cached, cachedAt
+local memo = {}
+function M.Cached()
+  local now = GetTime and GetTime() or 0
+  if not cached or now - (cachedAt or 0) > 1 then cached, cachedAt = M.State(), now; memo = {} end
+  return cached
+end
+function M.Forget() cached = nil; wornBonus = nil; memo = {} end
+local function Memo(s, key, fn)
+  if s ~= cached then return fn() end
+
 -- your number for state s, with what has no spell of its own following the right part from `base`
 function M.Total(s, base)
   base = base or s
-  local now, cur = M.Play(s, base), (base == s) and nil or M.Play(base, base)
+  if base == s then return Memo(s, "total", function() local p = M.Play(s, s); return p and p.total or 0 end) end
+  local now, cur = M.Play(s, base), Memo(base, "play", function() return M.Play(base, base) end)
   if not now then return 0 end
   if not cur then return now.total end
   -- the "other" parts: scaled as at your current state, then moved with their driver
@@ -369,6 +382,9 @@ end
 -- your split for item effects on skills: { { name, share, cpm } }
 function M.Breakdown()
   local s = M.Cached()
+  return Memo(s, "breakdown", function() return M.BreakdownNow(s) or false end) or nil
+end
+function M.BreakdownNow(s)
   local play = M.Play(s)
   if not (play and play.total > 0) then return nil end
   local out = {}
@@ -377,14 +393,10 @@ function M.Breakdown()
   return out
 end
 
--- (your state, kept for a second: tooltips ask often)
-local cached, cachedAt
-function M.Cached()
-  local now = GetTime and GetTime() or 0
-  if not cached or now - (cachedAt or 0) > 1 then cached, cachedAt = M.State(), now end
-  return cached
+  local v = memo[key]
+  if v == nil then v = fn(); memo[key] = v end
+  return v
 end
-function M.Forget() cached = nil; wornBonus = nil end
 
 ---------------------------------------------------------------------------
 -- Items
@@ -419,6 +431,9 @@ end
 -- what 1 of a stat does to your number, in %
 function M.PerUnit(key, s)
   s = s or M.Cached()
+  return Memo(s, "per:" .. key, function() return M.PerUnitNow(key, s) end)
+end
+function M.PerUnitNow(key, s)
   local n = (key == "CRIT" or key == "HIT" or key == "HASTE" or key == "SPELLCRIT" or key == "SPELLHIT" or key == "EXPERTISE") and 1 or 10
   local before = M.Total(s)
   if before <= 0 then return 0 end
@@ -435,6 +450,10 @@ end
 -- the exchange rate between the weights and %: what 1 point of weight is worth, from what your
 -- spec's main stat does for your number (Forever Upgrades' own yardstick)
 function M.Rate(s)
+  s = s or M.Cached()
+  return Memo(s, "rate", function() return M.RateNow(s) end)
+end
+function M.RateNow(s)
   local site = ns.PresetImportance(ns.SpecKey())
   local best, bestPts
   for _, k in ipairs({ "STR", "AGI", "SP", "HEAL", "AP" }) do
