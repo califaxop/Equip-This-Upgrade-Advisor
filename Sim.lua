@@ -352,6 +352,10 @@ end
 function M.Forget() cached = nil; wornBonus = nil; memo = {} end
 local function Memo(s, key, fn)
   if s ~= cached then return fn() end
+  local v = memo[key]
+  if v == nil then v = fn(); memo[key] = v end
+  return v
+end
 
 -- your number for state s, with what has no spell of its own following the right part from `base`
 function M.Total(s, base)
@@ -391,11 +395,6 @@ function M.BreakdownNow(s)
   for _, e in ipairs(play.parts) do out[#out + 1] = { e[1], e[2] / 60 / play.total, e[4] or 0 } end
   table.sort(out, function(a, b) return a[2] > b[2] end)
   return out
-end
-
-  local v = memo[key]
-  if v == nil then v = fn(); memo[key] = v end
-  return v
 end
 
 ---------------------------------------------------------------------------
