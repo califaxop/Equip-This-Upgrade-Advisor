@@ -116,7 +116,7 @@ function ns.OpenDps()
     win.stats = UI.Text(win, "note", "")
     win.stats:SetPoint("TOPLEFT", 20, -44); win.stats:SetWidth(390)
     -- the table: ability, per cast, a minute, per second, share
-    local cols = { { "Ability", 20, 150, "LEFT" }, { "Per cast", 170, 60, "RIGHT" }, { "A minute", 232, 56, "RIGHT" },
+    local cols = { { "Ability", 20, 150, "LEFT" }, { "Per hit", 170, 60, "RIGHT" }, { "A minute", 232, 56, "RIGHT" },
       { "Per sec", 290, 58, "RIGHT" }, { "Share", 350, 56, "RIGHT" } }
     for _, c in ipairs(cols) do
       local h = UI.Text(win, "note", c[1]); h:SetPoint("TOPLEFT", c[2], -68); h:SetWidth(c[3]); h:SetJustifyH(c[4])
@@ -136,7 +136,7 @@ function ns.OpenDps()
     win.worthHead:SetPoint("TOPLEFT", 20, wy)
     win.worth = UI.Text(win, "line", "")
     win.worth:SetPoint("TOPLEFT", 20, wy - 32); win.worth:SetWidth(390); win.worth:SetSpacing(3)
-    win.note = UI.Text(win, "note", "Abilities in grey have no spell of their own (pets, procs, totems): their part follows the site's sim.")
+    win.note = UI.Text(win, "note", "Per hit: an average hit, as your tooltip shows it (with your spell power). Per sec: with crits and misses. In grey: no spell of its own (procs, totems, pets), its part follows the site's sim.")
     win.note:SetPoint("BOTTOMLEFT", 20, 14); win.note:SetWidth(390)
     local function fmtN(x) return x >= 100 and format("%d", x + 0.5) or format("%.1f", x) end
     function win.Refresh()

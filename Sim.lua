@@ -220,19 +220,22 @@ function M.CastAmount(id, s, ranged)
       elseif aura == 69 then heal = heal + pts + s.heal * spc end -- (an absorb: counted as healing)
     end
   end
-  local total = 0
+  local total, raw = 0, 0 -- (raw: an average hit, before crits and misses: what the tooltip shows)
   if weapon then
     local w = ranged and s.rw or s.mh
     if w then
       local speed = normalized and ((w.ranged and NORMAL.ranged) or (w.twoHand and NORMAL.twoHand) or (w.dagger and NORMAL.dagger) or NORMAL.oneHand) or w.speed
       local ap = ranged and s.rap or s.ap
-      total = total + (w.dps * w.speed + ap * speed / R.apPerDps + flat) * pct / 100 * StrikeLanding(s, ranged)
+      local hit = (w.dps * w.speed + ap * speed / R.apPerDps + flat) * pct / 100
+      raw = raw + hit
+      total = total + hit * StrikeLanding(s, ranged)
     end
   end
+  raw = raw + direct + periodic + heal + hot
   if direct > 0 then total = total + direct * (physical and StrikeLanding(s, ranged) or SpellLanding(s, school)) end
   if periodic > 0 then total = total + periodic * (physical and 1 or SpellLanding(s, school) / (1 + (s.scrit[school] or 0) / 100 * (R.spellCritDamage - 1))) end
   local healing = heal * SpellLanding(s, school, true) + hot
-  return total + healing, healing > total
+  return total + healing, healing > total, raw
 end
 
 -- a spell's cooldown, in seconds: the game's, else Forever's tables
@@ -266,13 +269,21 @@ function M.Play(s, base)
     local name, share, cpm = p[1], p[2], p[3]
     local e = { name, 0, "other", cpm, nil, share }
     if name == "Attack" or name == "Auto Shot" then
-      e[2], e[3] = M.WhiteDps(s, ranged or name == "Auto Shot") * 60, "white"
+      local r = ranged or name == "Auto Shot"
+      e[2], e[3] = M.WhiteDps(s, r) * 60, "white"
+      -- (an average swing, and swings a minute: main hand, or the ranged weapon)
+      local w = r and s.rw or s.mh
+      if w then
+        e[7] = w.dps * w.speed + (r and s.rap or s.ap) * w.speed / R.apPerDps
+        e[8] = 60 * (1 + (r and s.rhaste or s.haste) / 100) / w.speed * ((not r and s.oh) and 2 or 1)
+      end
     elseif PET(name) then
       e[3] = "pet"
     else
       local id = cpm > 0 and M.Rank(name, s.level)
       if id then
-        local amount = M.CastAmount(id, s, ranged)
+        local amount, _, raw = M.CastAmount(id, s, ranged)
+        e[7] = raw
         local cd = Cooldown(id)
         if cd > 0 and cpm > 60 / cd * CAP_SLACK then cpm = 60 / cd end -- (a longer cooldown than the site's sim)
         local d = ns.SPELLS[id]
@@ -454,7 +465,8 @@ end
 ---------------------------------------------------------------------------
 -- The numbers, ability by ability (the DPS window, Options.lua)
 ---------------------------------------------------------------------------
--- { unit, total, stats = "...", rows = { { name, perCast or nil, cpm or nil, perSec, share, estimated } },
+-- { unit, total, stats = "...", rows = { { name, average hit (as the tooltip) or nil, casts or swings a minute or nil,
+--   per second (with crits and misses), share, estimated } },
 --   worth = { { label, % } } }, or nil and why
 function M.ReportData()
   if not M.Active() then return nil, format("%s is scored by its stat weights.", ns.SpecName(ns.SpecKey())) end
@@ -476,8 +488,9 @@ function M.ReportData()
   for _, e in ipairs(play.parts) do
     local perSec = e[2] / 60
     if perSec > 0 then
-      rows[#rows + 1] = { e[1], (e[3] == "spell" and e[4] and e[4] > 0) and e[2] / e[4] or nil,
-        (e[3] == "spell") and e[4] or nil, perSec, perSec / play.total, e[3] == "other" or e[3] == "pet" }
+      local spell, white = e[3] == "spell", e[3] == "white"
+      rows[#rows + 1] = { e[1], (spell or white) and e[7] or nil,
+        spell and e[4] or (white and e[8]) or nil, perSec, perSec / play.total, e[3] == "other" or e[3] == "pet" }
     end
   end
   table.sort(rows, function(a, b) return a[4] > b[4] end)
