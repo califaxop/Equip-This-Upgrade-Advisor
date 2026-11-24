@@ -30,8 +30,6 @@ ns.NORM = { STR = 1, AGI = 1, STA = 1, INT = 1, SPI = 1, AP = 0.5, RAP = 0.4, SP
   CRIT = 14, HIT = 12, HASTE = 10, SPELLCRIT = 10, SPELLHIT = 10, DPS = 4, ARMOR = 0.02, DEF = 1.2, DODGE = 12,
   PARRY = 12, BLOCK = 6, BLOCKVALUE = 0.5 }
 local function round2(x) return math.floor(x * 100 + 0.5) / 100 end
--- What a stat's weight means, in words (the tooltip on each stat in /eqt): at 5 for everyone, then
--- with your weights, measured against the primary stat you weight most.
 local PRIMARY = { "STR", "AGI", "INT" }
 local function Short(x) x = math.floor(x * 10 + 0.5) / 10; return (x == math.floor(x)) and tostring(x) or format("%.1f", x) end
 -- a weight as typed: 3.75 -> "3.75", 4.5 -> "4.5", 5 -> "5"
@@ -41,40 +39,49 @@ local function Unit(key)
   if (ns.STAT_NAMES[key] or ""):find("%%") then return "+1%" end
   return "+1"
 end
+-- The tooltip on a stat in /eqt, in four short parts: where the number comes from, what it's worth,
+-- how items are scored with it, and what changing it does.
 function ns.WeightInfo(key, weights)
   local lines = {}
-  local name = ns.STAT_NAMES[key] or key
+  local name = (ns.STAT_NAMES[key] or key):gsub(" %%$", "")
   local unit = Unit(key)
-  local label = (unit == "+1%" or unit == "+1") and (unit .. " " .. name:gsub(" %%$", "")) or unit
-  local isPrimary = key == "STR" or key == "AGI" or key == "INT"
-  local at5 = ns.NORM[key] or 0
-  if isPrimary then
-    lines[1] = format("At 5, %s counts as 1 point: the yardstick the other stats are measured against.", label)
-  elseif key == "STA" or key == "SPI" then
-    lines[1] = format("At 5, %s counts as 1 point, as much as +1 of a primary stat (Strength, Agility or Intellect) at 5.", label)
-  else
-    lines[1] = format("At 5, %s counts as much as +%s of a primary stat (Strength, Agility or Intellect) at 5.", label, Short(at5))
-  end
+  local label = (unit == "+1%" or unit == "+1") and (unit .. " " .. name) or unit
+  local spec = ns.SpecKey()
+  local scale = ns.Scales.Active()
   local mine = weights and weights[key] or 0
+  -- 1. where it comes from
+  local default = ns.PresetImportance(spec)[key] or 0
+  local site = ns.GUIDE and ns.GUIDE[spec] and ns.GUIDE[spec].weights and next(ns.GUIDE[spec].weights)
+  local from = site and ("Forever Upgrades' " .. ns.SpecName(spec)) or ("the " .. ns.SpecName(spec) .. " preset")
+  if scale then
+    lines[#lines + 1] = format("From your scale \"%s\".", scale)
+  elseif ns.db.weights[spec] and ns.db.weights[spec][key] ~= nil then
+    lines[#lines + 1] = format("Your setting: %s (default %s, from %s weights).", Wt(mine), Wt(default), from)
+  else
+    lines[#lines + 1] = format("Default: %s, from %s weights.", Wt(mine), from)
+  end
+  -- 2. what it's worth, next to your top main stat
   local pts = ns.PointsPer(key, mine)
   if pts <= 0 then
-    lines[2] = "Your weight is 0: it's ignored."
+    lines[#lines + 1] = "At 0 it's ignored: items get nothing for it."
   else
-    -- your most-weighted primary stat
     local best, bestPts
     for _, k in ipairs(PRIMARY) do
       local p = ns.PointsPer(k, weights[k])
       if p > 0 and (not bestPts or p > bestPts) then best, bestPts = k, p end
     end
     if best and best ~= key then
-      lines[2] = format("With your weights: %s (%s) is worth as much as +%s %s (%s).", label, Wt(mine), Short(pts / bestPts),
-        ns.STAT_NAMES[best], Wt(weights[best]))
+      lines[#lines + 1] = format("Worth: %s counts as much as +%s %s.", label, Short(pts / bestPts), ns.STAT_NAMES[best])
     else
-      lines[2] = format("With your weight (%s): %s = %s points.", Wt(mine), label, Short(pts))
+      lines[#lines + 1] = format("Worth: your main stat. Other stats are measured against %s.", label)
     end
   end
-  if key == "DPS" then lines[#lines + 1] = "Only counts on weapons. Damage procs and extra attacks are counted through this too." end
-  lines[#lines + 1] = "0 ignores a stat; 5 means it matters as much as it can."
+  if key == "DPS" then lines[#lines + 1] = "Only on weapons. Damage procs and extra attacks count through it too." end
+  -- 3. how items are scored
+  lines[#lines + 1] = "An item's score: each of its stats times its weight, plus its effects. \"Upgrade +2%\" means your whole gear scores 2% higher with it."
+  -- 4. changing it
+  lines[#lines + 1] = scale and format("Change it to make %s count more or less in your scale. 0 ignores it, 5 is the most.", name)
+    or format("Change it to make %s count more or less; only this stat changes. 0 ignores it, 5 is the most. Reset weights goes back to the default.", name)
   return lines
 end
 

@@ -116,7 +116,10 @@ local function BuildPanel(panel)
     local function tip(owner)
       GameTooltip:SetOwner(owner, "ANCHOR_RIGHT")
       GameTooltip:SetText(ns.STAT_NAMES[key], 1, 1, 1)
-      for _, line in ipairs(ns.WeightInfo(key, ns.CurrentWeights())) do GameTooltip:AddLine(line, 0.85, 0.85, 0.85, true) end
+      for i, line in ipairs(ns.WeightInfo(key, ns.CurrentWeights())) do
+        if i > 1 then GameTooltip:AddLine(" ") end -- (a gap between the parts: easier to read)
+        GameTooltip:AddLine(line, 0.85, 0.85, 0.85, true)
+      end
       GameTooltip:Show()
     end
     local hover = CreateFrame("Frame", nil, panel)
