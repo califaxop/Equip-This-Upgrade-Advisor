@@ -294,6 +294,25 @@ function WindfuryBonus()
   return 0
 end
 
+-- A summon's hit (Searing Totem: "attacks an enemy ... for 26 to 35 Fire damage"; Healing Stream Totem:
+-- "restores 14 health every 2 sec"), from your spell's tooltip: what each of its attacks or ticks does
+-- for your rank. Its attacks come from a creature spell the game's data doesn't carry, so how often it
+-- strikes is what the site's share of your damage works out to at that hit.
+local function SummonHit(name)
+  if not (C_Spell and C_Spell.GetSpellInfo and C_TooltipInfo and C_TooltipInfo.GetSpellByID) then return nil end
+  local ok, info = pcall(C_Spell.GetSpellInfo, name)
+  if not (ok and type(info) == "table" and Readable(info.spellID)) then return nil end
+  local okT, data = pcall(C_TooltipInfo.GetSpellByID, info.spellID)
+  if not (okT and type(data) == "table" and type(data.lines) == "table") then return nil end
+  for _, l in ipairs(data.lines) do
+    local t = (Readable(l.leftText) and l.leftText or ""):gsub(",", "")
+    local a, b = t:match("(%d+) to (%d+) %a* ?damage")
+    if a then return (tonumber(a) + tonumber(b)) / 2 end
+    local h = t:match("restores (%d+) health") or t:match("heals? [%a ]-for (%d+)")
+    if h then return tonumber(h) end
+  end
+end
+
 -- a spell's cooldown, in seconds: the game's, else Forever's tables
 local function Cooldown(id)
   if GetSpellBaseCooldown then
@@ -372,6 +391,11 @@ function M.Play(s, base)
   local scale = (knownShare > 0) and known / knownShare or 0
   for _, e in ipairs(parts) do
     if e[3] == "other" or e[3] == "pet" then e[2] = e[6] * scale end
+    -- (a summon with a hit in its tooltip: per hit, and how often at that share)
+    if e[3] == "other" and e[2] > 0 then
+      local hit = (s == base) and SummonHit(e[1]) or nil
+      if hit and hit > 0 then e[7], e[8] = hit, e[2] / hit end
+    end
   end
   local total = 0
   for _, e in ipairs(parts) do total = total + e[2] end
@@ -582,8 +606,10 @@ function M.ReportData()
     local perSec = e[2] / 60
     if perSec > 0 then
       local spell, white = e[3] == "spell", e[3] == "white"
-      rows[#rows + 1] = { e[1], (spell or white) and e[7] or nil,
-        spell and e[4] or (white and e[8]) or nil, perSec, perSec / play.total, e[3] == "other" or e[3] == "pet" }
+      local summon = e[3] == "other" and e[7] ~= nil
+      rows[#rows + 1] = { e[1], (spell or white or summon) and e[7] or nil,
+        spell and e[4] or ((white or summon) and e[8]) or nil, perSec, perSec / play.total,
+        (e[3] == "other" and not summon) or e[3] == "pet", summon }
     end
   end
   table.sort(rows, function(a, b) return a[4] > b[4] end)

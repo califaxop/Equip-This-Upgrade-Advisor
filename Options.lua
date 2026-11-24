@@ -136,7 +136,7 @@ function ns.OpenDps()
     win.worthHead:SetPoint("TOPLEFT", 20, wy)
     win.worth = UI.Text(win, "line", "")
     win.worth:SetPoint("TOPLEFT", 20, wy - 32); win.worth:SetWidth(390); win.worth:SetSpacing(3)
-    win.note = UI.Text(win, "note", "Per hit: an average hit, as your tooltip shows it (with your spell power). Per sec: with crits and misses. In grey: no numbers of its own (totems, pets, some procs), its part follows the site's sim.")
+    win.note = UI.Text(win, "note", "Per hit: an average hit, as your tooltip shows it (with your spell power). Per sec: with crits and misses. *: a summon (totem): its hit from your tooltip, how often from the site's sim. In grey: no numbers of its own (pets, some procs), its part follows the site's sim.")
     win.note:SetPoint("BOTTOMLEFT", 20, 14); win.note:SetWidth(390)
     local function fmtN(x) return x >= 100 and format("%d", x + 0.5) or format("%.1f", x) end
     function win.Refresh()
@@ -149,7 +149,7 @@ function ns.OpenDps()
       for i, row in ipairs(d.rows) do
         local r = win.rows[i]
         if not r then break end
-        r[1]:SetText(row[6] and ("|cff9d9d9d" .. row[1] .. "|r") or row[1])
+        r[1]:SetText(row[6] and ("|cff9d9d9d" .. row[1] .. "|r") or (row[7] and (row[1] .. " |cff9d9d9d*|r") or row[1]))
         r[2]:SetText(row[2] and fmtN(row[2]) or "")
         r[3]:SetText(row[3] and format("%.1f", row[3]) or "")
         r[4]:SetText(fmtN(row[4]))
