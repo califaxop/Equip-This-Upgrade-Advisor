@@ -67,6 +67,12 @@ local function Guide()
   local bits = {}
   for _, e in ipairs(list) do bits[#bits + 1] = format("%s %s", ns.STAT_NAMES[e[1]]:gsub(" %%$", ""), ns.Short(w[e[1]])) end
   ns.Print("values (" .. ns.ScoringLabel() .. "): " .. table.concat(bits, ", "))
+  for _, side in ipairs(ns.Score.Sides()) do
+    if side.kind == "points" and side.share > 0 then
+      ns.Print(format("%s (%d%% of your build): you score %d points, %d from your character (base stats, level, talents) and %d from your gear; an item's %% is of that",
+        side.label, side.share * 100 + 0.5, side.total, side.base or 0, (side.total or 0) - (side.base or 0)))
+    end
+  end
   local _, why = ns.Talents.Factors(key)
   for _, t in ipairs(why) do
     ns.Print(format("talent: %s %d/%d - %s counts less until you have it", t[2], t[3], t[4], ns.STAT_NAMES[t[1]] or t[1]))

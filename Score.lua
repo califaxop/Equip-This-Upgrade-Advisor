@@ -411,7 +411,50 @@ local function WornEach(fn)
   end
 end
 
--- your build's sides: { { kind = "points" | "eh", w = values, share, total (your gear's points) } }
+-- Your character without gear, in points for a set of values: your base Strength, Agility, Stamina,
+-- Intellect and Spirit (level and talents), the attack power your level gives, and the crit and hit
+-- your talents give. Items are a % of this plus your gear, so the % is close to the change in your
+-- whole output (and on the same scale as effects like "+10% Stormstrike", which are % of output).
+-- Returns the points and { stat = points }.
+local STAT_INDEX = { STR = 1, AGI = 2, STA = 3, INT = 4, SPI = 5 }
+local LEVEL_AP = { WARRIOR = true, PALADIN = true, SHAMAN = true, ROGUE = true, HUNTER = true, DRUID = true }
+function S.Base(w)
+  local gear = {}
+  WornEach(function(f) for k, v in pairs(f.stats) do gear[k] = (gear[k] or 0) + v end end)
+  local pts, parts = 0, {}
+  local function add(k, amount)
+    local x = w[k] or 0
+    if amount > 0 and x ~= 0 then pts = pts + amount * x; parts[k] = (parts[k] or 0) + amount * x end
+  end
+  local eff = {}
+  for k, i in pairs(STAT_INDEX) do
+    local base, e = Call(UnitStat, "player", i)
+    base, e = Num(base), Num(e)
+    local g = gear[k] or 0
+    eff[k] = e
+    -- (Classic-style sheets put gear in the bonus part: the base is you; else gear is in the base)
+    add(k, (e - base >= g - 0.5) and base or math.max(0, base - g))
+  end
+  local level = UnitLevel and UnitLevel("player") or 1
+  if LEVEL_AP[ns.Class()] then add("AP", math.max(0, level * 2 - 20)) end -- (Classic: 2 per level, less 20)
+  -- crit and hit beyond your gear's and your stats' (talents, your class's base): what the game says,
+  -- less your gear's, less what your Agility / Intellect give (about level/3 Agility and level
+  -- Intellect per 1% crit, as in Classic)
+  local function first(fn, ...) return Num(Call(fn, ...)) end
+  local crit = first(GetCritChance) - (gear.CRIT or 0) - (eff.AGI or 0) / math.max(1, level / 3)
+  local scrit = 0
+  for i = 2, 7 do scrit = math.max(scrit, first(GetSpellCritChance, i)) end
+  scrit = scrit - (gear.SPELLCRIT or 0) - (eff.INT or 0) / math.max(1, level)
+  add("CRIT", math.max(0, crit)); add("SPELLCRIT", math.max(0, scrit))
+  local caps = S.Caps()
+  local hit = first(GetHitModifier) - (gear.HIT or 0)
+  local shit = first(GetSpellHitModifier) - (gear.SPELLHIT or 0)
+  add("HIT", math.max(0, caps.HIT and math.min(hit, caps.HIT[1]) or hit))
+  add("SPELLHIT", math.max(0, caps.SPELLHIT and math.min(shit, caps.SPELLHIT[1]) or shit))
+  return pts, parts
+end
+
+-- your build's sides: { { kind = "points" | "eh", w = values, share, total (you and your gear, in points) } }
 function S.Sides()
   if sides then return sides end
   local key = ns.SpecKey()
@@ -430,13 +473,17 @@ function S.Sides()
     for stat in pairs(per) do if ns.Ignored(stat, key) then per[stat] = 0 end end
     list[2] = { kind = "eh", w = per, share = t, label = "survival" }
   end
-  -- what your gear scores on each points side (its stats, then its effects with 1% of that as +1% output)
+  -- what you score on each points side: your character, your gear's stats, then its effects (with 1%
+  -- of you and your gear as +1% output)
   for _, side in ipairs(list) do
     if side.kind == "points" then
       local stats = 0
       WornEach(function(f, slot) stats = stats + Points(f, side.w, slot) end)
-      -- (a floor for little or no gear: about what a character's gear scores at its level, so a first
-      -- item isn't "+5000%")
+      side.gear = stats
+      side.base, side.baseParts = S.Base(side.w)
+      stats = stats + side.base
+      -- (a floor when the game won't say: about what a character scores at its level, so a first item
+      -- isn't "+5000%")
       local floor = 3 * (UnitLevel and UnitLevel("player") or 1) * math.max(side.w.STR or 0, side.w.AGI or 0, side.w.INT or 0, side.w.SP or 0, side.w.HEAL or 0, side.w.STA or 0, 0.5)
       side.statsTotal = math.max(stats, floor, 1)
       local eff = 0
