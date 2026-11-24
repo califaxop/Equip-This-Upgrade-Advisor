@@ -174,7 +174,7 @@ function M.SkillKind(name)
   local n = (name or ""):lower()
   if SWING[n] then return "swing" end
   if APSKILL[n] then return "ap" end
-  if WHITE[n] then return "white" end
+  if WHITE[n] or n:find("windfury", 1, true) then return "white" end -- (Windfury Attack, Windfury Weapon (Rank 2)...)
   return "spell"
 end
 
