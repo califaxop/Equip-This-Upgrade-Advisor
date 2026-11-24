@@ -136,7 +136,7 @@ function ns.OpenDps()
     win.worthHead:SetPoint("TOPLEFT", 20, wy)
     win.worth = UI.Text(win, "line", "")
     win.worth:SetPoint("TOPLEFT", 20, wy - 32); win.worth:SetWidth(390); win.worth:SetSpacing(3)
-    win.note = UI.Text(win, "note", "Per hit: an average hit, as your tooltip shows it (with your spell power). Per sec: with crits and misses. In grey: no spell of its own (procs, totems, pets), its part follows the site's sim.")
+    win.note = UI.Text(win, "note", "Per hit: an average hit, as your tooltip shows it (with your spell power). Per sec: with crits and misses. In grey: no numbers of its own (totems, pets, some procs), its part follows the site's sim.")
     win.note:SetPoint("BOTTOMLEFT", 20, 14); win.note:SetWidth(390)
     local function fmtN(x) return x >= 100 and format("%d", x + 0.5) or format("%.1f", x) end
     function win.Refresh()

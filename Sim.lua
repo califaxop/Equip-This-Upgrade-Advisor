@@ -44,6 +44,7 @@ local RANGED = { ["HUNTER:1"] = true, ["HUNTER:2"] = true }
 local MODEL = { STR = true, AGI = true, AP = true, RAP = true, SP = true, HEAL = true, CRIT = true, SPELLCRIT = true,
   HIT = true, SPELLHIT = true, HASTE = true, DPS = true, EXPERTISE = true }
 M.MODEL = MODEL
+local WindfuryBonus -- (below: Windfury Weapon's bonus attack power; M.State reads it)
 
 local function Call(fn, ...)
   if type(fn) ~= "function" then return nil end
@@ -113,6 +114,7 @@ function M.State()
   s.critPerAgi = Num(Call(GetCritChanceFromStat, 2, 100))
   local link = function(slot) return GetInventoryItemLink and GetInventoryItemLink("player", slot) end
   s.mh, s.oh, s.rw = Weapon(link(16)), Weapon(link(17)), Weapon(link(18))
+  s.wfBonus = (ns.Class() == "SHAMAN") and WindfuryBonus() or 0
   if s.oh and not s.oh.dps then s.oh = nil end
   return s
 end
@@ -267,6 +269,22 @@ local function WornBonus(names)
   return wornBonus
 end
 
+-- Windfury Weapon's bonus attack power on its extra attacks, from your spell's tooltip ("... with 104
+-- extra attack power"); 0 when it can't be read
+function WindfuryBonus()
+  if not (C_Spell and C_Spell.GetSpellInfo and C_TooltipInfo and C_TooltipInfo.GetSpellByID) then return 0 end
+  local ok, info = pcall(C_Spell.GetSpellInfo, "Windfury Weapon")
+  if not (ok and type(info) == "table" and Readable(info.spellID)) then return 0 end
+  local okT, data = pcall(C_TooltipInfo.GetSpellByID, info.spellID)
+  if not (okT and type(data) == "table" and type(data.lines) == "table") then return 0 end
+  for _, l in ipairs(data.lines) do
+    local t = Readable(l.leftText) and l.leftText or ""
+    local n = t:match("(%d+) extra attack power") or t:match("(%d+) additional attack power") or t:match("(%d+) attack power")
+    if n then return tonumber(n) end
+  end
+  return 0
+end
+
 -- a spell's cooldown, in seconds: the game's, else Forever's tables
 local function Cooldown(id)
   if GetSpellBaseCooldown then
@@ -297,6 +315,8 @@ function M.Play(s, base)
   local names = {}
   for _, p in ipairs(site) do names[#names + 1] = p[1] end
   local bonus = WornBonus(names)
+  local siteSwings = 0 -- (the site's auto attacks a minute: how often its Windfury went off per swing)
+  for _, p in ipairs(site) do if p[1] == "Attack" then siteSwings = p[3] end end
   for _, p in ipairs(site) do
     local name, share, cpm = p[1], p[2], p[3]
     local e = { name, 0, "other", cpm, nil, share }
@@ -309,6 +329,14 @@ function M.Play(s, base)
         e[7] = w.dps * w.speed + (r and s.rap or s.ap) * w.speed / R.apPerDps
         e[8] = 60 * (1 + (r and s.rhaste or s.haste) / 100) / w.speed * ((not r and s.oh) and 2 or 1)
       end
+    elseif name == "Windfury Weapon" and s.mh and siteSwings > 0 then
+      -- extra attacks: your swings a minute x how often the site's sim saw them per swing; each one a
+      -- main-hand hit with Windfury's bonus attack power (it can't glance)
+      local w = s.mh
+      local swings = 60 * (1 + s.haste / 100) / w.speed
+      local attacks = swings * cpm / siteSwings
+      local hit = w.dps * w.speed + (s.ap + (base.wfBonus or 0)) * w.speed / R.apPerDps
+      e[2], e[3], e[7], e[8] = hit * StrikeLanding(s) * attacks, "white", hit, attacks
     elseif PET(name) then
       e[3] = "pet"
     else
