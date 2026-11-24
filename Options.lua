@@ -66,11 +66,12 @@ local function BuildPanel(panel)
   local leftLbl = at(UI.Text(panel, "value", ""), 26, -386)
   local mixText = UI.Text(panel, "note", "")
   mixText:SetPoint("TOP", mix, "BOTTOM", 0, -2)
-  track({ Refresh = function()
+  local mixRefresh = track({ Refresh = function()
     leftLbl:SetText(leftEnd())
     local t = ns.SurvivalShare()
     mixText:SetText(format("%d%% %s  /  %d%% survivability", (1 - t) * 100 + 0.5, leftEnd():gsub("^More ", ""):lower(), t * 100 + 0.5))
   end })
+  rows[#rows + 1] = mixRefresh -- (moves with the slider and the build)
   local yEnd = -448
   local reset = at(UI.Button(panel, "Reset build", 110, function() ns.ResetPriorities(); changed() end), 26, yEnd)
   reset.tip = "Back to Auto: Leveling until the level cap, then Damage (tanks: Tanking)."
