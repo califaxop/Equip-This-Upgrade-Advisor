@@ -288,7 +288,19 @@ function ns.PriorityInfo(key)
   local spec = ns.SpecKey()
   local weights = ns.Weights(spec)
   local pts = ns.PointsPer(key, weights[key])
-  if pts <= 0 then
+  local Sim = ns.Sim
+  if Sim and Sim.Active() and Sim.MODEL[key] then
+    -- worked out from your spells and numbers (Sim.lua)
+    local ok, per = pcall(Sim.PerUnit, key)
+    if ok and per then
+      local n = (unit == "+1%" or key == "DPS") and 1 or 10
+      local label10 = (n == 10) and ("+10 " .. name) or label
+      lines[#lines + 1] = format("Worth: %s = %+.2f%% %s for you now (from your spells and numbers).", label10, per * n, Sim.Unit())
+    end
+    if ns.Level(key) ~= "goal" or (weights[key] or 0) ~= (ns.PresetImportance(spec)[key] or 0) then
+      lines[#lines + 1] = "Your priority scales that up or down."
+    end
+  elseif pts <= 0 then
     lines[#lines + 1] = "Items get nothing for it."
   else
     local best, bestPts
@@ -314,6 +326,8 @@ function ns.PriorityInfo(key)
     lines[#lines + 1] = format("Default: as your goal, %s, has it.", gname)
   end
   lines[#lines + 1] = "Normal: Forever Upgrades' value. Higher: halfway to your spec's most valued stat. Highest: worth more than every Normal stat, so items with more of it win. Ignore: worth nothing."
-  lines[#lines + 1] = "An item's score adds up its stats by these values, plus its effects. \"Upgrade +2%\": your whole gear scores 2% higher with it."
+  lines[#lines + 1] = (Sim and Sim.Active())
+    and format("An item's value: the change in your %s from wearing it, plus its other stats (Stamina, Intellect...) by these values, plus its effects.", Sim.Unit())
+    or "An item's score adds up its stats by these values, plus its effects. \"Upgrade +2%\": your whole gear scores 2% higher with it."
   return lines
 end

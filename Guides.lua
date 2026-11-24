@@ -4,6 +4,8 @@
 local _, ns = ...
 ns.GUIDE = { build = "2026-11-24", source = "Forever Upgrades",
   ["WARRIOR:1"] = { -- Arms Warrior
+    unit = "DPS",
+    priority = { "Hit (to cap)", "Strength", "Critical Strike", "Agility", "Weapon DPS", "Stamina" },
     weights = { AGI = 0.65, AP = 0.5, CRIT = 14, DPS = 9, EXPERTISE = 10, HASTE = 8, HIT = 14, STA = 0.1, STR = 1 },
     rotation = { "Charge", "Battle Shout", "Execute", "Mortal Strike", "Overpower", "Whirlwind", "Slam", "Rend", "Heroic Strike", "Recklessness" },
     levels = {
@@ -13,6 +15,8 @@ ns.GUIDE = { build = "2026-11-24", source = "Forever Upgrades",
     },
   },
   ["WARRIOR:2"] = { -- Fury Warrior
+    unit = "DPS",
+    priority = { "Hit (to cap)", "Strength", "Critical Strike", "Agility", "Haste", "Stamina" },
     weights = { AGI = 0.7, AP = 0.5, CRIT = 15.4, DPS = 5, EXPERTISE = 11, HASTE = 9, HIT = 16, STA = 0.1, STR = 1 },
     rotation = { "Bloodrage", "Battle Shout", "Execute", "Bloodthirst", "Reckless Swings", "Whirlwind", "Slam", "Heroic Strike", "Hamstring", "Death Wish" },
     levels = {
@@ -22,18 +26,31 @@ ns.GUIDE = { build = "2026-11-24", source = "Forever Upgrades",
     },
   },
   ["WARRIOR:3"] = { -- Protection Warrior
+    unit = "DPS",
+    priority = { "Defense (to crit immunity)", "Stamina", "Armor", "Block Value", "Dodge", "Parry", "Hit", "Strength" },
     weights = { AGI = 0.5, ARMOR = 0.1, BLOCK = 3, BLOCKVALUE = 0.6, DEF = 1.5, DODGE = 12, EXPERTISE = 8, HIT = 8, PARRY = 13.5, STA = 1, STR = 0.4 },
     rotation = { "Defensive Stance", "Shield Block", "Shield Slam", "Revenge", "Sunder Armor", "Shield Wall" },
   },
   ["PALADIN:1"] = { -- Holy Paladin
+    unit = "HPS",
+    priority = { "Healing Power", "Intellect", "Critical Strike", "Mana per 5 sec", "Spirit", "Stamina" },
     weights = { HASTE = 8, HEAL = 1, INT = 0.6, MP5 = 1.8, SP = 1, SPELLCRIT = 8.4, SPI = 0.2, STA = 0.1 },
     rotation = { "Oath of Light", "Holy Shock", "Light's Vigil", "Divine Favor", "Flash of Light" },
+    levels = {
+      [30] = { { "Holy Light", 0.833, 19.9 }, { "Holy Shock", 0.167, 4.9 } },
+      [50] = { { "Flash of Light", 0.425, 28.5 }, { "Light's Vigil", 0.354, 0.0 }, { "Holy Shock", 0.113, 4.9 }, { "Holy Light", 0.108, 1.0 } },
+      [60] = { { "Flash of Light", 0.585, 31.3 }, { "Holy Light", 0.159, 1.0 }, { "Light's Vigil", 0.156, 0.0 }, { "Holy Shock", 0.100, 3.4 } },
+    },
   },
   ["PALADIN:2"] = { -- Protection Paladin
+    unit = "DPS",
+    priority = { "Defense", "Stamina", "Armor", "Block Value", "Spell Power", "Hit", "Dodge", "Strength" },
     weights = { ARMOR = 0.1, BLOCK = 3, BLOCKVALUE = 0.5, DEF = 1.4, DODGE = 10.8, HIT = 8, INT = 0.3, PARRY = 12, SP = 0.6, STA = 1, STR = 0.4 },
     rotation = { "Righteous Fury", "Seal of Fury", "Holy Shield", "Holy Strike", "Judgement", "Consecration" },
   },
   ["PALADIN:3"] = { -- Retribution Paladin
+    unit = "DPS",
+    priority = { "Hit (to cap)", "Strength", "Critical Strike", "Agility", "Weapon DPS", "Spell Power", "Intellect" },
     weights = { AGI = 0.55, AP = 0.5, CRIT = 14, DPS = 9, EXPERTISE = 9, HASTE = 7, HIT = 13, INT = 0.2, SP = 0.3, STA = 0.1, STR = 1 },
     rotation = { "Blessing of Might", "Seal of the Crusader", "Holy Strike", "Judgement", "Seal of Command", "Seal of Righteousness", "Hammer of Wrath" },
     levels = {
@@ -43,6 +60,8 @@ ns.GUIDE = { build = "2026-11-24", source = "Forever Upgrades",
     },
   },
   ["HUNTER:1"] = { -- Beast Mastery Hunter
+    unit = "DPS",
+    priority = { "Hit (to cap)", "Agility", "Ranged Attack Power", "Critical Strike", "Intellect", "Stamina" },
     weights = { AGI = 1, AP = 0.1, CRIT = 11.2, DPS = 4, HASTE = 8, HIT = 12, INT = 0.2, RAP = 0.45, STA = 0.1 },
     rotation = { "Hunter's Mark", "Aspect of the Hawk", "Bestial Wrath", "Rapid Fire", "Summon Hawk", "Multi-Shot", "Serpent Sting", "Auto Shot" },
     levels = {
@@ -52,6 +71,8 @@ ns.GUIDE = { build = "2026-11-24", source = "Forever Upgrades",
     },
   },
   ["HUNTER:2"] = { -- Marksmanship Hunter
+    unit = "DPS",
+    priority = { "Hit (to cap)", "Agility", "Ranged Attack Power", "Critical Strike", "Haste", "Intellect" },
     weights = { AGI = 1, CRIT = 14, DPS = 5, HASTE = 9, HIT = 13, INT = 0.9, RAP = 0.5, STA = 0.1 },
     rotation = { "Hunter's Mark", "Trueshot Aura", "Rapid Fire", "Aimed Shot", "Sniper Shot", "Arcane Shot", "Serpent Sting", "Auto Shot" },
     levels = {
@@ -61,6 +82,8 @@ ns.GUIDE = { build = "2026-11-24", source = "Forever Upgrades",
     },
   },
   ["HUNTER:3"] = { -- Survival Hunter
+    unit = "DPS",
+    priority = { "Agility", "Hit (to cap)", "Critical Strike", "Attack Power", "Weapon DPS", "Stamina" },
     weights = { AGI = 1, AP = 0.45, CRIT = 12.6, DPS = 6, HASTE = 8, HIT = 12, PARRY = 6, RAP = 0.1, STA = 0.15, STR = 0.2 },
     rotation = { "Hunter's Mark", "Aspect of the Beast", "Rapid Fire", "Mongoose Bite", "Raptor Strike", "Strider Kick", "Lacerate" },
     levels = {
@@ -70,6 +93,8 @@ ns.GUIDE = { build = "2026-11-24", source = "Forever Upgrades",
     },
   },
   ["ROGUE:1"] = { -- Assassination Rogue
+    unit = "DPS",
+    priority = { "Hit (to cap)", "Agility", "Critical Strike", "Attack Power", "Strength", "Weapon DPS" },
     weights = { AGI = 1, AP = 0.5, CRIT = 14, DPS = 3, EXPERTISE = 10, HASTE = 8, HIT = 14, STA = 0.1, STR = 0.55 },
     rotation = { "Garrote", "Slice and Dice", "Shank", "Eviscerate", "Mutilate" },
     levels = {
@@ -79,6 +104,8 @@ ns.GUIDE = { build = "2026-11-24", source = "Forever Upgrades",
     },
   },
   ["ROGUE:2"] = { -- Combat Rogue
+    unit = "DPS",
+    priority = { "Hit (to cap)", "Agility", "Critical Strike", "Attack Power", "Strength", "Weapon DPS" },
     weights = { AGI = 1, AP = 0.5, CRIT = 12.6, DPS = 3.5, EXPERTISE = 11, HASTE = 9, HIT = 15, STA = 0.1, STR = 0.55 },
     rotation = { "Cheap Shot", "Slice and Dice", "Adrenaline Rush", "Blade Flurry", "Shank", "Eviscerate", "Sinister Strike" },
     levels = {
@@ -88,6 +115,8 @@ ns.GUIDE = { build = "2026-11-24", source = "Forever Upgrades",
     },
   },
   ["ROGUE:3"] = { -- Subtlety Rogue
+    unit = "DPS",
+    priority = { "Agility", "Hit (to cap)", "Attack Power", "Critical Strike", "Stamina" },
     weights = { AGI = 1, AP = 0.55, CRIT = 11.2, DPS = 3, EXPERTISE = 9, HASTE = 7, HIT = 12, STA = 0.25, STR = 0.55 },
     rotation = { "Premeditation", "Ambush", "Vanish", "Slice and Dice", "Rupture", "Eviscerate", "Hemorrhage", "Ghostly Strike", "Shank" },
     levels = {
@@ -97,14 +126,30 @@ ns.GUIDE = { build = "2026-11-24", source = "Forever Upgrades",
     },
   },
   ["PRIEST:1"] = { -- Discipline Priest
+    unit = "HPS",
+    priority = { "Healing Power", "Intellect", "Spirit", "Mana per 5 sec", "Critical Strike", "Stamina" },
     weights = { HASTE = 7, HEAL = 1, INT = 0.6, MP5 = 1.8, SP = 1, SPELLCRIT = 7, SPI = 0.45, STA = 0.1 },
     rotation = { "Power Word: Shield", "Penance", "Renew", "Power Infusion", "Inner Focus", "Heal" },
+    levels = {
+      [30] = { { "Prayer of Healing", 0.556, 5.0 }, { "Penance", 0.228, 5.0 }, { "Power Word: Shield", 0.126, 4.0 }, { "Renew", 0.090, 3.0 } },
+      [50] = { { "Prayer of Healing", 0.594, 7.0 }, { "Penance", 0.173, 4.0 }, { "Renew", 0.128, 4.0 }, { "Power Word: Shield", 0.105, 4.0 } },
+      [60] = { { "Prayer of Healing", 0.501, 3.0 }, { "Penance", 0.247, 4.0 }, { "Renew", 0.171, 3.0 }, { "Power Word: Shield", 0.081, 2.0 } },
+    },
   },
   ["PRIEST:2"] = { -- Holy Priest
+    unit = "HPS",
+    priority = { "Healing Power", "Spirit", "Intellect", "Mana per 5 sec", "Critical Strike", "Stamina" },
     weights = { HASTE = 7, HEAL = 1, INT = 0.5, MP5 = 1.8, SP = 1, SPELLCRIT = 7, SPI = 0.55, STA = 0.1 },
     rotation = { "Power Word: Shield", "Prayer of Mending", "Renew", "Inner Focus", "Heal" },
+    levels = {
+      [30] = { { "Heal", 0.696, 8.0 }, { "Power Word: Shield", 0.159, 4.0 }, { "Renew", 0.145, 4.0 } },
+      [50] = { { "Prayer of Healing", 0.414, 5.0 }, { "Prayer of Mending", 0.238, 3.0 }, { "Renew", 0.165, 4.0 }, { "Greater Heal", 0.104, 2.0 }, { "Power Word: Shield", 0.080, 3.0 } },
+      [60] = { { "Prayer of Healing", 0.273, 2.0 }, { "Prayer of Mending", 0.252, 3.0 }, { "Renew", 0.169, 3.0 }, { "Power Word: Shield", 0.155, 4.0 }, { "Greater Heal", 0.150, 2.0 } },
+    },
   },
   ["PRIEST:3"] = { -- Shadow Priest
+    unit = "DPS",
+    priority = { "Hit (to cap)", "Spell Power", "Shadow Damage", "Critical Strike", "Intellect", "Spirit", "Stamina" },
     weights = { HASTE = 8, INT = 0.3, SP = 1, SPELLCRIT = 7, SPELLHIT = 12, SPELLPEN = 0.6, SPI = 0.2, STA = 0.1 },
     rotation = { "Shadowform", "Shadow Word: Pain", "Devouring Plague", "Mind Blast", "Shadow Word: Death", "Mind Flay" },
     levels = {
@@ -114,6 +159,8 @@ ns.GUIDE = { build = "2026-11-24", source = "Forever Upgrades",
     },
   },
   ["SHAMAN:1"] = { -- Elemental Shaman
+    unit = "DPS",
+    priority = { "Hit (to cap)", "Spell Power", "Critical Strike", "Intellect", "Mana per 5 sec", "Nature Damage", "Fire Damage" },
     weights = { HASTE = 8, INT = 0.4, MP5 = 1.4, SP = 1, SPELLCRIT = 11.2, SPELLHIT = 12, SPI = 0.1, STA = 0.1 },
     rotation = { "Call of the Elements", "Lightning Mastery", "Flame Shock", "Chain Lightning", "Lightning Bolt" },
     levels = {
@@ -123,6 +170,8 @@ ns.GUIDE = { build = "2026-11-24", source = "Forever Upgrades",
     },
   },
   ["SHAMAN:2"] = { -- Enhancement Shaman
+    unit = "DPS",
+    priority = { "Hit (to cap)", "Strength", "Agility", "Critical Strike", "Attack Power", "Weapon DPS", "Intellect" },
     weights = { AGI = 0.65, AP = 0.5, CRIT = 14, DPS = 8, HASTE = 9, HIT = 13, INT = 0.25, SP = 0.2, STA = 0.1, STR = 1 },
     rotation = { "Windfury Weapon", "Rage of the Farseer", "Stormstrike", "Earth Shock", "Lightning Bolt", "Flame Shock", "Searing Totem" },
     levels = {
@@ -132,10 +181,19 @@ ns.GUIDE = { build = "2026-11-24", source = "Forever Upgrades",
     },
   },
   ["SHAMAN:3"] = { -- Restoration Shaman
+    unit = "HPS",
+    priority = { "Healing Power", "Mana per 5 sec", "Intellect", "Critical Strike", "Spirit", "Stamina" },
     weights = { HASTE = 7, HEAL = 1, INT = 0.55, MP5 = 2, SP = 1, SPELLCRIT = 7, SPI = 0.2, STA = 0.1 },
     rotation = { "Call of the Elements", "Riptide", "Nature's Swiftness", "Mana Tide Totem", "Water Shield", "Healing Wave", "Chain Heal" },
+    levels = {
+      [30] = { { "Healing Wave", 0.870, 23.0 }, { "Healing Stream Totem", 0.130, 0.0 } },
+      [50] = { { "Healing Wave", 0.779, 19.6 }, { "Healing Stream Totem", 0.126, 0.0 }, { "Riptide", 0.095, 5.0 } },
+      [60] = { { "Healing Wave", 0.784, 19.4 }, { "Healing Stream Totem", 0.149, 0.0 }, { "Riptide", 0.067, 2.5 } },
+    },
   },
   ["MAGE:1"] = { -- Arcane Mage
+    unit = "DPS",
+    priority = { "Hit (to cap)", "Spell Power", "Intellect", "Critical Strike", "Arcane Damage", "Spirit", "Mana per 5 sec" },
     weights = { HASTE = 9, INT = 0.5, MP5 = 1.2, SP = 1, SPELLCRIT = 11.2, SPELLHIT = 11, SPI = 0.3, STA = 0.1 },
     rotation = { "Arcane Intellect", "Arcane Blast", "Arcane Power", "Arcane Missiles", "Arcane Wrath", "Presence of Mind", "Frostbolt", "Evocation" },
     levels = {
@@ -145,6 +203,8 @@ ns.GUIDE = { build = "2026-11-24", source = "Forever Upgrades",
     },
   },
   ["MAGE:2"] = { -- Fire Mage
+    unit = "DPS",
+    priority = { "Hit (to cap)", "Spell Power", "Fire Damage", "Critical Strike", "Intellect", "Spirit" },
     weights = { HASTE = 9, INT = 0.4, MP5 = 1.1, SP = 1, SPELLCRIT = 12.6, SPELLHIT = 12, SPELLPEN = 0.4, SPI = 0.2, STA = 0.1 },
     rotation = { "Pyroblast", "Scorch", "Fireball", "Pyroblast", "Combustion", "Evocation" },
     levels = {
@@ -154,6 +214,8 @@ ns.GUIDE = { build = "2026-11-24", source = "Forever Upgrades",
     },
   },
   ["MAGE:3"] = { -- Frost Mage
+    unit = "DPS",
+    priority = { "Hit (to cap)", "Spell Power", "Frost Damage", "Critical Strike", "Intellect", "Spirit" },
     weights = { HASTE = 9, INT = 0.4, MP5 = 1.1, SP = 1, SPELLCRIT = 11.2, SPELLHIT = 11, SPI = 0.2, STA = 0.1 },
     rotation = { "Ice Barrier", "Frostbolt", "Ice Lance", "Evocation" },
     levels = {
@@ -163,6 +225,8 @@ ns.GUIDE = { build = "2026-11-24", source = "Forever Upgrades",
     },
   },
   ["WARLOCK:1"] = { -- Affliction Warlock
+    unit = "DPS",
+    priority = { "Hit (to cap)", "Spell Power", "Shadow Damage", "Critical Strike", "Stamina", "Intellect", "Spirit" },
     weights = { HASTE = 8, INT = 0.3, SP = 1, SPELLCRIT = 5.6, SPELLHIT = 12, SPELLPEN = 0.6, SPI = 0.15, STA = 0.2 },
     rotation = { "Curse of the Elements", "Amplify Curse", "Corruption", "Bane of Agony", "Siphon Life", "Shadow Bolt", "Wrack", "Life Tap" },
     levels = {
@@ -172,6 +236,8 @@ ns.GUIDE = { build = "2026-11-24", source = "Forever Upgrades",
     },
   },
   ["WARLOCK:2"] = { -- Demonology Warlock
+    unit = "DPS",
+    priority = { "Hit (to cap)", "Spell Power", "Shadow Damage", "Stamina", "Critical Strike", "Intellect" },
     weights = { HASTE = 8, INT = 0.3, SP = 1, SPELLCRIT = 9.8, SPELLHIT = 12, SPI = 0.1, STA = 0.3 },
     rotation = { "Demonic Sacrifice", "Curse of the Elements", "Corruption", "Bane of Agony", "Shadow Bolt", "Life Tap" },
     levels = {
@@ -181,6 +247,8 @@ ns.GUIDE = { build = "2026-11-24", source = "Forever Upgrades",
     },
   },
   ["WARLOCK:3"] = { -- Destruction Warlock
+    unit = "DPS",
+    priority = { "Hit (to cap)", "Spell Power", "Fire Damage", "Critical Strike", "Intellect", "Stamina" },
     weights = { HASTE = 9, INT = 0.3, SP = 1, SPELLCRIT = 12.6, SPELLHIT = 12, SPELLPEN = 0.5, STA = 0.15 },
     rotation = { "Curse of the Elements", "Soul Fire", "Immolate", "Conflagrate", "Shadowburn", "Incinerate", "Life Tap" },
     levels = {
@@ -190,6 +258,8 @@ ns.GUIDE = { build = "2026-11-24", source = "Forever Upgrades",
     },
   },
   ["DRUID:1"] = { -- Balance Druid
+    unit = "DPS",
+    priority = { "Hit (to cap)", "Spell Power", "Critical Strike", "Intellect", "Arcane Damage", "Nature Damage", "Spirit" },
     weights = { HASTE = 9, INT = 0.4, MP5 = 1.2, SP = 1, SPELLCRIT = 11.2, SPELLHIT = 12, SPI = 0.2, STA = 0.1 },
     rotation = { "Moonkin Form", "Faerie Fire", "Insect Swarm", "Moonfire", "Starfire", "Wrath", "Innervate" },
     levels = {
@@ -199,6 +269,8 @@ ns.GUIDE = { build = "2026-11-24", source = "Forever Upgrades",
     },
   },
   ["DRUID:2"] = { -- Feral Combat Druid
+    unit = "DPS",
+    priority = { "Weapon DPS", "Hit and Expertise", "Critical Strike", "Strength", "Agility", "Stamina", "Spirit", "Intellect", "Spell Power" },
     weights = { AGI = 1.7, AP = 1, CRIT = 9.38, DPS = 13.7, HASTE = 6.1, HIT = 11.2, STR = 2.2 },
     rotation = { "Poised", "Rake", "Shred", "Rip", "Ferocious Bite", "Omen of Clarity" },
     levels = {
@@ -208,7 +280,14 @@ ns.GUIDE = { build = "2026-11-24", source = "Forever Upgrades",
     },
   },
   ["DRUID:3"] = { -- Restoration Druid
+    unit = "HPS",
+    priority = { "Healing Power", "Spirit", "Intellect", "Mana per 5 sec", "Critical Strike", "Stamina" },
     weights = { HASTE = 7, HEAL = 1, INT = 0.5, MP5 = 1.8, SP = 1, SPELLCRIT = 5.6, SPI = 0.5, STA = 0.1 },
     rotation = { "Wild Growth", "Rejuvenation", "Swiftmend", "Nature's Swiftness", "Regrowth", "Innervate" },
+    levels = {
+      [30] = { { "Regrowth", 0.814, 24.0 }, { "Rejuvenation", 0.186, 5.0 } },
+      [50] = { { "Wild Growth", 0.469, 7.0 }, { "Regrowth", 0.255, 6.0 }, { "Rejuvenation", 0.085, 4.0 }, { "Swiftmend", 0.085, 4.0 }, { "Bloom", 0.056, 0.0 }, { "Healing Touch", 0.050, 1.0 } },
+      [60] = { { "Wild Growth", 0.442, 5.0 }, { "Regrowth", 0.158, 5.0 }, { "Swiftmend", 0.155, 4.0 }, { "Rejuvenation", 0.140, 4.0 }, { "Healing Touch", 0.059, 1.0 }, { "Bloom", 0.046, 0.0 } },
+    },
   },
 }

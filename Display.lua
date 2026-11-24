@@ -36,11 +36,13 @@ function D.Verdict(link)
   end
   if c.kind == "twohand" then return GREY .. "Off-hand: you use a two-hander|r" end
   if c.kind == "armortype" then return GREY .. "Not " .. c.best .. ": you wear " .. c.best .. " (your setting)|r" end
-  if c.kind == "new" then return format("%sUpgrade %+.1f%%|r %s(empty slot, %s)|r", GREEN, c.pct or 0, GREY, spec) end
+  local unit = c.model and (" " .. ns.Sim.Unit()) or ""
+  if c.kind == "new" then return format("%sUpgrade %+.1f%%%s|r %s(empty slot, %s)|r", GREEN, c.pct or 0, unit, GREY, spec) end
   if c.kind == "same" then return GREY .. "About the same|r" .. Versus(c.vs, c.inBags) .. " " .. GREY .. "(" .. spec .. ")|r" end
   local col = c.kind == "upgrade" and GREEN or RED
   local word = c.kind == "upgrade" and "Upgrade" or "Downgrade"
-  return format("%s%s %+.1f%%|r%s %s(%s)|r", col, word, c.pct, Versus(c.vs, c.inBags), GREY, spec)
+  local how = (c.hand == "oh") and (" " .. GREY .. "as your off-hand|r") or ""
+  return format("%s%s %+.1f%%%s|r%s%s %s(%s)|r", col, word, c.pct, unit, Versus(c.vs, c.inBags), how, GREY, spec)
 end
 
 ---------------------------------------------------------------------------

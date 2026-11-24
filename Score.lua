@@ -201,7 +201,7 @@ function S.Facts(link)
   if complete then cache[link] = f end
   return f
 end
-function S.ClearCache() wipe(cache); if S.ForgetBags then S.ForgetBags() end; if ns.Effects then ns.Effects.ClearCache() end; end
+function S.ClearCache() wipe(cache); if S.ForgetBags then S.ForgetBags() end; if ns.Sim then ns.Sim.Forget() end; if ns.Effects then ns.Effects.ClearCache() end; end
 
 local WEAPON_LOCS = { INVTYPE_WEAPON = true, INVTYPE_2HWEAPON = true, INVTYPE_WEAPONMAINHAND = true,
   INVTYPE_WEAPONOFFHAND = true, INVTYPE_RANGED = true, INVTYPE_RANGEDRIGHT = true, INVTYPE_THROWN = true }
@@ -291,6 +291,73 @@ local function BagScores(loc, exceptId, weights)
   return out
 end
 
+-- With the DPS / HPS model: the % change from wearing an item, against your best owned one.
+-- Weapons as setups: a two-hander replaces main hand + off hand; a one-hander replaces the main hand
+-- (or, if you dual wield, whichever hand it does more in); rings and trinkets the one they beat most.
+-- { kind, pct, delta, value (its gain), vs, inBags, hand = "oh", model = true }
+local RANGED_LOC = { INVTYPE_RANGED = true, INVTYPE_RANGEDRIGHT = true, INVTYPE_THROWN = true }
+local OFF_LOC = { INVTYPE_WEAPONOFFHAND = true, INVTYPE_SHIELD = true, INVTYPE_HOLDABLE = true }
+function S.ModelCompare(link, f, weights)
+  local Sim = ns.Sim
+  local s = Sim.Cached()
+  local function worn(slot) return GetInventoryItemLink and GetInventoryItemLink("player", slot) end
+  local function loc2(l) return C_Item and C_Item.GetItemInfoInstant and select(4, C_Item.GetItemInfoInstant(l)) end
+  local function gainOf(l, lf)
+    local loc = lf.equipLoc
+    if loc == "INVTYPE_2HWEAPON" then
+      local out, mh, oh = {}, worn(16), worn(17)
+      if mh then out[#out + 1] = mh end
+      if oh then out[#out + 1] = oh end
+      return Sim.Gain(l, out, weights, "mh", s), mh or oh
+    elseif loc == "INVTYPE_WEAPON" or loc == "INVTYPE_WEAPONMAINHAND" then
+      local mh = worn(16)
+      local g, vs, hand = Sim.Gain(l, mh and { mh } or {}, weights, "mh", s), mh, nil
+      if loc == "INVTYPE_WEAPON" and DualWields() and not (mh and loc2(mh) == "INVTYPE_2HWEAPON") then
+        local oh = worn(17)
+        local g2 = Sim.Gain(l, oh and { oh } or {}, weights, "oh", s)
+        if g2 and (not g or g2 > g) then g, vs, hand = g2, oh, "oh" end
+      end
+      return g, vs, hand
+    elseif OFF_LOC[loc] then
+      local oh = worn(17)
+      return Sim.Gain(l, oh and { oh } or {}, weights, "oh", s), oh
+    elseif RANGED_LOC[loc] then
+      local rw = worn(18)
+      return Sim.Gain(l, rw and { rw } or {}, weights, "rw", s), rw
+    end
+    local best, vs, empty
+    for _, slot in ipairs(SLOTS[loc] or {}) do
+      local cur = worn(slot)
+      local g = Sim.Gain(l, cur and { cur } or {}, weights, nil, s)
+      if g and (not best or g > best) then best, vs, empty = g, cur, cur == nil end
+    end
+    return best, vs, nil, empty
+  end
+  local gain, vs, hand, empty = gainOf(link, f)
+  if not gain then return nil end
+  if vs == nil then empty = true end
+  -- your best owned item of the kind: one in your bags that does more is the one to beat
+  -- (an item in your bags itself is measured against what you wear, unless another beats it)
+  local id = link:match("item:(%d+)")
+  local carried = false
+  for _, b in ipairs(BagItems()) do if b[1]:match("item:(%d+)") == id then carried = true end end
+  local bagBest, bagLink = 0, nil
+  for _, b in ipairs(BagItems()) do
+    if Family(b[2]) == Family(f.equipLoc) and b[1]:match("item:(%d+)") ~= id then
+      local bf = S.Facts(b[1])
+      if bf and bf.usable then
+        local g = gainOf(b[1], bf)
+        if g and g > bagBest and (not carried or g > gain) then bagBest, bagLink = g, b[1] end
+      end
+    end
+  end
+  local pct = gain - bagBest
+  if bagLink then vs, hand, empty = bagLink, nil, false end
+  if empty and pct > 0 then return { kind = "new", pct = pct, delta = pct, value = gain, model = true } end
+  local kind = (math.abs(pct) < 0.1) and "same" or (pct > 0 and "upgrade" or "downgrade")
+  return { kind = kind, pct = pct, delta = pct, value = gain, vs = vs, inBags = bagLink ~= nil, hand = hand, model = true }
+end
+
 -- Your whole gear's score: every slot you wear (not shirt or tabard). Upgrades are measured against it,
 -- so a % means the same in every slot ("+2%": 2% stronger overall), however weak the item you'd replace.
 function S.GearTotal(weights)
@@ -355,6 +422,11 @@ function S.CompareWeights(link, weights)
       if not cur then oldValue, vs = 0, nil; break end -- an empty slot: it's an upgrade
       if oldValue == nil or v < oldValue then oldValue, vs = v, cur end -- the weaker ring / trinket
     end
+  end
+  -- your DPS / HPS, worked out from your spells (Sim.lua): the change from wearing it
+  if not wearing and ns.Sim and ns.Sim.Active() then
+    local ok, r = pcall(S.ModelCompare, link, f, weights)
+    if ok and r then return r end
   end
   -- Your best owned item counts, not only what you wear: a better one in your bags is the one to beat
   -- (so an item that's worse than one you already carry isn't called an upgrade).
