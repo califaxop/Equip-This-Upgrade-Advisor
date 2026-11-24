@@ -8,45 +8,47 @@ local GREEN, RED, GREY, GOLD = "|cff40ff40", "|cffff5050", "|cff9d9d9d", "|cffff
 
 local ORANGE = "|cffff9933"
 
--- " vs [Item]" in the item's quality color: what it's measured against
-local function Versus(vs, inBags)
-  if type(vs) ~= "string" then return "" end
-  local name = vs:match("%[(.-)%]")
-  if not name then return "" end
-  local color = vs:match("^(|c%x%x%x%x%x%x%x%x)") or "|cffffffff"
-  return " " .. GREY .. "vs|r " .. color .. name .. "|r" .. (inBags and (" " .. GREY .. "(in your bags)|r") or "")
+-- an item's name in its quality color
+local function Named(link)
+  local name = type(link) == "string" and link:match("%[(.-)%]")
+  if not name then return nil end
+  return (link:match("^(|c%x%x%x%x%x%x%x%x)") or "|cffffffff") .. name .. "|r"
+end
+-- " vs [Item]" (+ the off-hand it'd be paired with; "(bags)" when your best is in your bags)
+local function Versus(c)
+  local vs = Named(c.vs)
+  if not vs then return "" end
+  local out = " " .. GREY .. "vs|r " .. vs
+  if c.inBags then out = out .. " " .. GREY .. "(bags)|r" end
+  return out
 end
 
--- "Upgrade +12% vs [Item] (Elemental)" etc., or nil
+-- Short: "Downgrade -11.3% DPS + [Savage Boar's Guard] vs [Rage of the Storm]" (with that off-hand, against
+-- your two-hander). The spec and goal
+-- it's scored for are in /eqt ("Scoring gear for").
 function D.Verdict(link)
   local c = S.Compare(link, ns.CurrentWeights())
   if not c then return nil end
-  local spec = ns.ScoringLabel()
   if c.kind == "unusable" then return GREY .. "Can't use it|r" end
   if c.kind == "equipped" then
     local what = c.equipLoc == "INVTYPE_TRINKET" and "trinket" or "ring"
-    if c.pair == "weaker" then
-      return GREY .. "Equipped|r " .. ORANGE .. "- your weaker " .. what .. " (replaced first)|r " .. GREY .. "(" .. spec .. ")|r"
-    elseif c.pair == "stronger" then
-      return GREY .. "Equipped - your stronger " .. what .. " (" .. spec .. ")|r"
-    elseif c.pair == "equal" then
-      return GREY .. "Equipped - your " .. what .. "s score the same (" .. spec .. ")|r"
-    end
+    if c.pair == "weaker" then return GREY .. "Equipped|r " .. ORANGE .. "- your weaker " .. what .. " (replaced first)|r" end
+    if c.pair == "stronger" then return GREY .. "Equipped - your stronger " .. what .. "|r" end
+    if c.pair == "equal" then return GREY .. "Equipped - your " .. what .. "s are equal|r" end
     return GREY .. "Equipped|r"
   end
   if c.kind == "twohand" then return GREY .. "Off-hand: you use a two-hander|r" end
-  if c.kind == "armortype" then return GREY .. "Not " .. c.best .. ": you wear " .. c.best .. " (your setting)|r" end
+  if c.kind == "armortype" then return GREY .. "Not " .. c.best .. " (your setting)|r" end
   local unit = c.model and (" " .. ns.Sim.Unit()) or ""
-  if c.kind == "new" then return format("%sUpgrade %+.1f%%%s|r %s(empty slot, %s)|r", GREEN, c.pct or 0, unit, GREY, spec) end
-  if c.kind == "same" then return GREY .. "About the same|r" .. Versus(c.vs, c.inBags) .. " " .. GREY .. "(" .. spec .. ")|r" end
+  if c.kind == "new" then return format("%sUpgrade %+.1f%%%s|r %s(empty slot)|r", GREEN, c.pct or 0, unit, GREY) end
+  if c.kind == "same" then return GREY .. "About the same|r" .. Versus(c) end
   local col = c.kind == "upgrade" and GREEN or RED
   local word = c.kind == "upgrade" and "Upgrade" or "Downgrade"
-  local how = (c.hand == "oh") and (" " .. GREY .. "as your off-hand|r") or ""
-  if c.partner then
-    local name = c.partner:match("%[(.-)%]")
-    if name then how = " " .. GREY .. "(with|r " .. (c.partner:match("^(|c%x%x%x%x%x%x%x%x)") or "") .. name .. "|r " .. GREY .. "in your off-hand)|r" end
-  end
-  return format("%s%s %+.1f%%%s|r%s%s %s(%s)|r", col, word, c.pct, unit, Versus(c.vs, c.inBags), how, GREY, spec)
+  local extra = ""
+  if c.hand == "oh" then extra = " " .. GREY .. "(off-hand)|r" end
+  local partner = Named(c.partner)
+  if partner then extra = " " .. GREY .. "+|r " .. partner end
+  return format("%s%s %+.1f%%%s|r%s%s", col, word, c.pct, unit, extra, Versus(c))
 end
 
 ---------------------------------------------------------------------------
