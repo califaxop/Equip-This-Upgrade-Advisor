@@ -244,7 +244,7 @@ function ns.ScoringLabel()
   return spec
 end
 
--- The tooltip on a stat in /eqt, in short parts: its level now, what it's worth, what the levels do,
+-- The tooltip on a stat in /eqt, in short parts: what it's worth, what the levels do,
 -- and how items are scored.
 function ns.PriorityInfo(key)
   local lines = {}
@@ -253,10 +253,6 @@ function ns.PriorityInfo(key)
   local label = (unit == "+1%" or unit == "+1") and (unit .. " " .. name) or unit
   local spec = ns.SpecKey()
   local weights = ns.Weights(spec)
-  local site = ns.GUIDE and ns.GUIDE[spec] and ns.GUIDE[spec].weights and next(ns.GUIDE[spec].weights)
-  local from = site and ("Forever Upgrades' value for " .. ns.SpecName(spec)) or ("the " .. ns.SpecName(spec) .. " preset")
-  local level = ns.Level(key)
-  lines[#lines + 1] = format("Set to %s. (Normal is %s.)", LEVEL_NAME[level], from)
   local pts = ns.PointsPer(key, weights[key])
   if pts <= 0 then
     lines[#lines + 1] = "Items get nothing for it."
