@@ -1,4 +1,5 @@
--- Stat weights. The presets below are written as points per unit (the main stat is 1; crit and hit
+-- Stat weights. Each spec starts from Forever Upgrades' weights (Guides.lua); the presets below are
+-- the fallback. Both are written as points per unit (the main stat is 1; crit and hit
 -- per 1%; DPS is weapon damage per second, only on weapons), then shown and edited as importance
 -- 0-5 (see ns.NORM). Starting points to tune in /eqt, not gospel.
 local _, ns = ...
@@ -194,7 +195,9 @@ end
 function ns.PresetImportance(key)
   local class, tree = key:match("^(%u+):(%d)$")
   local p = class and ns.PRESETS[class] and ns.PRESETS[class][tonumber(tree)]
-  return ns.ToImportance(p and p[2] or MELEE)
+  -- Forever Upgrades' stat weights for the spec (Guides.lua), else the built-in ones
+  local g = ns.GUIDE and ns.GUIDE[key] and ns.GUIDE[key].weights
+  return ns.ToImportance((g and next(g)) and g or (p and p[2]) or MELEE)
 end
 
 -- the weights (importance 0-5) in use for a spec: your edits over the preset

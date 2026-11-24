@@ -167,7 +167,7 @@ local function BuildPanel(panel)
     { function() return ns.db.split or "blend" end, function(v) ns.db.split = v end },
     function() ns.Score.ClearCache(); Changed() end,
     "How your damage splits between auto attack and each skill, for the damage model and items that improve a skill.\n\n"
-      .. "Guide + meter: a guide's rotation played out with your spells and weapon, then more and more what your damage meter records (all of it after 10 min of combat).\n"
+      .. "Guide + meter: Forever Upgrades' rotation for your spec, with your own spells' damage and cooldowns, then more and more what your damage meter records (all of it after 10 min of combat).\n"
       .. "Guide only: always the guide's rotation.\nMeter only: your damage meter once it has a minute of combat.\n\n/eqt learn shows the split."),
     26 + (nStats % 2) * 240, y0 - math.floor(nStats / 2) * 26)
   track(splitBtn); splitBtn.Refresh()

@@ -1,96 +1,29 @@
 -- How your damage splits between auto attack and each skill: a guide's rotation to start, your own
 -- damage meter as it learns.
 --
--- Guide: each damage spec has a single-target priority list (the usual Classic rotations). It's played
--- out for two minutes with your own spells (the ranks you know, their tooltip numbers, cooldowns and cast
--- times) and your own weapon and attack power (Model.lua): what each skill does, and how often you use it.
+-- Guide: Forever Upgrades' rotation for your spec, played out in its simulator (Guides.lua): each
+-- ability's share of the damage and how often it's used, at levels 30, 50 and 60 (blended for the
+-- levels between). Its spell numbers can trail Forever's patches, so each ability's damage per use is
+-- read from its tooltip in your game (your rank, your weapon and attack power), auto attack comes
+-- from your weapon (Model.lua), and casts a minute are capped by the ability's real cooldown.
+-- What has no tooltip number (poisons, Deep Wounds, Windfury, pets...) keeps the guide's share, scaled
+-- with the rest. Spells you don't know are left out.
 -- Meter: Learn.lua adds up what the game's damage meter says you did. The more combat it has, the more
--- it counts: BLEND_SECONDS of combat and it's all yours. A spec without a list (healers, tanks, hunters,
--- feral) uses a built-in split instead.
+-- it counts: BLEND_SECONDS of combat and it's all yours. Specs the guide has no damage split for
+-- (healers, tanks) use a built-in split instead.
 local _, ns = ...
 local R = {}
 ns.Rotation = R
 local Readable = ns.Readable
 
-R.SECONDS = 120        -- how long the rotation is played out
 R.BLEND_SECONDS = 600  -- combat recorded before your meter counts in full (1 min ~10%, 5 min half)
+R.CAP_SLACK = 1.2      -- casts are capped by the cooldown only past this (talents shorten some cooldowns)
 local WHITE = "Attack" -- auto attack, as the damage meter names it
 
--- Priority lists, top first. Fields:
---   dot: kept up (recast when it runs out);  filler: used when nothing else is ready (the best one);
---   group/groupCd: a shared cooldown (shocks);  cpm: used about this often a minute, outside the
---   priority (procs, rage dumps);  replaces: takes the place of a white swing (Heroic Strike);
---   ap: damage = this x attack power;  cost/cp/finisher: rogue energy and combo points;
---   swings: if the tooltip has no number, about this many main-hand hits
-local GUIDES = {
-  ["SHAMAN:1"] = { gcd = 1.5,
-    { "Flame Shock", dot = true, group = "shock", groupCd = 6 },
-    { "Chain Lightning" },
-    { "Lightning Bolt", filler = true } },
-  ["SHAMAN:2"] = { gcd = 1.5, melee = true, windfury = true,
-    { "Stormstrike", swings = 1 },
-    { "Flame Shock", dot = true, group = "shock", groupCd = 6 },
-    { "Earth Shock", group = "shock", groupCd = 6 } },
-  ["WARRIOR:1"] = { gcd = 1.5, melee = true,
-    { "Mortal Strike" },
-    { "Whirlwind" },
-    { "Overpower", cpm = 1.5 },
-    { "Heroic Strike", cpm = 5, replaces = true } },
-  ["WARRIOR:2"] = { gcd = 1.5, melee = true,
-    { "Bloodthirst", ap = 0.45 },
-    { "Whirlwind" },
-    { "Heroic Strike", cpm = 8, replaces = true } },
-  ["PALADIN:3"] = { gcd = 1.5, melee = true,
-    { "Seal of Command", cpm = 7 },
-    { "Judgement", swings = 1, noTip = true },
-    { "Consecration" } },
-  ["ROGUE:1"] = { gcd = 1.0, melee = true, energy = true,
-    { "Eviscerate", finisher = 5, cost = 35, swings = 2.5 },
-    { "Sinister Strike", cost = 40, cp = 1 } },
-  ["ROGUE:2"] = { gcd = 1.0, melee = true, energy = true,
-    { "Eviscerate", finisher = 5, cost = 35, swings = 2.5 },
-    { "Sinister Strike", cost = 40, cp = 1 } },
-  ["ROGUE:3"] = { gcd = 1.0, melee = true, energy = true,
-    { "Eviscerate", finisher = 5, cost = 35, swings = 2.5 },
-    { "Hemorrhage", cost = 35, cp = 1 },
-    { "Sinister Strike", cost = 40, cp = 1, fallback = "Hemorrhage" } },
-  ["PRIEST:3"] = { gcd = 1.5,
-    { "Shadow Word: Pain", dot = true },
-    { "Mind Blast" },
-    { "Mind Flay", filler = true, channel = true } },
-  ["MAGE:1"] = { gcd = 1.5,
-    { "Arcane Missiles", filler = true, channel = true },
-    { "Frostbolt", filler = true } },
-  ["MAGE:2"] = { gcd = 1.5,
-    { "Fire Blast" },
-    { "Fireball", filler = true } },
-  ["MAGE:3"] = { gcd = 1.5,
-    { "Fire Blast" },
-    { "Frostbolt", filler = true } },
-  ["WARLOCK:1"] = { gcd = 1.5,
-    { "Corruption", dot = true },
-    { "Curse of Agony", dot = true },
-    { "Siphon Life", dot = true },
-    { "Shadow Bolt", filler = true } },
-  ["WARLOCK:2"] = { gcd = 1.5,
-    { "Corruption", dot = true },
-    { "Curse of Agony", dot = true },
-    { "Immolate", dot = true },
-    { "Shadow Bolt", filler = true } },
-  ["WARLOCK:3"] = { gcd = 1.5,
-    { "Immolate", dot = true },
-    { "Conflagrate" },
-    { "Corruption", dot = true },
-    { "Shadow Bolt", filler = true } },
-  ["DRUID:1"] = { gcd = 1.5,
-    { "Moonfire", dot = true },
-    { "Insect Swarm", dot = true },
-    { "Starfire", filler = true },
-    { "Wrath", filler = true } },
-}
-R.GUIDES = GUIDES
 -- healers: the meter counts damage, not healing, so their split stays the built-in one
 local HEALERS = { ["PRIEST:1"] = true, ["PRIEST:2"] = true, ["PALADIN:1"] = true, ["SHAMAN:3"] = true, ["DRUID:3"] = true }
+local MELEE = { ["WARRIOR:1"] = true, ["WARRIOR:2"] = true, ["PALADIN:3"] = true, ["ROGUE:1"] = true,
+  ["ROGUE:2"] = true, ["ROGUE:3"] = true, ["SHAMAN:2"] = true }
 
 local function Num(v) return (type(v) == "number" and Readable(v)) and v or nil end
 
@@ -106,127 +39,120 @@ local function SpellDamage(text)
 end
 R.SpellDamage = SpellDamage
 
--- one use of a skill: { name, dmg, cast, cd, dur } (nil: you don't know it, or it can't be read)
-local function Use(e, s)
+-- is it a spell of yours? true: you know it; false: a spell you don't know (yet); nil: not a spell
+-- by that name (auto attack, a pet, a proc)
+local function Knows(name)
+  if not (C_Spell and C_Spell.GetSpellInfo) then return nil end
+  local ok, info = pcall(C_Spell.GetSpellInfo, name)
+  if not (ok and type(info) == "table" and info.spellID) then return nil end
+  if not IsPlayerSpell then return true end
+  local okK, known = pcall(IsPlayerSpell, info.spellID)
+  if okK and Readable(known) then return known and true or false end
+  return true
+end
+
+-- one use of a skill, from its tooltip: damage, kind (swing / ap / spell) and cooldown (s); nil if unread
+local function Use(name, s)
   local E = ns.Effects
-  local id, cast, cd = E.KnownSpell(e[1])
+  local id, _, cd = E.KnownSpell(name)
   if not id then return nil end
-  local avg, tcd, _, _, weapon = E.SpellUse(id)
-  local text = E.SpellText(id)
+  local avg, tcd, heal, _, weapon = E.SpellUse(id)
+  if heal then return nil end
+  local text = E.SpellText(id) or ""
   local M = ns.Model
   local melee = (s and s.mh) and M.SpecialLanding(s) * M.TalentDamage(s) or 1
-  local dmg, dur
-  if e.noTip then
-    -- (its tooltip has no damage: Judgement's depends on the seal)
-  elseif e.ap and s then
-    dmg = s.ap * e.ap * melee
-  elseif e.finisher then
-    local t = text:gsub(",", "")
-    local a, b = t:match(e.finisher .. " points?: (%d+)%s*%-%s*(%d+)")
-    if not a then a, b = t:match(".*%D(%d+) to (%d+)") end
-    if a and b then dmg = (tonumber(a) + tonumber(b)) / 2 * melee end
+  local dmg, kind
+  local apPct = text:lower():match("(%d+)%% of your attack power")
+  local a5, b5 = text:gsub(",", ""):match("5 points?: (%d+)%s*%-%s*(%d+)")
+  if a5 then
+    dmg = (tonumber(a5) + tonumber(b5)) / 2 * melee           -- (a finisher at 5 combo points)
+  elseif apPct and s then
+    dmg, kind = s.ap * tonumber(apPct) / 100 * melee, "ap"
   elseif weapon then
-    if avg then dmg = avg * melee end
+    if avg then dmg, kind = avg * melee, "swing" end
   else
-    local d
-    d, dur = SpellDamage(text)
+    local d = SpellDamage(text)
     if d then
       local crit = Num(GetSpellCritChance and select(2, pcall(GetSpellCritChance, 4))) or 5
       dmg = d * (1 + crit / 200) * 0.96 -- (crits do +50%; about 4% of spells miss)
     end
   end
-  if not dmg and e.swings and s and s.mh then dmg = M.Swing(s) * e.swings end
-  if not dmg or dmg <= 0 then return nil end
-  cd = math.max(cd or 0, tcd or 0)
-  if e.channel then cast = dur or 3 end
-  return { e = e, name = e[1], dmg = dmg, cast = cast or 0, cd = cd, dur = dur or 0 }
+  return dmg and dmg > 0 and dmg or nil, kind, math.max(cd or 0, tcd or 0)
 end
 
--- the rotation played out: { parts = { { name, share, kind, cpm } }, melee } or nil
-local function Play(guide, s)
-  local T, gcd = R.SECONDS, guide.gcd or 1.5
-  local list, fixed = {}, {}
-  local have = {}
-  for _, e in ipairs(guide) do
-    if not (e.fallback and have[e.fallback]) then
-      local u = Use(e, s)
-      if u then
-        have[e[1]] = true
-        if e.cpm then fixed[#fixed + 1] = u else list[#list + 1] = u end
+-- the guide's split at your level: { { name, share, cpm, cd, isSpell } }, blended between 30 / 50 / 60
+local function AtLevel(levels, level)
+  local lo, hi
+  for _, l in ipairs({ 30, 50, 60 }) do
+    if levels[l] then
+      if l <= level then lo = l end
+      if l >= level and not hi then hi = l end
+    end
+  end
+  lo, hi = lo or hi, hi or lo
+  if not lo then return nil end
+  local f = (hi ~= lo) and (level - lo) / (hi - lo) or 0
+  local by, order = {}, {}
+  for _, side in ipairs({ { levels[lo], 1 - f }, { levels[hi], f } }) do
+    if side[2] > 0 then
+      for _, p in ipairs(side[1]) do
+        local k = p[1]:lower()
+        local e = by[k]
+        if not e then e = { p[1], 0, 0, 0, p[5] }; by[k] = e; order[#order + 1] = e end
+        e[2] = e[2] + p[2] * side[2]
+        e[3] = e[3] + p[3] * side[2]
+        e[4] = math.max(e[4], p[4] or 0)
       end
     end
   end
-  if #list == 0 and #fixed == 0 then return nil end
-  local count, dmg = {}, {}
-  local ready, groupReady, dotEnd = {}, {}, {}
-  local energy, cp = 100, 0
-  local t, n = 0, 0
-  while t < T and n < 5000 do
-    n = n + 1
-    local pick
-    for _, u in ipairs(list) do
-      local e = u.e
-      if not e.filler and (ready[u.name] or 0) <= t and (not e.group or (groupReady[e.group] or 0) <= t)
-        and (not e.dot or (dotEnd[u.name] or 0) <= t)
-        and (not e.cost or energy >= e.cost) and (not e.finisher or cp >= e.finisher) then
-        pick = u; break
-      end
-    end
-    if not pick then -- the best filler (damage per second of casting)
-      local best
-      for _, u in ipairs(list) do
-        if u.e.filler and (ready[u.name] or 0) <= t then
-          local rate = u.dmg / math.max(gcd, u.cast)
-          if not best or rate > best then best, pick = rate, u end
-        end
-      end
-    end
-    local busy
-    if pick then
-      local e = pick.e
-      count[pick.name] = (count[pick.name] or 0) + 1
-      dmg[pick.name] = (dmg[pick.name] or 0) + pick.dmg
-      busy = math.max(gcd, pick.cast)
-      if pick.cd > 0 then ready[pick.name] = t + math.max(pick.cd, busy) end
-      if e.group then groupReady[e.group] = t + (e.groupCd or 6) end
-      if e.dot then dotEnd[pick.name] = t + pick.cast + math.max(pick.dur, 6) end
-      if e.cost then energy = energy - e.cost end
-      if e.cp then cp = math.min(5, cp + e.cp) end
-      if e.finisher then cp = 0 end
-    else
-      busy = 0.1 -- (waiting: a cooldown or energy)
-    end
-    t = t + busy
-    if guide.energy then energy = math.min(100, energy + 10 * busy) end
-  end
-  for _, u in ipairs(fixed) do
-    local c = u.e.cpm * T / 60
-    count[u.name] = c
-    dmg[u.name] = c * u.dmg
-  end
-  -- auto attack (and Windfury) for melee specs
+  return order
+end
+
+-- the guide's split, played with your spells: { parts = { { name, share, kind, cpm } } } or nil
+local function Play(key, s)
+  local g = ns.GUIDE and ns.GUIDE[key]
+  local base = g and g.levels and AtLevel(g.levels, UnitLevel and UnitLevel("player") or 60)
+  if not base then return nil end
   local M = ns.Model
-  if guide.melee and s and M.Dps(s) > 0 then
-    local white = M.Dps(s) * T
-    for _, u in ipairs(fixed) do
-      if u.e.replaces then white = white - count[u.name] * M.Swing(s) * 0.9 end -- (a swing that would have been white)
-    end
-    dmg[WHITE] = math.max(0, white)
-    if guide.windfury and ns.Effects.KnownSpell("Windfury Weapon") and s.mh then
-      local swings = T * (1 + s.haste / 100) / s.mh.speed
-      dmg["Windfury Weapon"] = swings * 0.2 * M.Swing(s) * 1.2 -- (20% of swings; the extra attack has more attack power)
+  local list = {}
+  for _, p in ipairs(base) do
+    local name, share, cpm, dbcd, isSpell = p[1], p[2], p[3], p[4], p[5]
+    local e = { name = name, share = share, cpm = cpm > 0 and cpm or nil, kind = M.SkillKind(name) }
+    if name == WHITE then
+      if s and M.Dps(s) > 0 then e.live = M.Dps(s) * 60 end
+      list[#list + 1] = e
+    elseif not (isSpell and e.cpm and C_Spell and C_Spell.GetSpellInfo and not Knows(name)) then
+      -- (left out: an ability you'd cast that you haven't learned; passives and procs always count)
+      if e.cpm then
+        local dmg, kind, cd = Use(name, s)
+        cd = (cd and cd > 0) and cd or dbcd
+        if cd and cd > 0 and e.cpm > 60 / cd * R.CAP_SLACK then e.cpm = 60 / cd end -- (a longer cooldown than the guide's)
+        if kind then e.kind = kind end
+        if dmg then e.live = dmg * e.cpm end
+      end
+      list[#list + 1] = e
     end
   end
+  if #list == 0 then return nil end
+  -- the scale between your numbers and the guide's: the middle one of (yours / its) for what was read;
+  -- something read far off that (a tooltip misread) keeps the guide's share instead
+  local ratios = {}
+  for _, e in ipairs(list) do if e.live and e.share > 0 then ratios[#ratios + 1] = e.live / e.share end end
+  table.sort(ratios)
+  local k = #ratios > 0 and ratios[math.floor((#ratios + 1) / 2)] or 1
   local total = 0
-  for _, v in pairs(dmg) do total = total + v end
+  for _, e in ipairs(list) do
+    local r = e.live and e.share > 0 and e.live / e.share / k
+    e.dmg = (r and r > 0.25 and r < 4) and e.live or e.share * k
+    total = total + e.dmg
+  end
   if total <= 0 then return nil end
   local parts = {}
-  for name, v in pairs(dmg) do
-    parts[#parts + 1] = { name, v / total, M.SkillKind(name), count[name] and count[name] * 60 / T or nil }
-  end
+  for _, e in ipairs(list) do parts[#parts + 1] = { e.name, e.dmg / total, e.kind, e.cpm } end
   table.sort(parts, function(a, b) return a[2] > b[2] end)
   return { parts = parts }
 end
+R.Play = Play
 
 -- the built-in split (specs without a guide list): the old suggested skills, by weight
 local function Preset(key)
@@ -250,22 +176,22 @@ end
 local cache = {}
 function R.ClearCache() wipe(cache) end
 
--- the guide's split for your spec (cached: your gear and attack power change it)
+-- the guide's split for your spec (cached: your gear, attack power and level change it)
 function R.Guide(key)
   key = key or ns.SpecKey()
-  local guide = GUIDES[key]
-  if not guide then return Preset(key) end
-  local s = guide.melee and ns.Model.State() or nil
-  local stamp = s and format("%s:%d:%.1f", tostring(s.mh and s.mh.dps), s.ap, s.haste) or "-"
+  local s = MELEE[key] and ns.Model.State() or nil
+  local level = UnitLevel and UnitLevel("player") or 60
+  local stamp = format("%s:%d:%.1f:%d", tostring(s and s.mh and s.mh.dps), s and s.ap or 0, s and s.haste or 0, level)
   local c = cache[key]
   local now = GetTime and GetTime() or 0
   if c and (c.stamp == stamp or (s and s.ap <= 0)) and now - c.at < 30 then return c.split end
-  local ok, split = pcall(Play, guide, s)
-  if not (ok and split) then
-    if c then return c.split end -- (hidden numbers in combat: the last good one)
-    split = Preset(key)
-  else
+  local ok, split = pcall(Play, key, s)
+  if ok and split then
     split.guide = true
+  elseif c then
+    return c.split -- (hidden numbers in combat: the last good one)
+  else
+    split = Preset(key)
   end
   cache[key] = { stamp = stamp, at = now, split = split }
   return split
@@ -351,7 +277,7 @@ end
 -- where the split comes from, in words
 function R.Source(split)
   split = split or R.Split()
-  local base = split.guide and "the guide's rotation" or "the built-in split"
+  local base = split.guide and "Forever Upgrades' rotation" or "the built-in split"
   local m = split.meter or 0
   if m >= 1 then return "your damage meter" end
   if m > 0 then return format("%s, %d%% your damage meter", base, math.floor(m * 100 + 0.5)) end

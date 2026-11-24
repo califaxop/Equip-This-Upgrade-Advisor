@@ -9,6 +9,7 @@
 ## OptionalDeps: EllesmereUI, FlareUI
 
 Core.lua
+Guides.lua
 Weights.lua
 Procs.lua
 Effects.lua
