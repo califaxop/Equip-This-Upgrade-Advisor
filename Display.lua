@@ -42,6 +42,10 @@ function D.Verdict(link)
   local col = c.kind == "upgrade" and GREEN or RED
   local word = c.kind == "upgrade" and "Upgrade" or "Downgrade"
   local how = (c.hand == "oh") and (" " .. GREY .. "as your off-hand|r") or ""
+  if c.partner then
+    local name = c.partner:match("%[(.-)%]")
+    if name then how = " " .. GREY .. "(with|r " .. (c.partner:match("^(|c%x%x%x%x%x%x%x%x)") or "") .. name .. "|r " .. GREY .. "in your off-hand)|r" end
+  end
   return format("%s%s %+.1f%%%s|r%s%s %s(%s)|r", col, word, c.pct, unit, Versus(c.vs, c.inBags), how, GREY, spec)
 end
 

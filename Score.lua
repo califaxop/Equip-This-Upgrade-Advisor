@@ -294,7 +294,7 @@ end
 -- With the DPS / HPS model: the % change from wearing an item, against your best owned one.
 -- Weapons as setups: a two-hander replaces main hand + off hand; a one-hander replaces the main hand
 -- (or, if you dual wield, whichever hand it does more in); rings and trinkets the one they beat most.
--- { kind, pct, delta, value (its gain), vs, inBags, hand = "oh", model = true }
+-- { kind, pct, delta, value (its gain), vs, inBags, hand = "oh", partner = off-hand link, model = true }
 local RANGED_LOC = { INVTYPE_RANGED = true, INVTYPE_RANGEDRIGHT = true, INVTYPE_THROWN = true }
 local OFF_LOC = { INVTYPE_WEAPONOFFHAND = true, INVTYPE_SHIELD = true, INVTYPE_HOLDABLE = true }
 function S.ModelCompare(link, f, weights)
@@ -311,6 +311,22 @@ function S.ModelCompare(link, f, weights)
       return Sim.Gain(l, out, weights, "mh", s), mh or oh
     elseif loc == "INVTYPE_WEAPON" or loc == "INVTYPE_WEAPONMAINHAND" then
       local mh = worn(16)
+      if mh and loc2(mh) == "INVTYPE_2HWEAPON" then
+        -- replacing your two-hander: with your best off-hand from your bags (a shield, a held item,
+        -- or a second weapon if you dual wield), else on its own
+        local best, partner = Sim.Gain(l, { mh }, weights, "mh", s), nil
+        for _, b in ipairs(BagItems()) do
+          local bl = b[1]
+          if bl ~= l and (OFF_LOC[b[2]] or (b[2] == "INVTYPE_WEAPON" and DualWields())) then
+            local bf = S.Facts(bl)
+            if bf and bf.usable then
+              local g = Sim.Gain(l, { mh }, weights, "mh", s, bl)
+              if g and (not best or g > best) then best, partner = g, bl end
+            end
+          end
+        end
+        return best, mh, nil, nil, partner
+      end
       local g, vs, hand = Sim.Gain(l, mh and { mh } or {}, weights, "mh", s), mh, nil
       if loc == "INVTYPE_WEAPON" and DualWields() and not (mh and loc2(mh) == "INVTYPE_2HWEAPON") then
         local oh = worn(17)
@@ -333,7 +349,7 @@ function S.ModelCompare(link, f, weights)
     end
     return best, vs, nil, empty
   end
-  local gain, vs, hand, empty = gainOf(link, f)
+  local gain, vs, hand, empty, partner = gainOf(link, f)
   if not gain then return nil end
   if vs == nil then empty = true end
   -- your best owned item of the kind: one in your bags that does more is the one to beat
@@ -352,10 +368,10 @@ function S.ModelCompare(link, f, weights)
     end
   end
   local pct = gain - bagBest
-  if bagLink then vs, hand, empty = bagLink, nil, false end
+  if bagLink then vs, hand, empty, partner = bagLink, nil, false, nil end
   if empty and pct > 0 then return { kind = "new", pct = pct, delta = pct, value = gain, model = true } end
   local kind = (math.abs(pct) < 0.1) and "same" or (pct > 0 and "upgrade" or "downgrade")
-  return { kind = kind, pct = pct, delta = pct, value = gain, vs = vs, inBags = bagLink ~= nil, hand = hand, model = true }
+  return { kind = kind, pct = pct, delta = pct, value = gain, vs = vs, inBags = bagLink ~= nil, hand = hand, partner = partner, model = true }
 end
 
 -- Your whole gear's score: every slot you wear (not shirt or tabard). Upgrades are measured against it,

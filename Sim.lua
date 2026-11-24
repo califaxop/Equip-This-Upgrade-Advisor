@@ -481,17 +481,21 @@ end
 
 -- The % change from wearing `link` in place of `out` (links), weapons into the hand `hand`
 -- ("mh" / "oh" / "rw"; a two-hander clears the off hand)
-function M.Gain(link, out, weights, hand, s)
+-- (`partner`: an off-hand worn with it, when a one-hander replaces a two-hander)
+function M.Gain(link, out, weights, hand, s, partner)
   s = s or M.Cached()
   local f = ns.Score.Facts(link)
   if not f then return nil end
   local swap = { out = out, inn = { link } }
   if hand then swap[hand] = Weapon(link) or false end
   if f.equipLoc == "INVTYPE_2HWEAPON" then swap.oh = false end
+  local pf = partner and ns.Score.Facts(partner)
+  if pf then swap.inn[2] = partner; swap.oh = Weapon(partner) or false end
   local change = M.Change(swap, s)
   if not change then return nil end
   local rate = M.Rate(s)
   local gain = change + M.Extra(f, weights, s, rate)
+  if pf then gain = gain + M.Extra(pf, weights, s, rate) end
   for _, l in ipairs(out or {}) do gain = gain - M.Extra(ns.Score.Facts(l), weights, s, rate) end
   return gain
 end
