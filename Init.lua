@@ -55,7 +55,8 @@ SlashCmdList.EQUIPTHIS = function(msg)
   local cmd, rest = msg:match("^%s*(%S*)%s*(.-)%s*$")
   cmd = (cmd or ""):lower()
   if cmd == "dps" or cmd == "hps" then
-    ns.Sim.Report(ns.Print)
+    local ok = pcall(ns.OpenDps)
+    if not ok then ns.Sim.Report(ns.Print) end
     return
   elseif cmd == "guide" then
     for _, line in ipairs(ns.Rotation.Report()) do ns.Print(line) end

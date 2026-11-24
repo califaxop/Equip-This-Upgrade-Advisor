@@ -90,10 +90,85 @@ local function BuildPanel(panel)
     UI.ShowLink("EquipThisLinkWindow", "Equip This!: bugs and ideas", "https://github.com/califaxop/Equip-This-Upgrade-Advisor/issues/new/choose")
   end)
   fb:SetPoint("LEFT", reset, "RIGHT", 8, 0)
-  local hint = at(UI.Text(panel, "note", "/eqt item: how an item was scored.  /eqt guide: your spec's rotation."), 26, yEnd - 30)
+  local dpsBtn = UI.Button(panel, "Your " .. ns.Sim.Unit(), 110, function() ns.OpenDps() end)
+  dpsBtn:SetPoint("LEFT", fb, "RIGHT", 8, 0)
+  dpsBtn.tip = "Your damage (or healing) per second as Equip This! works it out, ability by ability, and what each stat is worth to it."
+  track({ Refresh = function() if dpsBtn.SetLabel then dpsBtn.SetLabel("Your " .. ns.Sim.Unit()) end end })
+  local hint = at(UI.Text(panel, "note", "/eqt item: how an item was scored.  /eqt guide: your spec's rotation.  /eqt dps: this window."), 26, yEnd - 30)
 
   panel:HookScript("OnShow", function() for _, w in ipairs(refreshers) do w.Refresh() end end)
   panel.height = -(yEnd - 66)
+end
+
+---------------------------------------------------------------------------
+-- Your DPS / HPS window: the number, each ability's part, and what each stat is worth
+---------------------------------------------------------------------------
+local DPS_ROWS = 12
+function ns.OpenDps()
+  local win = EquipThisDpsWindow
+  if not win then
+    win = UI.Window("EquipThisDpsWindow", 430, 130 + DPS_ROWS * 18 + 120)
+    win:SetPoint("CENTER", UIParent, "CENTER", 260, 60)
+    win.title = UI.Text(win, "title", "")
+    win.title:SetPoint("TOPLEFT", 20, -18)
+    win.total = UI.Text(win, "header", "")
+    win.total:SetPoint("LEFT", win.title, "RIGHT", 12, 0)
+    win.stats = UI.Text(win, "note", "")
+    win.stats:SetPoint("TOPLEFT", 20, -44); win.stats:SetWidth(390)
+    -- the table: ability, per cast, a minute, per second, share
+    local cols = { { "Ability", 20, 150, "LEFT" }, { "Per cast", 170, 60, "RIGHT" }, { "A minute", 232, 56, "RIGHT" },
+      { "Per sec", 290, 58, "RIGHT" }, { "Share", 350, 56, "RIGHT" } }
+    for _, c in ipairs(cols) do
+      local h = UI.Text(win, "note", c[1]); h:SetPoint("TOPLEFT", c[2], -68); h:SetWidth(c[3]); h:SetJustifyH(c[4])
+    end
+    win.rows = {}
+    for i = 1, DPS_ROWS do
+      local r = {}
+      for j, c in ipairs(cols) do
+        local fs = UI.Text(win, j == 1 and "line" or "value", "")
+        fs:SetPoint("TOPLEFT", c[2], -68 - i * 18); fs:SetWidth(c[3]); fs:SetJustifyH(c[4]); fs:SetWordWrap(false)
+        r[j] = fs
+      end
+      win.rows[i] = r
+    end
+    local wy = -68 - (DPS_ROWS + 1) * 18 - 6
+    win.worthHead = UI.Section(win, "What stats are worth to it", 390)
+    win.worthHead:SetPoint("TOPLEFT", 20, wy)
+    win.worth = UI.Text(win, "line", "")
+    win.worth:SetPoint("TOPLEFT", 20, wy - 32); win.worth:SetWidth(390); win.worth:SetSpacing(3)
+    win.note = UI.Text(win, "note", "Abilities in grey have no spell of their own (pets, procs, totems): their part follows the site's sim.")
+    win.note:SetPoint("BOTTOMLEFT", 20, 14); win.note:SetWidth(390)
+    local function fmtN(x) return x >= 100 and format("%d", x + 0.5) or format("%.1f", x) end
+    function win.Refresh()
+      local d, why = ns.Sim.ReportData()
+      win.title:SetText("Your " .. ns.Sim.Unit())
+      for _, r in ipairs(win.rows) do for _, fs in ipairs(r) do fs:SetText("") end end
+      if not d then win.total:SetText(""); win.stats:SetText(why or ""); win.worth:SetText(""); return end
+      win.total:SetText(fmtN(d.total))
+      win.stats:SetText(d.stats)
+      for i, row in ipairs(d.rows) do
+        local r = win.rows[i]
+        if not r then break end
+        r[1]:SetText(row[6] and ("|cff9d9d9d" .. row[1] .. "|r") or row[1])
+        r[2]:SetText(row[2] and fmtN(row[2]) or "")
+        r[3]:SetText(row[3] and format("%.1f", row[3]) or "")
+        r[4]:SetText(fmtN(row[4]))
+        r[5]:SetText(format("%d%%", row[5] * 100 + 0.5))
+      end
+      local lines = {}
+      for i, w in ipairs(d.worth) do
+        local cell = format("%s  |cff40ff40+%.2f%%|r", w[1], w[2])
+        if i % 2 == 1 then lines[#lines + 1] = cell else lines[#lines] = lines[#lines] .. "        " .. cell end
+      end
+      win.worth:SetText(table.concat(lines, "\n"))
+    end
+    -- your numbers move with buffs and gear: keep it current while it's open
+    local t = 0
+    win:SetScript("OnUpdate", function(_, el) t = t + el; if t > 1 then t = 0; win.Refresh() end end)
+    win:HookScript("OnShow", function() win.Refresh() end)
+  end
+  win.Refresh()
+  win:Show()
 end
 
 function ns.CreateOptions()

@@ -452,33 +452,52 @@ function M.Gain(link, out, weights, hand, s)
 end
 
 ---------------------------------------------------------------------------
--- /eqt dps: the numbers, ability by ability
+-- The numbers, ability by ability (the DPS window, Options.lua)
 ---------------------------------------------------------------------------
-function M.Report(print)
-  if not M.Active() then
-    print(format("%s is scored by its stat weights (no %s model for it).", ns.SpecName(ns.SpecKey()), M.Unit()))
-    return
-  end
+-- { unit, total, stats = "...", rows = { { name, perCast or nil, cpm or nil, perSec, share, estimated } },
+--   worth = { { label, % } } }, or nil and why
+function M.ReportData()
+  if not M.Active() then return nil, format("%s is scored by its stat weights.", ns.SpecName(ns.SpecKey())) end
   local s = M.Cached()
   local play = M.Play(s)
-  if not play then print("no rotation for your spec at this level.") return end
-  print(format("your %s: %.1f", M.Unit(), play.total))
+  if not (play and play.total > 0) then return nil, "No rotation for your spec at this level yet." end
   local sp, sc = 0, 0
   for i = 2, 7 do sp, sc = math.max(sp, s.sp[i] or 0), math.max(sc, s.scrit[i] or 0) end
-  print(format("attack power %d, spell power %d, healing %d, crit %.1f%% (spells %.1f%%), hit %.1f%% (spells %.1f%%), haste %.1f%%",
-    s.ap, sp, s.heal, s.crit, sc, s.hit, s.shit, s.haste))
-  for i, e in ipairs(play.parts) do
-    if i > 12 then break end
-    local share = play.total > 0 and e[2] / 60 / play.total * 100 or 0
-    if e[3] == "spell" then
-      print(format("  %s (spell %d): %.0f a cast x %.1f a minute = %.1f per sec (%d%%)", e[1], e[5], e[2] / e[4], e[4], e[2] / 60, share + 0.5))
-    elseif e[3] == "white" then
-      print(format("  %s: %.1f per sec (%d%%)", e[1], e[2] / 60, share + 0.5))
-    else
-      print(format("  %s: %.1f per sec (%d%%, the site's share)", e[1], e[2] / 60, share + 0.5))
+  local data = { unit = M.Unit(), total = play.total, rows = {}, worth = {} }
+  if play.heals then
+    data.stats = format("Healing %d   Spell crit %.1f%%   Haste %.1f%%", s.heal, sc, s.shaste)
+  elseif sp > s.ap then
+    data.stats = format("Spell power %d   Spell crit %.1f%%   Spell hit %.1f%%   Haste %.1f%%", sp, sc, s.shit, s.shaste)
+  else
+    data.stats = format("Attack power %d   Crit %.1f%%   Hit %.1f%%   Haste %.1f%%", play.ranged and s.rap or s.ap,
+      play.ranged and s.rcrit or s.crit, s.hit, s.haste)
+  end
+  local rows = {}
+  for _, e in ipairs(play.parts) do
+    local perSec = e[2] / 60
+    if perSec > 0 then
+      rows[#rows + 1] = { e[1], (e[3] == "spell" and e[4] and e[4] > 0) and e[2] / e[4] or nil,
+        (e[3] == "spell") and e[4] or nil, perSec, perSec / play.total, e[3] == "other" or e[3] == "pet" }
     end
   end
-  print(format("worth (+%% %s): +10 Strength %.2f, +10 Agility %.2f, +10 attack power %.2f, +10 spell power %.2f, +10 healing %.2f, +1%% crit %.2f, +1%% spell crit %.2f, +1%% hit %.2f, +1%% haste %.2f",
-    M.Unit(), M.PerUnit("STR", s) * 10, M.PerUnit("AGI", s) * 10, M.PerUnit("AP", s) * 10, M.PerUnit("SP", s) * 10,
-    M.PerUnit("HEAL", s) * 10, M.PerUnit("CRIT", s), M.PerUnit("SPELLCRIT", s), M.PerUnit("HIT", s), M.PerUnit("HASTE", s)))
+  table.sort(rows, function(a, b) return a[4] > b[4] end)
+  data.rows = rows
+  local list = play.heals and { { "HEAL", "+10 Healing" }, { "SP", "+10 Spell power" }, { "SPELLCRIT", "+1% Spell crit" }, { "HASTE", "+1% Haste" } }
+    or { { "STR", "+10 Strength" }, { "AGI", "+10 Agility" }, { "AP", "+10 Attack power" }, { "SP", "+10 Spell power" },
+         { "CRIT", "+1% Crit" }, { "SPELLCRIT", "+1% Spell crit" }, { "HIT", "+1% Hit" }, { "SPELLHIT", "+1% Spell hit" },
+         { "HASTE", "+1% Haste" }, { "DPS", "+1 Weapon DPS" } }
+  for _, w in ipairs(list) do
+    local n = w[2]:find("^%+10") and 10 or 1
+    local v = M.PerUnit(w[1], s) * n
+    if v > 0.005 then data.worth[#data.worth + 1] = { w[2], v } end
+  end
+  return data
+end
+
+-- (as text, for chat)
+function M.Report(print)
+  local d, why = M.ReportData()
+  if not d then print(why) return end
+  print(format("your %s: %.1f", d.unit, d.total))
+  for _, r in ipairs(d.rows) do print(format("  %s: %.1f per sec (%d%%)", r[1], r[4], r[5] * 100 + 0.5)) end
 end
