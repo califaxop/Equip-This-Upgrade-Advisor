@@ -1,7 +1,7 @@
 -- Settings window (/eqt), in the same style as the other addons.
 local _, ns = ...
 local UI = ns.UI
-local W_ = 470 -- content width
+local W_ = 690 -- content width
 local window
 
 local function Changed()
@@ -52,23 +52,23 @@ local function BuildPanel(panel)
     buildOpts[#buildOpts + 1] = { b[1], ns.BuildName(b[1]) }
     buildTip[#buildTip + 1] = ns.BuildName(b[1]) .. ": " .. b[5]
   end
-  local build = at(UI.Selector(panel, 200, buildOpts,
+  local build = at(UI.Selector(panel, 230, buildOpts,
     { function() return ns.Priorities().build or "auto" end, function(v) ns.SetBuild(v) end }, changed,
     table.concat(buildTip, "\n")), 86, -354)
   rows[#rows + 1] = build; track(build)
-  local mix = UI.Slider(panel, "Survival (the rest: damage / healing)", 180, 0, 1, 0.05,
+  local mix = UI.Slider(panel, "Survival (the rest is damage / healing)", 330, 0, 1, 0.05,
     { function() return ns.SurvivalShare() end, function(v) ns.SetSurvivalShare(v) end },
     function(v) return format("%d%%", v * 100 + 0.5) end,
     changed)
-  mix:SetPoint("TOPLEFT", 300, -346)
+  mix:SetPoint("TOPLEFT", 386, -346)
   rows[#rows + 1] = mix; track(mix)
   -- each stat: your value (a number), and Default / Ignore / Higher / Highest
   local y0 = -400
   for i, key in ipairs(ns.STAT_ORDER) do
     local col, row = (i - 1) % 2, math.floor((i - 1) / 2)
-    local x, y = 26 + col * 240, y0 - row * 26
+    local x, y = 26 + col * 350, y0 - row * 28
     local lbl = at(UI.Text(panel, "line", ns.STAT_NAMES[key]), x, y - 3)
-    lbl:SetWidth(96); lbl:SetJustifyH("LEFT"); if lbl.SetWordWrap then lbl:SetWordWrap(false) end
+    lbl:SetWidth(150); lbl:SetJustifyH("LEFT"); if lbl.SetWordWrap then lbl:SetWordWrap(false) end
     local function tip(owner)
       GameTooltip:SetOwner(owner, "ANCHOR_RIGHT")
       GameTooltip:SetText(ns.STAT_NAMES[key], 1, 1, 1)
@@ -79,23 +79,23 @@ local function BuildPanel(panel)
       GameTooltip:Show()
     end
     local hover = CreateFrame("Frame", nil, panel)
-    hover:SetSize(98, 20); hover:SetPoint("TOPLEFT", x - 2, y + 1)
+    hover:SetSize(152, 20); hover:SetPoint("TOPLEFT", x - 2, y + 1)
     hover:EnableMouse(true)
     hover:SetScript("OnEnter", tip)
     hover:SetScript("OnLeave", function() GameTooltip:Hide() end)
-    local box = UI.Edit(panel, 44, {
+    local box = UI.Edit(panel, 62, {
       function() return ns.Short(ns.Weights()[key] or 0) end,
       function(t) local v = tonumber(t); if v and math.abs(v - (ns.Weights()[key] or 0)) > 1e-6 then ns.SetValue(key, v); changed() end end },
       "", false, true)
-    box:SetPoint("TOPLEFT", x + 98, y + 1)
+    box:SetPoint("TOPLEFT", x + 152, y + 1)
     if box.HookScript then box:HookScript("OnEnter", tip); box:HookScript("OnLeave", function() GameTooltip:Hide() end) end
     rows[#rows + 1] = box; track(box)
-    local sel = UI.Selector(panel, 92, ns.LEVELS,
+    local sel = UI.Selector(panel, 130, ns.LEVELS,
       { function() return ns.Level(key) end, function(v) ns.SetLevel(key, v) end }, changed)
-    sel:SetPoint("TOPLEFT", x + 144, y + 2)
+    sel:SetPoint("TOPLEFT", x + 220, y + 2)
     rows[#rows + 1] = sel; track(sel)
   end
-  local yEnd = y0 - math.ceil(#ns.STAT_ORDER / 2) * 26 - 10
+  local yEnd = y0 - math.ceil(#ns.STAT_ORDER / 2) * 28 - 10
   local reset = at(UI.Button(panel, "Reset build", 110, function() ns.ResetPriorities(); changed() end), 26, yEnd)
   reset.tip = "Back to Auto, with Forever Upgrades' values (and your talents)."
   local fb = UI.Button(panel, "Report a bug / suggest", 170, function()
@@ -130,7 +130,7 @@ end
 
 function ns.OpenOptions()
   if not window then
-    window = UI.Window("EquipThisOptionsWindow", 522, 640)
+    window = UI.Window("EquipThisOptionsWindow", 742, 640)
     window:SetPoint("CENTER")
     UI.SetHost(window) -- pop-ups (New, Rename, Import, Delete...) sit over this window
     local ok, e = pcall(BuildPanel, window)
