@@ -7,8 +7,15 @@
 -- the swing, not the hit. The enemy's side (who you hit, how often you miss) isn't something the
 -- game tells addons: those are the Classic rules, all in RULES below.
 --
--- An item's value = the change in your melee DPS (white hits; skills that use your weapon and
--- attack power move with it), plus its other stats (Stamina, Intellect, armor...) through your
+-- Your output is split the way your Skill Weights say (/eqt): white hits, and each skill's share.
+-- Each part moves the way it really does with gear:
+--   white hits (and weapon imbues like Windfury)  -> your damage per second
+--   weapon strikes (Stormstrike, Mortal Strike...) -> one main-hand swing: the weapon's hit plus
+--                                                     attack power x its speed / 14 (a slow, heavy
+--                                                     weapon makes them hit much harder)
+--   attack power skills (Bloodthirst)              -> your attack power
+--   spells (shocks, Lightning Bolt...)             -> not melee gear: unchanged
+-- An item's value = the change in that output, plus its other stats (Stamina, Intellect, armor...) through your
 -- weights, valued against what 1 Strength (or 1 attack power) does for your damage, plus its
 -- effects (procs, "+10% Stormstrike"), which are already a % of your output. One currency: % damage.
 local _, ns = ...
@@ -106,6 +113,70 @@ end
 
 local function Copy(s) local t = {} for k, v in pairs(s) do t[k] = v end return t end
 
+-- Skills that hit with your weapon (one swing's damage) or scale with attack power. Lower case.
+local SWING = { ["stormstrike"] = true, ["heroic strike"] = true, ["mortal strike"] = true, ["sinister strike"] = true,
+  ["backstab"] = true, ["ambush"] = true, ["hemorrhage"] = true, ["overpower"] = true, ["slam"] = true, ["cleave"] = true,
+  ["whirlwind"] = true, ["crusader strike"] = true, ["lava lash"] = true, ["ghostly strike"] = true, ["riposte"] = true,
+  ["raptor strike"] = true, ["mutilate"] = true, ["seal of command"] = true, ["holy strike"] = true }
+local APSKILL = { ["bloodthirst"] = true }
+local WHITE = { ["windfury weapon"] = true, ["windfury"] = true, ["auto attack"] = true, ["attack"] = true,
+  ["rockbiter weapon"] = true, ["flametongue weapon"] = true, ["seal of righteousness"] = true }
+function M.SkillKind(name)
+  local n = (name or ""):lower()
+  if SWING[n] then return "swing" end
+  if APSKILL[n] then return "ap" end
+  if WHITE[n] then return "white" end
+  return "spell"
+end
+
+-- a skill or ability's hit: misses and dodges, crits, but no glancing or dual-wield penalty
+local function SpecialLanding(s)
+  local miss = math.max(0, R.miss - s.hit) / 100
+  local dodge = math.max(0, R.dodge - s.expertise) / 100
+  local c = math.max(0, math.min(s.crit / 100, 1 - miss - dodge))
+  return 1 - miss - dodge + c * (R.critDamage - 1)
+end
+-- one main-hand swing's damage, on average (a weapon strike's)
+local function Swing(s)
+  local w = s.mh
+  local speed = w and w.speed or 2.0
+  local weaponHit = w and w.dps * speed or 0
+  return (weaponHit + s.ap * speed / R.apPerDps) * SpecialLanding(s)
+end
+M.Swing = Swing
+
+-- your output, split: { white = share, parts = { { name, share, kind } ... } } (shares add up to 1)
+function M.Split()
+  local parts, used = {}, 0
+  for _, sk in ipairs(ns.CurrentSkills()) do
+    local share = ns.SkillShare(sk[1])
+    if share and share > 0 then
+      parts[#parts + 1] = { sk[1], share, M.SkillKind(sk[1]) }
+      used = used + share
+    end
+  end
+  return { white = math.max(0, 1 - used), parts = parts }
+end
+
+-- how much your output changes from state `a` to state `b`: their ratio
+local function Ratio(a, b, split)
+  split = split or M.Split()
+  local da, db = M.Dps(a), M.Dps(b)
+  if da <= 0 then return nil end
+  local r = split.white * db / da
+  local sa, sb = Swing(a), Swing(b)
+  local la, lb = SpecialLanding(a), SpecialLanding(b)
+  for _, p in ipairs(split.parts) do
+    local share, kind = p[2], p[3]
+    if kind == "swing" then r = r + share * (sa > 0 and sb / sa or 1)
+    elseif kind == "ap" then r = r + share * ((a.ap * la) > 0 and (b.ap * lb) / (a.ap * la) or 1)
+    elseif kind == "white" then r = r + share * db / da
+    else r = r + share end
+  end
+  return r
+end
+M.Ratio = Ratio
+
 -- `s` with `stats` added (sign 1) or taken away (sign -1)
 local function Apply(s, stats, sign)
   local g = function(k) return (stats[k] or 0) * sign end
@@ -119,24 +190,26 @@ end
 -- { out = { link, ... }, inn = { link, ... }, mh = weapon or false (unchanged: nil), oh = ... }
 function M.Change(swap, s)
   s = s or M.State()
-  local before = M.Dps(s)
-  if before <= 0 then return nil end
+  if M.Dps(s) <= 0 then return nil end
   local t = Copy(s)
   for _, l in ipairs(swap.out or {}) do local f = ns.Score.Facts(l); if f then Apply(t, f.stats, -1) end end
   for _, l in ipairs(swap.inn or {}) do local f = ns.Score.Facts(l); if f then Apply(t, f.stats, 1) end end
   if swap.mh ~= nil then t.mh = swap.mh or nil end
   if swap.oh ~= nil then t.oh = swap.oh or nil end
-  return (M.Dps(t) / before - 1) * 100, t
+  local r = Ratio(s, t)
+  if not r then return nil end
+  return (r - 1) * 100, t
 end
 
 -- What 1 unit of a stat does to your damage, in % (for effects and your other stats)
 function M.PerUnit(key, s)
   s = s or M.State()
   local n = (key == "CRIT" or key == "HIT" or key == "HASTE") and 1 or 10
-  local before = M.Dps(s)
-  if before <= 0 then return 0 end
+  if M.Dps(s) <= 0 then return 0 end
   local t = Copy(s); Apply(t, { [key] = n }, 1)
-  return (M.Dps(t) / before - 1) * 100 / n
+  if key == "DPS" then t.mh = t.mh and { dps = t.mh.dps + n, speed = t.mh.speed, twoHand = t.mh.twoHand } end
+  local r = Ratio(s, t)
+  return r and (r - 1) * 100 / n or 0
 end
 
 -- the exchange rate between your weights and % damage: what 1 point of weight is worth, from
@@ -249,6 +322,17 @@ function M.Report(print)
       print(format("%s: %.1f damage per second (character sheet: %s)", h[1], mine, theirs and format("%.1f", theirs) or "?"))
     end
   end
+  if s.mh then
+    local lo, hi = Call(UnitDamage, "player")
+    local hit = s.mh.dps * s.mh.speed + s.ap * s.mh.speed / R.apPerDps
+    print(format("main-hand hit: %.0f on average (character sheet: %s), weapon speed %.2f",
+      hit, (lo and hi) and format("%.0f", (lo + hi) / 2) or "?", s.mh.speed))
+  end
+  local split = M.Split()
+  local parts = { format("white hits %d%%", math.floor(split.white * 100 + 0.5)) }
+  local how = { swing = "per hit", ap = "attack power", white = "per second", spell = "not melee" }
+  for _, p in ipairs(split.parts) do parts[#parts + 1] = format("%s %d%% (%s)", p[1], math.floor(p[2] * 100 + 0.5), how[p[3]]) end
+  print("your output (Skill Weights): " .. table.concat(parts, ", "))
   local land, miss, dodge, crit = Landing(s.hit, s.crit, s.mh ~= nil and s.oh ~= nil, s.expertise)
   print(format("against an enemy your level: %.1f%% miss, %.1f%% dodge, %d%% glancing, %.1f%% crit = %.0f%% of your swings' damage lands",
     miss * 100, dodge * 100, R.glance, crit * 100, land * 100))
