@@ -462,7 +462,7 @@ function M.Report(print)
   local s = M.Cached()
   local play = M.Play(s)
   if not play then print("no rotation for your spec at this level.") return end
-  print(format("your %s: %.1f (Forever Upgrades' rotation at level %d, Forever's spell data build %s)", M.Unit(), play.total, s.level, ns.SPELL_DATA_BUILD or "?"))
+  print(format("your %s: %.1f", M.Unit(), play.total))
   local sp, sc = 0, 0
   for i = 2, 7 do sp, sc = math.max(sp, s.sp[i] or 0), math.max(sc, s.scrit[i] or 0) end
   print(format("attack power %d, spell power %d, healing %d, crit %.1f%% (spells %.1f%%), hit %.1f%% (spells %.1f%%), haste %.1f%%",
