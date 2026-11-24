@@ -23,6 +23,18 @@ local function Versus(c)
   return out
 end
 
+-- New loot (no imbue yet) is scored with your weapon's imbue on it (Sim.Change): say which
+local function Carried(link, c)
+  if not (c.model and S.Owned and not S.Owned(link)) or S.TempEnchant(link) then return nil end
+  local f = S.Facts(link)
+  if not (f and (f.stats.DPS or 0) > 0) then return nil end
+  local slot = (c.hand == "oh" and 17) or ((f.equipLoc == "INVTYPE_RANGED" or f.equipLoc == "INVTYPE_RANGEDRIGHT" or f.equipLoc == "INVTYPE_THROWN") and 18) or 16
+  local worn = GetInventoryItemLink and GetInventoryItemLink("player", slot)
+  local id = worn and S.TempEnchant(worn)
+  local e = id and ns.ENCHANTS and ns.ENCHANTS[id]
+  return e and (GREY .. "(with your " .. e[1] .. " on it)|r") or nil
+end
+
 -- Short: "Downgrade -11.3% DPS + [Savage Boar's Guard] vs [Rage of the Storm]" (with that off-hand, against
 -- your two-hander). The spec and goal
 -- it's scored for are in /eqt ("Scoring gear for").
@@ -48,6 +60,8 @@ function D.Verdict(link)
   local partner = Named(c.partner)
   if partner then lead = GREY .. "paired with|r " .. partner .. " " .. GREY .. "-|r " end
   local tail = (c.hand == "oh") and (" " .. GREY .. "(off-hand)|r") or ""
+  local carried = Carried(link, c)
+  if carried then tail = tail .. " " .. carried end
   return format("%s%s%s %+.1f%%%s|r%s", lead, col, word, c.pct, unit, tail), Versus(c)
 end
 
