@@ -3,7 +3,7 @@
 ## Notes: Your leveling upgrade advisor: which gear is better for your class and spec, on tooltips and quest rewards.
 ## IconTexture: Interface\AddOns\EquipThis\media\Logo
 ## Author: You
-## Version: 2.4.2
+## Version: 2.5.0
 ## X-Curse-Project-ID: 1819482
 ## SavedVariables: EquipThisDB
 ## OptionalDeps: EllesmereUI, FlareUI
@@ -12,6 +12,7 @@ Core.lua
 Weights.lua
 Effects.lua
 Score.lua
+Model.lua
 Scales.lua
 UI.lua
 Display.lua

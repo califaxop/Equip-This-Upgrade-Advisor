@@ -7,6 +7,8 @@ Equip This! scores gear for your class and spec, marks upgrades on item tooltips
 ## Highlights
 - **Quest rewards:** the best upgrade among the choices glows. No upgrade? The one that sells for most gets a coin.
 - **Tooltips:** "Upgrade +12% (Elemental)", "Downgrade", "Equipped" or "Can't use it", compared with what you wear.
+- **Melee: your real damage.** For warriors, rogues, Retribution paladins and Enhancement shamans, gear is scored by what it does to your melee damage: "Upgrade +2.4% damage". Your attack power, crit, hit and haste come from the game, live, with Forever's own conversions (what Strength and Agility give your class); stats that aren't damage (Stamina, Intellect, armor...) count through your weights, and item effects as the share of your output they add. `/eqt model` shows the numbers next to your character sheet's.
+- **Weapons as setups:** a one-hander against your two-hander comes with your best off-hand from your bags (a shield, or a second weapon if you dual wield); if you own none, it's compared on its own. Dual wielders see whether a one-hander is better in the main hand or the off hand.
 - **Your spec:** picked from your talents, or set it yourself. Every class and spec has stat weights, which you can tune on a simple 0-5 scale.
 - **Your own scales:** make named stat scales for your theorycrafting, import Pawn-style strings from guides, export yours to share.
 - **Item effects count:** procs on hit, on spell cast or on crit (about once a minute unless the item says otherwise; procs tied to one skill go off with that skill's casts) and Use effects: damage as DPS (weapon DPS for melee, spell damage for casters), stat buffs ("+300 Attack Power", "+5% crit chance", "+132 spell damage") by how long they're up, mana as mana per 5, haste as extra swings or casts, weapon skill ("Increased Swords +5") as +0.04% hit and crit per point (and softer glancing blows on raid bosses at 60) when you use that weapon. Procs when you're hit and on kills aren't counted. Checked against every effect line on Forever's gear.
@@ -23,9 +25,11 @@ Equip This! scores gear for your class and spec, marks upgrades on item tooltips
 | `/eqt` (or `/equipthis`) | Open settings |
 | `/eqt item <item>` | How an item was scored (shift-click it into the command) |
 | `/eqt spec` | Which spec gear is scored for |
+| `/eqt model` | The melee damage model's numbers next to your character sheet (`/eqt model off` / `on`) |
 
 ## Good to know
-- Stat weights are a starting point, not a simulation: tune them in `/eqt` to taste.
+- Stat weights are a starting point, not a simulation: tune them in `/eqt` to taste. (Melee specs: the damage stats come from the damage model; your weights still decide stats that aren't damage.)
+- The damage model reckons with an enemy your own level, with Classic's rules for its side: 5% miss (+19% on white swings when dual wielding), 5% dodge, 10% glancing blows, crits for double damage, the off hand for half.
 - Equip-line stats (crit, hit, spell damage, mp5) are read from English item tooltips.
 
 ## Updates
@@ -35,6 +39,7 @@ New versions come out every **Wednesday at 12:00 UTC** (8 PM Philippine time, 8 
 Found a bug or have an idea? [Open an issue](https://github.com/califaxop/Equip-This-Upgrade-Advisor/issues/new/choose): there's a short form for each. The settings window has a "Report a bug / suggest" button with this link too.
 
 ## Recent changes
+- **2.5.0:** Melee gear is scored by your real damage: a melee damage model built on your live numbers from the game (attack power, crit, hit, haste, and Forever's own Strength / Agility conversions), so every verdict is in one currency: "Upgrade +2.4% damage". No more inflated percentages between two weak items (shoulders showed +126%; now +0.8% damage). Weapons are compared as setups: a one-hander against your two-hander comes with your best off-hand, and dual wielders see which hand it suits. `/eqt model` shows the model next to your character sheet. Haste rating on gear now counts.
 - **2.4.2:** Fixed: an item read before the game had loaded its text (often right after login) was scored without its effects, like a weapon's "+10% Stormstrike", and kept that way for the whole session, so comparisons with it were off (a one-hander showed as -32% against Rage of the Storm instead of -41%). Such a read is no longer kept: the item is read again until its text is there.
 - **2.4.1:** Fixed: hit, crit, spell hit / crit, dodge, parry and block were read 10 times too high on many items (WoW: Forever lists "+1% hit" as 10 hit rating), so items with them looked far better than they are (a staff with +1% hit beat a much stronger two-hander). The item's own "by 1.0%" line is used now, and a bare rating is turned into a % the way the game does for you.
 - **2.4.0:** The settings window follows EllesmereUI's style when it's installed (painted by its own skinning API: your theme, accent colour and font).

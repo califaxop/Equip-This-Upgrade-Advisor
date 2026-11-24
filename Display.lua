@@ -35,6 +35,20 @@ function D.Verdict(link)
     return GREY .. "Equipped|r"
   end
   if c.kind == "twohand" then return GREY .. "Off-hand: you use a two-hander|r" end
+  if c.model then
+    -- the damage model: the change in your damage
+    if c.kind == "new" then return format("%sUpgrade %+.1f%% damage|r %s(empty slot, %s)|r", GREEN, c.gain or 0, GREY, spec) end
+    if c.kind == "same" then return GREY .. "About the same damage|r" .. Versus(c.vs) .. " " .. GREY .. "(" .. spec .. ")|r" end
+    local col = c.kind == "upgrade" and GREEN or RED
+    local word = c.kind == "upgrade" and "Upgrade" or "Downgrade"
+    local how = ""
+    if c.hand == "oh" then how = " " .. GREY .. "as your off-hand|r" end
+    if c.partner then
+      local name = c.partner:match("%[(.-)%]")
+      if name then how = " " .. GREY .. "(with|r " .. (c.partner:match("^(|c%x%x%x%x%x%x%x%x)") or "") .. name .. "|r " .. GREY .. "in your off-hand)|r" end
+    end
+    return format("%s%s %+.1f%% damage|r%s%s %s(%s)|r", col, word, c.gain, Versus(c.vs), how, GREY, spec)
+  end
   if c.kind == "new" then return GREEN .. "Upgrade (empty slot)|r " .. GREY .. "(" .. spec .. ")|r" end
   if c.kind == "same" then return GREY .. "About the same|r" .. Versus(c.vs) .. " " .. GREY .. "(" .. spec .. ")|r" end
   local col = c.kind == "upgrade" and GREEN or RED

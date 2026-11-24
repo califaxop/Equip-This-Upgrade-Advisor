@@ -49,7 +49,18 @@ SlashCmdList.EQUIPTHIS = function(msg)
   msg = msg or ""
   local cmd, rest = msg:match("^%s*(%S*)%s*(.-)%s*$")
   cmd = (cmd or ""):lower()
-  if cmd == "item" then
+  if cmd == "model" then
+    local arg = rest:lower()
+    if arg == "off" or arg == "on" then
+      ns.db.model = arg == "on"; ns.Score.ClearCache()
+      ns.Print("damage model " .. (ns.db.model and "on" or "off (weights only)"))
+    elseif not ns.Model.Active(ns.CurrentWeights()) then
+      ns.Print("the damage model scores melee specs (" .. ns.SpecName(ns.SpecKey()) .. " uses your weights)" .. (ns.db.model == false and "; it's turned off: /eqt model on" or ""))
+    else
+      ns.Model.Report(ns.Print)
+    end
+    return
+  elseif cmd == "item" then
     local link = rest:match("|H(item:[^|]+)|h") and rest or nil
     if not link then ns.Print("usage: /eqt item <shift-click an item>") return end
     Explain(rest:match("(|c%x+|Hitem:.-|h.-|h|r)") or rest)

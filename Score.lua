@@ -16,6 +16,7 @@ local KEYS = {
   ITEM_MOD_DAMAGE_PER_SECOND_SHORT = "DPS", ITEM_MOD_DEFENSE_SKILL_RATING_SHORT = "DEF",
   ITEM_MOD_DODGE_RATING_SHORT = "DODGE", ITEM_MOD_PARRY_RATING_SHORT = "PARRY",
   ITEM_MOD_BLOCK_RATING_SHORT = "BLOCK", ITEM_MOD_BLOCK_VALUE_SHORT = "BLOCKVALUE",
+  ITEM_MOD_HASTE_RATING_SHORT = "HASTE", ITEM_MOD_HASTE_MELEE_RATING_SHORT = "HASTE", -- (the damage model's)
 }
 
 -- Classic items often put these on "Equip:" lines instead of in the stat list (English client)
@@ -141,7 +142,7 @@ end
 -- Stats that are a % on the item ("Improves your chance to hit by 1.0%"). WoW: Forever lists them
 -- in the item's stats as ratings (that 1% as 10 hit rating), so: the % from the item's own line
 -- when it has one; a rating with no such line, turned into a % the way the game does for you.
-local PCT_STATS = { HIT = 6, CRIT = 9, SPELLHIT = 8, SPELLCRIT = 11, DODGE = 3, PARRY = 4, BLOCK = 5 } -- (their combat rating IDs)
+local PCT_STATS = { HIT = 6, CRIT = 9, SPELLHIT = 8, SPELLCRIT = 11, DODGE = 3, PARRY = 4, BLOCK = 5, HASTE = 18 } -- (their combat rating IDs)
 local RATING_PER_PCT = 10 -- (when the game won't say: 1% = 10 rating, as these items show)
 local function RatingToPct(key, rating)
   local cr = PCT_STATS[key]
@@ -225,7 +226,78 @@ local PAIRED = { [11] = 12, [12] = 11, [13] = 14, [14] = 13 }
 -- { kind = "upgrade" | "downgrade" | "same" | "new" | "unusable" | "equipped", pct, delta, value, vs = link,
 --   pair = "weaker" | "stronger" | "equal" (equipped rings / trinkets, when you wear two) }
 -- or nil (not gear, or not loaded yet)
+-- With the damage model (melee specs): the change in your damage, in %, from wearing it.
+-- Weapons as setups: a one-hander replacing your two-hander comes with your best off hand (if you
+-- own one; else it's on its own); if you dual wield, a one-hander is tried in either hand.
+-- { kind, gain (% damage), delta = gain, vs = link, hand = "oh" (as your off hand), partner = link, model = true }
+local function ModelCompare(link, f, weights, base)
+  local M = ns.Model
+  local s = M.State()
+  local function worn(slot) return GetInventoryItemLink and GetInventoryItemLink("player", slot) end
+  local function result(gain, vs, extra)
+    if not gain then return nil end
+    local kind = (math.abs(gain) < 0.05) and "same" or (gain > 0 and "upgrade" or "downgrade")
+    local r = { kind = kind, gain = gain, delta = gain, pct = gain, vs = vs, model = true, value = base.value }
+    for k, v in pairs(extra or {}) do r[k] = v end
+    return r
+  end
+  local loc = f.equipLoc
+  local mh, oh = worn(16), worn(17)
+  local mhLoc = mh and C_Item and C_Item.GetItemInfoInstant and select(4, C_Item.GetItemInfoInstant(mh))
+  local dw = DualWields()
+  if loc == "INVTYPE_2HWEAPON" then
+    local out = {}
+    if mh then out[#out + 1] = mh end
+    if oh then out[#out + 1] = oh end
+    return result(M.Gain(link, out, weights, "mh", nil, s), mh or oh)
+  end
+  if loc == "INVTYPE_WEAPON" or loc == "INVTYPE_WEAPONMAINHAND" then
+    if mhLoc == "INVTYPE_2HWEAPON" then
+      local partner = M.BestPartner(link, weights, dw and loc == "INVTYPE_WEAPON", s)
+      return result(M.Gain(link, { mh }, weights, "mh", partner, s), mh, { partner = partner })
+    end
+    local best, bestHand, vs
+    local g = M.Gain(link, { mh }, weights, "mh", nil, s)
+    best, bestHand, vs = g, "mh", mh
+    if dw and loc == "INVTYPE_WEAPON" then
+      local g2 = M.Gain(link, { oh }, weights, "oh", nil, s)
+      if g2 and (not best or g2 > best) then best, bestHand, vs = g2, "oh", oh end
+    end
+    if not vs then return { kind = "new", gain = best, delta = best, model = true, value = base.value } end
+    return result(best, vs, { hand = bestHand == "oh" and "oh" or nil })
+  end
+  if loc == "INVTYPE_SHIELD" or loc == "INVTYPE_HOLDABLE" or loc == "INVTYPE_WEAPONOFFHAND" then
+    local g = M.Gain(link, { oh }, weights, "oh", nil, s)
+    if not oh then return { kind = "new", gain = g, delta = g, model = true, value = base.value } end
+    return result(g, oh)
+  end
+  -- everything else: against what's in that slot (rings, trinkets: the one it'd best replace)
+  local best, vs
+  for _, slot in ipairs(SLOTS[loc]) do
+    local cur = worn(slot)
+    if not cur then
+      local g = M.Gain(link, {}, weights, nil, nil, s)
+      return { kind = "new", gain = g, delta = g, model = true, value = base.value }
+    end
+    local g = M.Gain(link, { cur }, weights, nil, nil, s)
+    if g and (not best or g > best) then best, vs = g, cur end
+  end
+  return result(best, vs)
+end
+
 function S.Compare(link, weights)
+  weights = weights or ns.Weights()
+  local c = S.CompareWeights(link, weights)
+  -- the damage model, for melee specs (the cases it doesn't change: as they are)
+  if c and ns.Model and ns.Model.Active(weights) and c.kind ~= "unusable" and c.kind ~= "equipped" and c.kind ~= "twohand" then
+    local f = S.Facts(link)
+    local ok, m = pcall(ModelCompare, link, f, weights, c)
+    if ok and m then return m end
+  end
+  return c
+end
+
+function S.CompareWeights(link, weights)
   weights = weights or ns.Weights()
   local value, f = S.Value(link, weights)
   if not value then return nil end
