@@ -107,8 +107,8 @@ local DPS_ROWS = 12
 function ns.OpenDps()
   local win = EquipThisDpsWindow
   if not win then
-    win = UI.Window("EquipThisDpsWindow", 430, 130 + DPS_ROWS * 18 + 120)
-    win:SetPoint("CENTER", UIParent, "CENTER", 260, 60)
+    -- a pop-up like the others: solid, over the settings window (dimmed behind it), or mid-screen
+    win = UI.Popup("EquipThisDpsWindow", 430, 130 + DPS_ROWS * 18 + 120)
     win.title = UI.Text(win, "title", "")
     win.title:SetPoint("TOPLEFT", 20, -18)
     win.total = UI.Text(win, "header", "")
@@ -168,7 +168,7 @@ function ns.OpenDps()
     win:HookScript("OnShow", function() win.Refresh() end)
   end
   win.Refresh()
-  win:Show()
+  win:Place(); win:Show()
 end
 
 function ns.CreateOptions()
