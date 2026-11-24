@@ -299,7 +299,7 @@ local function WornBonus(names)
 end
 
 -- Windfury Weapon's bonus attack power on its extra attacks, from the tooltip of the rank on your weapon
--- ("... with 119 extra attack power"); 0 when it can't be read
+-- ("2 extra attacks with 202 extra melee attack power"); 0 when it can't be read
 function WindfuryBonus()
   if not (C_TooltipInfo and C_TooltipInfo.GetSpellByID) then return 0 end
   -- the rank on your main hand (its imbue -> the rank that applies it, Spells.lua), else the highest you know
@@ -317,7 +317,8 @@ function WindfuryBonus()
   if not (okT and type(data) == "table" and type(data.lines) == "table") then return 0 end
   for _, l in ipairs(data.lines) do
     local t = Readable(l.leftText) and l.leftText or ""
-    local n = t:match("(%d+) extra attack power") or t:match("(%d+) additional attack power") or t:match("(%d+) attack power")
+    -- ("2 extra attacks with 202 extra melee attack power")
+    local n = t:match("(%d+) extra %a* ?attack power") or t:match("(%d+) additional %a* ?attack power") or t:match("(%d+) %a* ?attack power")
     if n then return tonumber(n) end
   end
   return 0
