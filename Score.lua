@@ -16,7 +16,8 @@ local KEYS = {
   ITEM_MOD_DAMAGE_PER_SECOND_SHORT = "DPS", ITEM_MOD_DEFENSE_SKILL_RATING_SHORT = "DEF",
   ITEM_MOD_DODGE_RATING_SHORT = "DODGE", ITEM_MOD_PARRY_RATING_SHORT = "PARRY",
   ITEM_MOD_BLOCK_RATING_SHORT = "BLOCK", ITEM_MOD_BLOCK_VALUE_SHORT = "BLOCKVALUE",
-  ITEM_MOD_HASTE_RATING_SHORT = "HASTE", ITEM_MOD_HASTE_MELEE_RATING_SHORT = "HASTE", 
+  ITEM_MOD_HASTE_RATING_SHORT = "HASTE", ITEM_MOD_HASTE_MELEE_RATING_SHORT = "HASTE",
+  ITEM_MOD_HEALTH_SHORT = "HEALTH", ITEM_MOD_HEALTH = "HEALTH",
 }
 
 -- Classic items often put these on "Equip:" lines instead of in the stat list (English client)
@@ -52,6 +53,8 @@ local EQUIP = {
   { "chance to crit by " .. N .. "%%", "CRIT" },
   { "chance to hit by " .. N .. "%%", "HIT" },
   { "hit chance by " .. N .. "%%", "HIT" },
+  -- health
+  { "maximum health by (%d+)", "HEALTH" },
   -- spell damage and healing (a school's spell damage counts as spell damage)
   { "damage and healing done by magical spells and effects by up to (%d+)", "SP" },
   { "damage and healing done by magical spells and effects of all party members within %d+ yards by up to (%d+)", "SP" },

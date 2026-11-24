@@ -23,9 +23,7 @@ ns.DEFAULTS = {
   tooltip = true,         -- the "Equip This!: Upgrade +12%" line on item tooltips
   rewards = true,         -- glow the best quest reward
   sellFallback = true,    -- no upgrade among the rewards: mark the one that sells for most
-  weights = {},           -- your edits: [specKey] = { STAT = weight, ... } (unset = preset)
-  scales = {},            -- your own scales: [name] = { STAT = weight, ... }
-  scale = nil,            -- the custom scale in use (nil = the spec preset)
+  priorities = {},        -- per spec: { goal = "survival", levels = { STA = "highest", ... } } (unset = Damage)
   flareStyle = true,
   euiStyle = true,       -- EllesmereUI look when EllesmereUI is installed (its skinning API)
 }
@@ -45,19 +43,9 @@ function ns.LoadDB()
   end
   ns.db = EquipThisDB
   -- (2.5.0: no more Skill Weights, damage model or damage-meter learning)
-  for _, k in ipairs({ "skills", "scaleSkills", "model", "learn", "learned", "learnSeen", "split" }) do ns.db[k] = nil end
-  if not ns.db.importanceV then
-    -- 2.1.0: weights became importance 0-5. Your preset edits use that spec preset's scaling;
-    -- your own scales are rescaled so their top stat is 5. Scores come out the same.
-    for key, edits in pairs(ns.db.weights or {}) do
-      local _, f = ns.PresetImportance(key)
-      for k, v in pairs(edits) do
-        edits[k] = ns.NORM[k] and math.floor(v / ns.NORM[k] * f * 100 + 0.5) / 100 or nil
-      end
-    end
-    for name, w in pairs(ns.db.scales or {}) do ns.db.scales[name] = (ns.ToImportance(w)) end
-    ns.db.importanceV = 1
-  end
+  -- (and no more 0-5 weights or custom scales: priorities instead)
+  for _, k in ipairs({ "skills", "scaleSkills", "model", "learn", "learned", "learnSeen", "split",
+    "weights", "scales", "scale", "importanceV" }) do ns.db[k] = nil end
 end
 
 ---------------------------------------------------------------------------

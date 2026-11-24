@@ -15,7 +15,6 @@ Procs.lua
 Effects.lua
 Score.lua
 Rotation.lua
-Scales.lua
 UI.lua
 Display.lua
 Options.lua

@@ -34,7 +34,7 @@ local BOSS_DEFENSE = 63 * 5
 local STAT_WORDS = {
   ["attack power"] = "AP", ["melee attack power"] = "AP", ["melee and ranged attack power"] = "AP", ["ranged attack power"] = "RAP", ["ranged attack"] = "RAP",
   ["strength"] = "STR", ["agility"] = "AGI", ["stamina"] = "STA", ["intellect"] = "INT", ["spirit"] = "SPI",
-  ["armor"] = "ARMOR", ["armor value"] = "ARMOR",
+  ["armor"] = "ARMOR", ["armor value"] = "ARMOR", ["maximum health"] = "HEALTH", ["max health"] = "HEALTH",
   ["spell damage"] = "SP", ["spell power"] = "SP", ["spell damage and healing"] = "SP", ["damage and healing"] = "SP",
   ["damage and healing done by magical spells and effects"] = "SP", ["damage done by magical spells and effects"] = "SP",
   ["damage done by spells and effects"] = "SP", ["damage of your spells and effects"] = "SP",

@@ -1,18 +1,19 @@
--- Stat weights. Each spec starts from Forever Upgrades' weights (Guides.lua); the presets below are
--- the fallback. Both are written as points per unit (the main stat is 1; crit and hit
+-- Stat values. Each spec's come from Forever Upgrades' weights (Guides.lua); the presets below are
+-- the fallback. You set priorities on top (Normal / Higher / Highest / Ignore, or a goal: see
+-- "Priorities" below). Values are written as points per unit (the main stat is 1; crit and hit
 -- per 1%; DPS is weapon damage per second, only on weapons), then shown and edited as importance
 -- 0-5 (see ns.NORM). Starting points to tune in /eqt, not gospel.
 local _, ns = ...
 
 -- stat keys: what the tooltip line and /eqt item show
 ns.STAT_NAMES = {
-  STR = "Strength", AGI = "Agility", STA = "Stamina", INT = "Intellect", SPI = "Spirit",
+  STR = "Strength", AGI = "Agility", STA = "Stamina", HEALTH = "Health", INT = "Intellect", SPI = "Spirit",
   ARMOR = "Armor", AP = "Attack Power", RAP = "Ranged Attack Power",
   SP = "Spell Damage", HEAL = "Healing", MP5 = "Mana per 5 sec",
   CRIT = "Crit %", HIT = "Hit %", HASTE = "Haste %", SPELLCRIT = "Spell Crit %", SPELLHIT = "Spell Hit %",
   DPS = "Weapon DPS", DEF = "Defense", DODGE = "Dodge %", PARRY = "Parry %", BLOCK = "Block %", BLOCKVALUE = "Block Value",
 }
-ns.STAT_ORDER = { "STR", "AGI", "STA", "INT", "SPI", "AP", "RAP", "SP", "HEAL", "MP5", "CRIT", "HIT", "HASTE",
+ns.STAT_ORDER = { "STR", "AGI", "STA", "HEALTH", "INT", "SPI", "AP", "RAP", "SP", "HEAL", "MP5", "CRIT", "HIT", "HASTE",
   "SPELLCRIT", "SPELLHIT", "DPS", "ARMOR", "DEF", "DODGE", "PARRY", "BLOCK", "BLOCKVALUE" }
 
 local MELEE    = { STR = 1, AGI = 0.75, STA = 0.2, AP = 0.5, CRIT = 14, HIT = 12, DPS = 4, ARMOR = 0.01 }
@@ -26,7 +27,7 @@ local TANK     = { STA = 1, ARMOR = 0.05, DEF = 1.2, DODGE = 12, PARRY = 12, BLO
 -- Weights are importance, 0 (ignore) to 5 (most), the same scale for every stat. Each stat comes
 -- in its own unit, so importance is turned into points with a fixed factor: what 1 unit of the
 -- stat is worth next to 1 point of a main stat, at full importance (5). E.g. 1% crit ~ 14 Strength.
-ns.NORM = { STR = 1, AGI = 1, STA = 1, INT = 1, SPI = 1, AP = 0.5, RAP = 0.4, SP = 1, HEAL = 0.6, MP5 = 2,
+ns.NORM = { STR = 1, AGI = 1, STA = 1, HEALTH = 0.1, INT = 1, SPI = 1, AP = 0.5, RAP = 0.4, SP = 1, HEAL = 0.6, MP5 = 2,
   CRIT = 14, HIT = 12, HASTE = 10, SPELLCRIT = 10, SPELLHIT = 10, DPS = 4, ARMOR = 0.02, DEF = 1.2, DODGE = 12,
   PARRY = 12, BLOCK = 6, BLOCKVALUE = 0.5 }
 local function round2(x) return math.floor(x * 100 + 0.5) / 100 end
@@ -38,51 +39,6 @@ local function Unit(key)
   if key == "DPS" then return "+1 weapon DPS" end
   if (ns.STAT_NAMES[key] or ""):find("%%") then return "+1%" end
   return "+1"
-end
--- The tooltip on a stat in /eqt, in four short parts: where the number comes from, what it's worth,
--- how items are scored with it, and what changing it does.
-function ns.WeightInfo(key, weights)
-  local lines = {}
-  local name = (ns.STAT_NAMES[key] or key):gsub(" %%$", "")
-  local unit = Unit(key)
-  local label = (unit == "+1%" or unit == "+1") and (unit .. " " .. name) or unit
-  local spec = ns.SpecKey()
-  local scale = ns.Scales.Active()
-  local mine = weights and weights[key] or 0
-  -- 1. where it comes from
-  local default = ns.PresetImportance(spec)[key] or 0
-  local site = ns.GUIDE and ns.GUIDE[spec] and ns.GUIDE[spec].weights and next(ns.GUIDE[spec].weights)
-  local from = site and ("Forever Upgrades' " .. ns.SpecName(spec)) or ("the " .. ns.SpecName(spec) .. " preset")
-  if scale then
-    lines[#lines + 1] = format("From your scale \"%s\".", scale)
-  elseif ns.db.weights[spec] and ns.db.weights[spec][key] ~= nil then
-    lines[#lines + 1] = format("Your setting: %s (default %s, from %s weights).", Wt(mine), Wt(default), from)
-  else
-    lines[#lines + 1] = format("Default: %s, from %s weights.", Wt(mine), from)
-  end
-  -- 2. what it's worth, next to your top main stat
-  local pts = ns.PointsPer(key, mine)
-  if pts <= 0 then
-    lines[#lines + 1] = "At 0 it's ignored: items get nothing for it."
-  else
-    local best, bestPts
-    for _, k in ipairs(PRIMARY) do
-      local p = ns.PointsPer(k, weights[k])
-      if p > 0 and (not bestPts or p > bestPts) then best, bestPts = k, p end
-    end
-    if best and best ~= key then
-      lines[#lines + 1] = format("Worth: %s counts as much as +%s %s.", label, Short(pts / bestPts), ns.STAT_NAMES[best])
-    else
-      lines[#lines + 1] = format("Worth: your main stat. Other stats are measured against %s.", label)
-    end
-  end
-  if key == "DPS" then lines[#lines + 1] = "Only on weapons. Damage procs and extra attacks count through it too." end
-  -- 3. how items are scored
-  lines[#lines + 1] = "An item's score: each of its stats times its weight, plus its effects. \"Upgrade +2%\" means your whole gear scores 2% higher with it."
-  -- 4. changing it
-  lines[#lines + 1] = scale and format("Change it to make %s count more or less in your scale. 0 ignores it, 5 is the most.", name)
-    or format("Change it to make %s count more or less; only this stat changes. 0 ignores it, 5 is the most. Reset weights goes back to the default.", name)
-  return lines
 end
 
 -- points per unit of a stat, for an importance
@@ -97,11 +53,6 @@ function ns.ToImportance(points)
   local out = {}
   for k, v in pairs(raw) do out[k] = round2(v * f) end
   return out, f
-end
-function ns.ToPoints(importance)
-  local out = {}
-  for k, v in pairs(importance) do out[k] = ns.PointsPer(k, v) end
-  return out
 end
 
 local function with(base, changes)
@@ -140,12 +91,8 @@ function ns.SpecName(key)
   return p and p[1] or key
 end
 
--- What gear is scored with: your active custom scale, else your spec's preset (with your edits)
-function ns.CurrentWeights()
-  local _, w = ns.Scales.Active()
-  if w then return ns.Copy(w) end
-  return ns.Weights()
-end
+-- What gear is scored with: your spec's values, with your priorities
+function ns.CurrentWeights() return ns.Weights() end
 ---------------------------------------------------------------------------
 -- Skills: your damage split (auto attack and each skill) comes from Rotation.lua. An item effect on a
 -- skill ("+10% Stormstrike") counts by that skill's share of your output: +10% to a skill that's 20% of
@@ -192,12 +139,6 @@ ns.PRESET_SKILLS = {
               S5("Healing Touch", 5, "Rejuvenation", 5, "Regrowth", 4) },
 }
 
--- the label shown with verdicts: the custom scale's name, else the spec's
-function ns.ScoringLabel()
-  local name = ns.Scales.Active()
-  return name or ns.SpecName(ns.SpecKey())
-end
-
 -- a spec's preset, as importance (0-5), and the factor it was scaled by
 function ns.PresetImportance(key)
   local class, tree = key:match("^(%u+):(%d)$")
@@ -207,10 +148,133 @@ function ns.PresetImportance(key)
   return ns.ToImportance((g and next(g)) and g or (p and p[2]) or MELEE)
 end
 
--- the weights (importance 0-5) in use for a spec: your edits over the preset
+---------------------------------------------------------------------------
+-- Priorities: what you want more of. Each stat is Normal (Forever Upgrades' value for your spec),
+-- Higher (halfway between that and your spec's most valued stat), Highest (above every Normal stat,
+-- so an item with more of it wins) or Ignore. A goal sets several at once.
+---------------------------------------------------------------------------
+ns.LEVELS = { { "ignore", "Ignore" }, { "normal", "Normal" }, { "higher", "Higher" }, { "highest", "Highest" } }
+local LEVEL_NAME = {}
+for _, l in ipairs(ns.LEVELS) do LEVEL_NAME[l[1]] = l[2] end
+ns.LEVEL_NAME = LEVEL_NAME
+local TOP = 5         -- a spec's most valued stat (its values are scaled so it's 5)
+local HIGHEST = 7.5   -- above any Normal or Higher stat
+
+ns.GOALS = {
+  { "damage", "Damage", "Forever Upgrades' values for your spec, as they are." },
+  { "survival", "Survival", "More health and armor to take more hits: Stamina and Health first, then Armor and avoidance." },
+  { "mana", "Mana", "Longer before you drink: Intellect first, then Spirit and mana per 5 sec." },
+  { "balanced", "Balanced", "A bit of everything: more Stamina, Health and Armor, and Intellect and mana per 5 sec if you use mana." },
+}
+local GOAL_LEVELS = {
+  damage = {},
+  survival = { STA = "highest", HEALTH = "highest", ARMOR = "higher", DEF = "higher", DODGE = "higher", PARRY = "higher", BLOCK = "higher" },
+  mana = { INT = "highest", SPI = "higher", MP5 = "higher" },
+  balanced = { STA = "higher", HEALTH = "higher", ARMOR = "higher", INT = "higher", MP5 = "higher" },
+}
+local MANA_STATS = { INT = true, SPI = true, MP5 = true }
+local NO_MANA = { WARRIOR = true, ROGUE = true }
+-- the goals that make sense for your class (no Mana goal for warriors and rogues)
+function ns.Goals()
+  local list = {}
+  for _, g in ipairs(ns.GOALS) do
+    if not (g[1] == "mana" and NO_MANA[ns.Class()]) then list[#list + 1] = g end
+  end
+  return list
+end
+local function GoalLevels(goal)
+  local t = {}
+  for k, v in pairs(GOAL_LEVELS[goal] or {}) do
+    if not (MANA_STATS[k] and NO_MANA[ns.Class()]) then t[k] = v end
+  end
+  return t
+end
+
+-- your priorities for a spec: { goal = "survival" | ... | "custom", levels = { STAT = level } } (Normal: unset)
+function ns.Priorities(key)
+  key = key or ns.SpecKey()
+  ns.db.priorities = ns.db.priorities or {}
+  return ns.db.priorities[key] or { goal = "damage", levels = {} }
+end
+local function Save(key, p) ns.db.priorities = ns.db.priorities or {}; ns.db.priorities[key] = p end
+function ns.SetGoal(goal, key)
+  key = key or ns.SpecKey()
+  if goal == "custom" then return end
+  Save(key, { goal = goal, levels = GoalLevels(goal) })
+end
+function ns.Level(stat, key) return ns.Priorities(key).levels[stat] or "normal" end
+function ns.SetLevel(stat, level, key)
+  key = key or ns.SpecKey()
+  local p = ns.Copy(ns.Priorities(key))
+  p.levels[stat] = (level ~= "normal") and level or nil
+  -- still one of the goals? else your own mix
+  p.goal = "custom"
+  for _, g in ipairs(ns.GOALS) do
+    local want, same = GoalLevels(g[1]), true
+    for k, v in pairs(want) do if p.levels[k] ~= v then same = false end end
+    for k, v in pairs(p.levels) do if want[k] ~= v then same = false end end
+    if same then p.goal = g[1] end
+  end
+  Save(key, p)
+end
+function ns.ResetPriorities(key) if ns.db.priorities then ns.db.priorities[key or ns.SpecKey()] = nil end end
+
+-- a stat's value (importance) at a level, from its Normal value
+local function AtLevel(base, level)
+  if level == "ignore" then return 0 end
+  if level == "higher" then return (base + TOP) / 2 end
+  if level == "highest" then return HIGHEST + base / 10 end -- (several at Highest keep the site's order)
+  return base
+end
+
+-- the values in use for a spec: Forever Upgrades' (Normal), moved by your priorities
 function ns.Weights(key)
   key = key or ns.SpecKey()
   local w = ns.PresetImportance(key)
-  for k, v in pairs(ns.db.weights[key] or {}) do w[k] = v end
+  for stat, level in pairs(ns.Priorities(key).levels) do w[stat] = AtLevel(w[stat] or 0, level) end
   return w
+end
+
+-- the label shown with verdicts: the spec, and your goal if it isn't plain damage
+function ns.ScoringLabel()
+  local p = ns.Priorities()
+  local spec = ns.SpecName(ns.SpecKey())
+  if p.goal == "custom" then return spec .. ", your priorities" end
+  for _, g in ipairs(ns.GOALS) do if g[1] == p.goal and g[1] ~= "damage" then return spec .. ", " .. g[2] end end
+  return spec
+end
+
+-- The tooltip on a stat in /eqt, in short parts: its level now, what it's worth, what the levels do,
+-- and how items are scored.
+function ns.PriorityInfo(key)
+  local lines = {}
+  local name = (ns.STAT_NAMES[key] or key):gsub(" %%$", "")
+  local unit = Unit(key)
+  local label = (unit == "+1%" or unit == "+1") and (unit .. " " .. name) or unit
+  local spec = ns.SpecKey()
+  local weights = ns.Weights(spec)
+  local site = ns.GUIDE and ns.GUIDE[spec] and ns.GUIDE[spec].weights and next(ns.GUIDE[spec].weights)
+  local from = site and ("Forever Upgrades' value for " .. ns.SpecName(spec)) or ("the " .. ns.SpecName(spec) .. " preset")
+  local level = ns.Level(key)
+  lines[#lines + 1] = format("Set to %s. (Normal is %s.)", LEVEL_NAME[level], from)
+  local pts = ns.PointsPer(key, weights[key])
+  if pts <= 0 then
+    lines[#lines + 1] = "Items get nothing for it."
+  else
+    local best, bestPts
+    for _, k in ipairs(PRIMARY) do
+      local p = ns.PointsPer(k, weights[k])
+      if p > 0 and (not bestPts or p > bestPts) then best, bestPts = k, p end
+    end
+    if best and best ~= key then
+      lines[#lines + 1] = format("Worth: %s counts as much as +%s %s.", label, Short(pts / bestPts), ns.STAT_NAMES[best])
+    else
+      lines[#lines + 1] = format("Worth: your main stat; other stats are measured against %s.", label)
+    end
+  end
+  if key == "DPS" then lines[#lines + 1] = "Only on weapons. Damage procs and extra attacks count through it too." end
+  if key == "HEALTH" then lines[#lines + 1] = "Items with \"+Health\". 10 Health is about 1 Stamina." end
+  lines[#lines + 1] = "Higher: worth more, halfway to your spec's most valued stat. Highest: worth more than every Normal stat, so items with more of it win. Ignore: worth nothing."
+  lines[#lines + 1] = "An item's score adds up its stats by these values, plus its effects. \"Upgrade +2%\": your whole gear scores 2% higher with it."
+  return lines
 end

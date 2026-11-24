@@ -14,7 +14,7 @@ ev:SetScript("OnEvent", function(_, event, arg1)
     ns.LoadDB()
     ns.CreateOptions()
   elseif event == "PLAYER_LOGIN" then
-    ns.Print("loaded. Type |cffffff00/eqt|r to check your spec and weights.")
+    ns.Print("loaded. Type |cffffff00/eqt|r to check your spec and priorities.")
     ns.Display.HookTooltips()
     ns.Display.HookRewards()
   elseif event ~= "ADDON_LOADED" then
@@ -57,9 +57,7 @@ SlashCmdList.EQUIPTHIS = function(msg)
     if not link then ns.Print("usage: /eqt item <shift-click an item>") return end
     Explain(rest:match("(|c%x+|Hitem:.-|h.-|h|r)") or rest)
   elseif cmd == "spec" then
-    local scale = ns.Scales.Active()
-    if scale then ns.Print("scoring gear with your scale \"" .. scale .. "\" (your spec: " .. ns.SpecName(ns.SpecKey()) .. ")")
-    else ns.Print("scoring gear for " .. ns.SpecName(ns.SpecKey()) .. (ns.db.spec == "auto" and " (from your talents)" or " (set in /eqt)")) end
+    ns.Print("scoring gear for " .. ns.ScoringLabel() .. (ns.db.spec == "auto" and " (spec from your talents)" or " (spec set in /eqt)"))
     -- what the talents say, tree by tree
     local pts, parts = ns.TalentPoints(), {}
     for i, p in ipairs(ns.PRESETS[ns.Class()] or {}) do parts[#parts + 1] = p[1] .. " " .. ((pts and pts[i]) or 0) end
