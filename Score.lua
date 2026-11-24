@@ -99,11 +99,13 @@ end
 -- what the item tooltip says: Equip-line stats, and whether something on it is red
 -- (can't use it: armor type, weapon skill, class, level)
 -- (also: every line's text, for the effects, and the weapon's speed)
+-- (also: whether the item's text could be read at all: right after login, or for an item the game
+-- hasn't loaded yet, it can't, and then its effects are missing)
 local function TooltipFacts(link)
   local extra, red, texts, speed = {}, false, {}, nil
-  if not (C_TooltipInfo and C_TooltipInfo.GetHyperlink) then return extra, red, texts end
+  if not (C_TooltipInfo and C_TooltipInfo.GetHyperlink) then return extra, red, texts, nil, true end
   local ok, data = pcall(C_TooltipInfo.GetHyperlink, link)
-  if not (ok and type(data) == "table" and type(data.lines) == "table") then return extra, red, texts end
+  if not (ok and type(data) == "table" and type(data.lines) == "table") then return extra, red, texts, nil, false end
   for i, l in ipairs(data.lines) do
     if i > 1 and (IsRed(l.leftColor) or IsRed(l.rightColor)) then red = true end
     local t = Readable(l.leftText) and l.leftText or ""
@@ -132,7 +134,8 @@ local function TooltipFacts(link)
       end
     end
   end
-  return extra, red, texts, speed
+  -- (only the name so far: its text hasn't loaded)
+  return extra, red, texts, speed, #data.lines > 1
 end
 
 -- Stats that are a % on the item ("Improves your chance to hit by 1.0%"). WoW: Forever lists them
@@ -166,7 +169,7 @@ function S.Facts(link)
     local key = KEYS[k]
     if key and type(v) == "number" then stats[key] = (stats[key] or 0) + v end
   end
-  local extra, red, texts, speed = TooltipFacts(link)
+  local extra, red, texts, speed, complete = TooltipFacts(link)
   for k, v in pairs(stats) do
     if PCT_STATS[k] and not extra[k] then stats[k] = RatingToPct(k, v) end -- (a rating with no % line)
   end
@@ -176,7 +179,9 @@ function S.Facts(link)
   local subType = C_Item and C_Item.GetItemInfoInstant and select(3, C_Item.GetItemInfoInstant(link))
   local f = { stats = stats, equipLoc = equipLoc, subType = type(subType) == "string" and subType:lower() or nil, usable = not red, sell = type(sell) == "number" and sell or 0,
     speed = speed, effects = ns.Effects and ns.Effects.Parse(texts) or {} }
-  cache[link] = f
+  -- Kept for next time only once the item's text was read: one read before it loads has no effect
+  -- lines (a "+10% Stormstrike" weapon would score as if it had none, for the whole session).
+  if complete then cache[link] = f end
   return f
 end
 function S.ClearCache() wipe(cache); if ns.Effects then ns.Effects.ClearCache() end end
