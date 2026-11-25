@@ -72,7 +72,16 @@ local function BuildPanel(panel)
     mixText:SetText(format("%d%% %s  /  %d%% survivability", (1 - t) * 100 + 0.5, leftEnd():gsub("^More ", ""):lower(), t * 100 + 0.5))
   end })
   rows[#rows + 1] = mixRefresh -- (moves with the slider and the build)
-  local yEnd = -448
+  -- "I tank": score survivability as a tank (any class)
+  local tank = at(UI.Check(panel, "I tank: bosses and enemies hit me (score survivability as a tank)",
+    { function() return ns.IsTank() end, function(v) ns.SetTanking(v) end }, W_, changed), 26, -440)
+  tank.tip = "For any class: survivability counts the way it does for a tank (bosses melee you, so armor, Defense, dodge, parry and block count fully; at 60, 12% of what comes at you is magic instead of 75%), and the build leans to survival (Auto: half and half while leveling, Tanking at 60). Protection warriors and paladins always tank."
+  track({ Refresh = function()
+    tank.Refresh()
+    if tank.SetActive then tank.SetActive(not ns.IsTankSpec()) end
+  end })
+  rows[#rows + 1] = { Refresh = function() tank.Refresh(); if tank.SetActive then tank.SetActive(not ns.IsTankSpec()) end end }
+  local yEnd = -476
   local reset = at(UI.Button(panel, "Reset build", 110, function() ns.ResetPriorities(); changed() end), 26, yEnd)
   reset.tip = "Back to Auto: Leveling until the level cap, then Damage (tanks: Tanking)."
   local fb = UI.Button(panel, "Report a bug / suggest", 170, function()

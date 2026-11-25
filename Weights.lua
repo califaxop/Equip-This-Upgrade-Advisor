@@ -144,7 +144,21 @@ function ns.Role(key)
   if g and g.role then return g.role end
   return (ns.PRESETS[key:match("^(%u+)")] and key:match(":(%d)$") and "melee") or "melee"
 end
-function ns.IsTank(key) return ns.Role(key) == "tank" end
+-- a tank: a tank spec, or "I tank" ticked for your spec (a shaman or a Retribution paladin tanking)
+function ns.IsTankSpec(key) return ns.Role(key) == "tank" end
+function ns.IsTank(key)
+  key = key or ns.SpecKey()
+  if ns.IsTankSpec(key) then return true end
+  local p = ns.db and ns.db.priorities and ns.db.priorities[key]
+  return p and p.tank and true or false
+end
+function ns.SetTanking(on, key)
+  key = key or ns.SpecKey()
+  local p = ns.Copy(ns.Priorities(key))
+  p.tank = on and true or nil
+  ns.db.priorities = ns.db.priorities or {}
+  ns.db.priorities[key] = p
+end
 ---------------------------------------------------------------------------
 -- Your build: what you want more of, in two layers.
 --  1. How damage (or healing) and survival mix. A tank's own weights are survival (effective health)
@@ -251,7 +265,13 @@ function ns.SetValue(stat, v, key)
   Save(key, p)
 end
 function ns.HasChanges() return false end
-function ns.ResetPriorities(key) if ns.db.priorities then ns.db.priorities[key or ns.SpecKey()] = nil end end
+-- (back to Auto; "I tank" stays)
+function ns.ResetPriorities(key)
+  key = key or ns.SpecKey()
+  if not ns.db.priorities then return end
+  local tank = ns.db.priorities[key] and ns.db.priorities[key].tank
+  ns.db.priorities[key] = tank and { build = "auto", levels = {}, values = {}, tank = true } or nil
+end
 
 -- your spec's values before your own changes: Forever Upgrades', with your talents (your current spec)
 function ns.BaseWeights(key)
@@ -302,6 +322,7 @@ function ns.ScoringLabel()
     label = label .. format(" (%d%% survival)", t * 100 + 0.5)
   end
   if ns.HasChanges() then label = label .. " + your changes" end
+  if ns.IsTank(key) and not ns.IsTankSpec(key) and b ~= "survival" then label = label .. " (tanking)" end
   return label
 end
 

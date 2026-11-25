@@ -623,9 +623,10 @@ function S.Sides()
     -- a tank: survival is your EHP (the site's own measure for tanks); damage from the class's damage
     -- spec's values (and its calibration)
     list[1] = { kind = "eh", w = EHPer(), share = t, label = "survival" }
-    local dk = ns.GUIDE and ns.GUIDE[key] and ns.GUIDE[key].damageSpec
+    -- (a tank spec's damage: the class's damage spec; "I tank" on another spec: its own values)
+    local dk = ns.IsTankSpec(key) and ns.GUIDE and ns.GUIDE[key] and ns.GUIDE[key].damageSpec
     local dw = dk and ns.SiteWeights(dk) or own
-    list[2] = { kind = "points", w = dw, share = 1 - t, label = "damage", calKey = dk }
+    list[2] = { kind = "points", w = dw, share = 1 - t, label = "damage", calKey = dk or key }
   else
     list[1] = { kind = "points", w = own, share = 1 - t, label = (ns.GUIDE[key] and ns.GUIDE[key].unit == "HPS") and "healing" or "damage", own = true }
     list[2] = { kind = "eh", w = EHPer(), share = t, label = "survival" }
