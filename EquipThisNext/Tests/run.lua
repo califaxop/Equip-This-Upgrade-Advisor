@@ -48,7 +48,7 @@ dofile(ROOT .. "Tests/FixtureShaman42.lua")
 dofile(ROOT .. "Tests/FixtureSpecs.lua")
 dofile(ROOT .. "Tests/FixtureClass.lua")
 if BENCH then assert(loadfile(ROOT .. "Tests/Bench.lua"))() return end
-for _, file in ipairs({ "CacheTests", "CompatTests", "ProfileTests", "ScannerTests", "EngineTests", "M4Tests", "M4bTests", "M4cTests", "ClassTests", "M6Tests" }) do
+for _, file in ipairs({ "CacheTests", "CompatTests", "ProfileTests", "ScannerTests", "EngineTests", "M4Tests", "M4bTests", "M4cTests", "ClassTests", "M6Tests", "EQT5Tests" }) do
   OUT("== " .. file)
   assert(loadfile(ROOT .. "Tests/" .. file .. ".lua"))()
 end

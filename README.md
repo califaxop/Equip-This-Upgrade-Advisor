@@ -1,20 +1,19 @@
-# Equip This!: Leveling Upgrade Advisor
+# Equip This!: Upgrade Advisor
 
-**Which gear is better for you while leveling, at a glance.**
+**Which gear is better for you, worked out on your own character.**
 
-Equip This! scores gear for your class and spec, marks upgrades on item tooltips, and glows the best quest reward so you never have to guess.
+Equip This! tells you on every item tooltip whether it's an upgrade, by how much, and why. It glows the best quest reward so you never have to guess.
 
 ## Highlights
-- **Forever Upgrades' numbers:** every spec's stat weights come from [Forever Upgrades](https://foreverupgrades.com)' simulator (what each stat does for the spec's DPS, HPS or tanking effective health), refreshed every week. An item scores its stats times those values, plus its effects, as a % of you: your gear plus what your character itself brings (its spells' own damage, base stats, talents: measured with Forever Upgrades' Sim DPS at levels 30 / 40 / 50 / 60), so "Upgrade +2.4% DPS vs [your item]" is close to the change in your output, and the same % means the same in every slot. `/eqt guide` shows the split.
-- **Your talents count:** the site's weights assume a full level-60 talent build. Talents that change what a stat is worth (Mental Dexterity turning Intellect into attack power, Flurry, Careful Aim, Spiritual Guidance...) are checked against yours: until you have them, those stats count less, and they rise as you take them.
-- **I tank:** tick it in `/eqt` to score survivability as a tank with any class (a shaman or a Retribution paladin tanking): bosses hit you, so armor, Defense, dodge, parry and block count fully, and the build leans to survival.
-- **Your build:** one slider, from More Damage (or More Healing) to More Survivability, with presets: Damage, Leveling (the default while you level: a quarter survivability), Balanced, Survival. Survivability is your effective health (EHP), worked out the way Forever Upgrades does for tanks: your health divided by the share of an enemy's melee damage you actually take, after armor, misses, dodges, parries, blocks (Shield Block and Holy Shield included), crits and crushing blows; against a boss three levels up at the level cap, an enemy your level before it. On top of the site's model, spells count too, cut only by your resistances: 20% of what comes at you while leveling; at the level cap, the mix of the raid you pick in Settings (Raid at 60: Molten Core, Blackwing Lair, Temple of Ahn'Qiraj or Naxxramas, the default), measured on Warcraft Logs. Non-tanks take mostly magic (63-85%: fire in Molten Core and Blackwing Lair, nature in Ahn'Qiraj and Naxxramas), since bosses seldom melee them; tanks 12-32%. Tanks use it too, with their damage from the class's damage spec.
-- **Adapts to you:** the stat values follow your level (hit caps, the site's sims at 30 / 50 / 60), your talents and your gear by themselves; the slider is all there is to set. `/eqt guide` lists the values in use. Verdicts say "DPS", "HPS" or "EHP" while your build is all one of them; `/eqt guide` also shows your EHP and what it's made of.
-- **Caps:** hit, spell hit and expertise count up to their cap (against your level while leveling, against bosses at 60), measured against your gear and talents without the item being replaced; a tank's defense counts fully up to crit immunity at 60.
-- **Shift for the working:** hold Shift on an item to see where its score comes from ("Weapon DPS -8.2%, Strength +1.1%...") and any effect it doesn't count.
+- **Worked out on you:** each item is tried on your own character: your stats from the character sheet, your talents, your abilities (Stormstrike, Mortal Strike, Frostbolt...), your weapon imbue (Windfury...), your procs and set bonuses, against the item you'd replace. Using Forever's own numbers: its spell coefficients, cooldowns, proc rates and threat values from the game's data, its glancing-blow and armor calculators from the game itself.
+- **Learns how you fight:** after each fight, Equip This! reads the game's damage meter (your damage and healing per spell) and learns how often you use each ability, so the value of spell power, attack power or crit follows your own play. It stays on your computer. Until it has learned, a default from real raid logs (Warcraft Logs) or a stated assumption is used.
+- **Every number apart:** "Upgrade +4.4% vs [your item]", then the numbers behind it: DPS (or healing; threat for tanks) and survivability (effective health), never mixed into one silently. The slider (More Damage <-> More Survivability) says how they weigh in the verdict; presets: Damage, Leveling (the default while you level), Balanced, Survival / Tanking.
+- **All classes and specs:** melee, ranged (hunters), casters, healers (with mana: a fight's length decides how much Intellect, Spirit and mana regen are worth) and tanks (threat from your stance, form or aura, from Forever's data).
+- **Smart comparisons:** both ring and trinket slots, two-handers against main hand + off hand, a one-hander paired with your best off-hand or shield from your bags, set bonuses gained and lost, your enchant carried over, unique items, and "your Axes skill is 180: until it's trained up" for a weapon type you haven't trained.
+- **Honest:** effects it can't count are listed, never treated as nothing; hold Shift for where the numbers come from and how sure they are.
+- **PvP too (optional):** burst, sustained damage and survival against players, with PvP's own assumptions.
 - **Quest rewards:** the best upgrade among the choices glows. No upgrade? The one that sells for most gets a coin.
-- **Item effects count:** procs on hit, on spell cast or on crit (with the game's proc chances where it has them; about once a minute otherwise), Use effects, and "+10% Stormstrike"-style skill bonuses by that skill's share of your rotation (from Forever Upgrades' sim at your level). Enchants count too; an item with no enchant of its own is compared with yours on it, and says so.
-- **Smart comparisons:** against your best item for the slot, worn or in your bags, rings and trinkets against the weaker of your two, two-handers against main hand + off hand, a one-hander replacing a two-hander paired with your best off-hand from your bags (and an off-hand's weapon DPS counting half). Optional: from level 40, only your best armor type (mail or plate) can be an upgrade.
+- **Help improve it (optional, off by default):** tick "Help improve Equip This!" in `/eqt` to keep anonymous fight records (class, spec, level, damage and healing per spell; no name, realm or IDs) that you can copy and send. Nothing leaves the game on its own. It helps the classes and specs the author can't play.
 
 ## Quick start
 1. Install and play: Equip This! works out of the box.
@@ -24,16 +23,17 @@ Equip This! scores gear for your class and spec, marks upgrades on item tooltips
 | Command | Does |
 |---|---|
 | `/eqt` (or `/equipthis`) | Open settings |
-| `/eqt item <item>` | How an item was scored (shift-click it into the command) |
-| `/eqt spec` | Which spec gear is scored for |
-| `/eqt guide` | Your spec's stat priority, rotation, output split, your values, and the talents still missing from them |
+| `/eqt item <item>` | The full working for an item (shift-click it into the command) |
+| `/eqt model` | Your character as Equip This! sees it: damage parts, rotation, threat, PvP, effective health |
+| `/eqt report` | Your fight records to copy (with "Help improve Equip This!" ticked) |
+| `/eqn` | The engine's diagnostics (`/eqn measure`, `/eqn abilities`, `/eqn weights`...) |
 
 ## Good to know
-- Stat values come from Forever Upgrades' simulations, made with level-60 gear and talents; your talents and your own changes adjust them.
-- Equip-line stats (crit, hit, spell damage, mp5) are read from English item tooltips.
+- Equip-line stats and effects are read from English item tooltips.
+- A brand-new character starts from a default rotation; it becomes yours after about 8 fights.
 
 ## Credits
-Stat priorities, stat weights and rotations per spec: [Forever Upgrades](https://foreverupgrades.com). Talent builds and their texts: Forever Upgrades and Forever's own game tables. Enchants: Forever's own tables, via [wago.tools](https://wago.tools).
+Forever's own game tables (spells, items, enchants, proc rates, threat), via [wago.tools](https://wago.tools). Default rotations, raid damage mixes and server-kept proc rates: [Warcraft Logs](https://www.warcraftlogs.com) (Classic Era 40-player raids).
 
 ## Updates
 New versions come out every **Wednesday at 12:00 UTC** (8 PM Philippine time, 8 AM US Eastern). Urgent fixes ship sooner.
@@ -42,6 +42,7 @@ New versions come out every **Wednesday at 12:00 UTC** (8 PM Philippine time, 8 
 Found a bug or have an idea? [Open an issue](https://github.com/califaxop/Equip-This-Upgrade-Advisor/issues/new/choose): there's a short form for each. The settings window has a "Report a bug / suggest" button with this link too.
 
 ## Recent changes
+- **5.0.0:** A new engine. Every item is now worked out on your own character instead of with fixed stat values: your character sheet, talents, abilities, imbue, procs and set bonuses, with Forever's own spell, item and threat data, and complete setups compared (both ring slots, weapon pairs, shields, enchants carried over). It learns how often you use each ability from the game's damage meter after your fights. Tooltips show the verdict and, under it, DPS (or healing, or threat for tanks) and effective health apart; hold Shift for the working and how sure it is. New: healers' and casters' mana over a fight, hunters' ranged attacks, tanks' threat, optional PvP numbers, and an opt-in "Help improve Equip This!" to send anonymous fight records. Forever Upgrades' values are no longer used. Equip This! Next, the test build, is part of it now: remove it if you have it.
 - **4.4.0:** Real proc rates from Warcraft Logs for items whose rate the game keeps on its server (they used to count as about once a minute): Misplaced Servo Arm 3.3 a minute, Darkmoon Card: Heroism 3.3, Heartseeking Crossbow 2.3, Darkmoon Card: Maelstrom 2.2, measured on players wearing them in recent 40-player raids. The item breakdown says when a rate was measured. Enchant names show their numbers ("with your Stamina +3 and Armor +24 on it", not "$k2"/"$k1"), and an enchant's armor now counts. Also includes 4.3.1.
 - **4.3.1:** Proc uptimes are more accurate: a proc that goes off again while its buff is still up only restarts it, so fast or long procs no longer count more uptime than they get (a 10-second buff at 3 procs a minute is up 39% of the time, not 50%). Use effects are unchanged (their length over their cooldown).
 - **4.3.0:** Pick the raid you're gearing for (Settings: Raid at 60, kept per character): Molten Core, Blackwing Lair, Temple of Ahn'Qiraj or Naxxramas. At the level cap your EHP counts that raid's spell damage, measured on Warcraft Logs (6 recent kills of each boss), so the right resistances count: fire in Molten Core (tanks take 32% of their damage as magic, everyone else 76%) and Blackwing Lair (32% / 85%), nature in Ahn'Qiraj (17% / 63%), a mix in Naxxramas (12% / 69%). `/eqt guide` says which raid it's using.

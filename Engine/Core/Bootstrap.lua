@@ -4,7 +4,7 @@
 local ADDON, ns = ...; ns = ns.Engine
 
 ns.name = ADDON
-ns.version = "0.8.1"
+ns.version = "0.9.0"
 ns.title = "Equip This! (engine)"
 
 -- Modules register themselves here so diagnostics can list what loaded.

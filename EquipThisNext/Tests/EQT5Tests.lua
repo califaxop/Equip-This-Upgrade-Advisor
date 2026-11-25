@@ -1,0 +1,119 @@
+-- Equip This! 5.0 (the engine bundled into Equip This!): loads the whole addon (EquipThis.toc at the
+-- repository root) on the mock game, with every UI frame call accepted, and checks the tooltip line,
+-- quest rewards, settings window, commands, the opt-in records and the old settings' migration.
+-- Runs only where the repository root is Equip This! 5.0 (Bridge.lua there).
+local EQT = ROOT .. "../"
+local f = io.open(EQT .. "Bridge.lua", "r")
+if not f then OUT("  (skipped: the repository root isn't Equip This! 5.0)") return end
+f:close()
+
+-- frames for the UI: any method works; Get* return a number, Is*/Has* false, the rest the frame
+local function permissive()
+  local o = {}
+  return setmetatable(o, { __index = function(t, k)
+    if type(k) ~= "string" then return nil end
+    if k:find("^Get") then return function() return 100 end end
+    if k:find("^Is") or k:find("^Has") then return function() return false end end
+    if k:find("^Create") then return function() return permissive() end end
+    return function() return t end
+  end })
+end
+local baseCreateFrame = CreateFrame
+local function uiCreateFrame(...)
+  local f = baseCreateFrame(...)
+  local fallback = permissive()
+  return setmetatable(f, { __index = function(_, k) return fallback[k] end })
+end
+
+local function loadEQT(db)
+  MOCK.Reset()
+  CreateFrame = uiCreateFrame
+  UIParent = permissive(); ChatFontNormal = {}; Settings = nil; InterfaceOptions_AddCategory = function() end
+  hooksecurefunc = function() end
+  UISpecialFrames = {}
+  format, tinsert, tremove, wipe = string.format, table.insert, table.remove, function(t) for k in pairs(t) do t[k] = nil end return t end
+  EquipThisDB = db
+  local ns = {}
+  local fh = assert(io.open(EQT .. "EquipThis.toc"))
+  for line in fh:lines() do
+    line = line:gsub("%s+$", "")
+    if line ~= "" and not line:match("^#") then assert(loadfile(EQT .. line:gsub("\\", "/")))("EquipThis", ns) end
+  end
+  fh:close()
+  for id in pairs(MOCK.ITEMS) do MOCK.cached[id] = true end
+  MOCK.Fire("ADDON_LOADED", "EquipThis"); MOCK.Fire("PLAYER_LOGIN"); MOCK.Fire("PLAYER_ENTERING_WORLD"); MOCK.RunTimers()
+  return ns
+end
+
+T.Test("5.0: Equip This! loads with the engine inside; the tooltip line comes from it", function()
+  MOCK.windfury = true
+  local ns = loadEQT(nil)
+  T.Ok(ns.Engine and ns.Engine.bundled, "the engine, in its own namespace")
+  T.Ok(ns.Engine.profile, "it scanned the character")
+  T.Eq(ns.Engine.db.tree, "auto", "settings synced into the engine")
+  local tt = MOCK.MakeTooltip("|cff0070dd|Hitem:1008::::::::42|h[Ring of Procs]|h|r")
+  function tt:Show() end
+  GameTooltip = tt   -- (Equip This! writes on the game's own tooltips)
+  MOCK.tooltipHook(tt, {})
+  local all = table.concat(tt.lines, "\n")
+  OUT("    tooltip: " .. all:gsub("\n", " / "))
+  T.Ok(tt.lines[1] and tt.lines[1]:find("Equip This!:") and (tt.lines[1]:find("Upgrade") or tt.lines[1]:find("Downgrade") or tt.lines[1]:find("same")), all)
+  T.Ok(all:find("DPS") and all:find("EHP"), "the separate numbers: " .. all)
+  IsShiftKeyDown = function() return true end
+  local tt2 = MOCK.MakeTooltip("|cff0070dd|Hitem:1008::::::::42|h[Ring of Procs]|h|r"); function tt2:Show() end
+  GameTooltip = tt2
+  MOCK.tooltipHook(tt2, {})
+  local all2 = table.concat(tt2.lines, "\n")
+  T.Ok(all2:find("Confidence") and all2:find("For "), "Shift: confidence and the build: " .. all2)
+  IsShiftKeyDown = function() return false end
+  T.Eq(ns.Engine.errors.count, 0, "no engine errors")
+end)
+
+T.Test("5.0: the slider mixes the verdict; the numbers stay apart", function()
+  local ns = loadEQT(nil)
+  local link = "|cff0070dd|Hitem:1008::::::::42|h[Ring of Procs]|h|r"
+  ns.Bridge.SetBuild("damage"); ns.Bridge.Sync()
+  local a = ns.Bridge.Compare(link)
+  ns.Bridge.SetBuild("survival"); ns.Bridge.Sync()
+  local b = ns.Bridge.Compare(link)
+  T.Near(a.pct, a.metrics.dps, 1e-9, "Damage: the DPS %")
+  T.Near(b.pct, b.metrics.ehp, 1e-9, "Survival: the EHP %")
+  ns.Bridge.SetMix(0.4); ns.Bridge.Sync()
+  local c = ns.Bridge.Compare(link)
+  T.Near(c.pct, 0.6 * c.metrics.dps + 0.4 * c.metrics.ehp, 1e-9, "your mix")
+  T.Eq(ns.Display.Unit(), "", "a mix has no single unit")
+end)
+
+T.Test("5.0: settings window, commands, quest rewards", function()
+  local ns = loadEQT(nil)
+  local okO, eO = pcall(ns.OpenOptions)
+  T.Ok(okO, "the settings window builds: " .. tostring(eO))
+  PRINTS = {}; SlashCmdList.EQUIPTHIS("item |cff0070dd|Hitem:1008::::::::42|h[Ring of Procs]|h|r")
+  T.Ok(#PRINTS > 0, "/eqt item")
+  PRINTS = {}; SlashCmdList.EQUIPTHIS("model"); T.Ok(table.concat(PRINTS, " "):find("DPS"), "/eqt model")
+  PRINTS = {}; SlashCmdList.EQUIPTHIS("help"); T.Ok(#PRINTS >= 4, "/eqt help")
+  T.Ok(pcall(SlashCmdList.EQUIPTHIS, "report"), "/eqt report")
+  GetNumQuestChoices = function() return 2 end
+  GetQuestItemLink = function(_, i) return i == 1 and "|cff0070dd|Hitem:1008::::::::42|h[Ring of Procs]|h|r" or "|cff0070dd|Hitem:1003::::::::42|h[Ring of Sets]|h|r" end
+  ns.db.rewards = true
+  T.Ok(pcall(ns.Display.MarkRewards), "quest rewards marked without errors")
+  T.Eq(ns.Engine.errors.count, 0)
+end)
+
+T.Test("5.0: opt-in fight records: off by default; on, anonymous lines to copy", function()
+  local ns = loadEQT(nil)
+  T.Eq(ns.Engine.db.share, false); T.Eq(ns.Engine.db.learn, true)
+  ns.Engine.db.share = true
+  MOCK.meter = { id = 500, duration = 30, spells = { [6603] = 3000, [17364] = 1200, [403] = 500 } }
+  MOCK.Fire("PLAYER_REGEN_ENABLED"); MOCK.RunTimers()
+  local text, n = ns.Engine.FightRecorder.ReportText()
+  T.Eq(n, 1)
+  T.Ok(text:find("EQT5|") and text:find("SHAMAN"), text)
+  local okR, eR = pcall(ns.ShowReport)
+  T.Ok(okR, "the copy window: " .. tostring(eR))
+end)
+
+T.Test("5.0: 4.x settings: the old scoring's are dropped, the rest kept", function()
+  local ns = loadEQT({ spec = "SHAMAN:2", priorities = { ["SHAMAN:2"] = { build = "leveling" } }, tooltip = false, raids = { ["X-Y"] = "mc" } })
+  T.Eq(ns.db.spec, "auto"); T.Eq(ns.db.priorities, nil); T.Eq(ns.db.tooltip, false); T.Eq(ns.db.raids["X-Y"], "mc")
+end)
