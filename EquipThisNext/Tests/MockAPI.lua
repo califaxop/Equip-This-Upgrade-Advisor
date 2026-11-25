@@ -49,7 +49,8 @@ function MOCK.RunTimers()
   timers = {}
   for _, fn in ipairs(list) do fn() end
 end
-function time() return MOCK.now end
+function time(t) if t then return os.time(t) end return MOCK.now end
+date = os.date   -- (WoW has date())
 PRINTS = {}
 function print(...)
   local t = {}

@@ -146,16 +146,32 @@ T.Test("5.0: sharing: a summary, one line to copy, 'I reported this' clears, a r
   T.Ok(line:find("^EquipThis:Fights:1!") and line:find("!End:EquipThis:Fights:1$"), line:sub(1, 80))
   T.Ok(not line:find("\n") and not line:find("|", 1, true), "one line, nothing the game would read as a code")
   T.Ok(line:find("c=SHAMAN,t=Enhancement,l=42,d=30,dmg=Auto Attack:3000;Lightning Bolt:500;Stormstrike:1200,heal=,mdl=", 1, true), line:sub(1, 200))
-  -- not again for a week, even with more waiting (a new session)
+  -- not again in the same window, even with more waiting (a new session)
   FR.reminded = nil
   for i = 1, 3 do
     MOCK.meter = { id = 700 + i, duration = 30, spells = { [6603] = 3000 } }
     MOCK.Fire("PLAYER_REGEN_ENABLED"); MOCK.RunTimers()
   end
-  T.Eq(reminded, 1, "at most once a week")
-  n6.db.lastReminded = n6.db.lastReminded - 8 * 24 * 3600
+  T.Eq(reminded, 1, "once per window")
+  -- the next window opens: a reminder again (once)
+  local saved = MOCK.now
+  MOCK.now = FR.WindowStart(saved) + 7 * 86400 + 60
+  FR.reminded = nil
   FR.MaybeRemind()
-  T.Eq(reminded, 2, "a week later")
+  T.Eq(reminded, 2, "the next window")
+  MOCK.now = saved
   T.Eq(FR.MarkReported(), FR.REMIND_AT + 5)
   T.Eq(FR.Summary().fights, 0); T.Eq(FR.Summary().sentBefore, FR.REMIND_AT + 5)
+end)
+
+T.Test("5.0: reminder windows: Wednesday 12:00 UTC (after maintenance) and Sunday midnight, twice a week", function()
+  local n7 = LoadAddon()
+  local FR = n7.FightRecorder
+  local function at(y, m, d, h, mi) return os.time({ year = y, month = m, day = d, hour = h, min = mi or 0, sec = 0, isdst = false }) end
+  -- (this test machine's clock is UTC) 2026-11-25 is a Wednesday
+  T.Eq(FR.WindowStart(at(2026, 11, 25, 13)), at(2026, 11, 25, 12), "Wednesday after maintenance")
+  T.Eq(FR.WindowStart(at(2026, 11, 25, 11)), at(2026, 11, 22, 0), "Wednesday morning: still Sunday's window")
+  T.Eq(FR.WindowStart(at(2026, 11, 28, 20)), at(2026, 11, 25, 12), "Saturday: Wednesday's")
+  T.Eq(FR.WindowStart(at(2026, 11, 29, 9)), at(2026, 11, 29, 0), "Sunday: Sunday's")
+  T.Eq(FR.WindowStart(at(2026, 12, 1, 9)), at(2026, 11, 29, 0), "Tuesday: Sunday's")
 end)
