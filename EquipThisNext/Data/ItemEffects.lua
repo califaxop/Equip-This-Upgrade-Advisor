@@ -45,7 +45,9 @@ function IE.IsEffect(line)
 end
 
 function IE.IsStatLine(line)
-  for _, p in ipairs(IE.STAT_LINES) do if line:find(p) then return true end end
+  -- (case-blind: Forever writes "chance to Block attacks", Classic "block")
+  local low = line:lower()
+  for _, p in ipairs(IE.STAT_LINES) do if low:find(p:lower()) then return true end end
   return false
 end
 

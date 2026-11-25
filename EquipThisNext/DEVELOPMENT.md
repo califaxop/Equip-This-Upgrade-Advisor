@@ -14,7 +14,7 @@ runs alongside the released Equip This! without touching it, on the `next-founda
 |---|---|
 | 1. Foundation: compatibility layer, scanners, diagnostics | **done: 0.1.3 validated in game (level 42 Shaman, build 71091)** |
 | 2. Basic evaluation | **done: validated in game (0.2.1; the tooltip %s look right to the tester)** |
-| 3. Complete gear evaluation | **0.3.0 tested in game; 0.3.1 fixes what it found (55 tests), waiting for the re-test** |
+| 3. Complete gear evaluation | **0.3.0 tested in game; 0.3.1/0.3.2 fix what it found, re-tested; next: milestone 4** |
 | 4. Simulation (DPS, healing, tanking, PvP) | not started |
 | 5. All classes and builds | not started |
 | 6. Optimization and validation | not started |
@@ -204,6 +204,13 @@ In-game results (0.3.0) and the 0.3.1 fixes (each has a regression test from the
   threat...) are still listed but no longer make confidence low (IE.IRRELEVANT). Mana cost and
   threat matter again with the caster and tank models (milestone 4).
 - Forever writes enchants as "Stamina +3 and Armor +24" (name first): parsed.
+
+In-game results (0.3.1): Flayer DPS -9.5 % at trained skill (-63.4 % today, as a note); Saltscale
+Girdle shows the Scarlet 2-piece lost (EHP -4.9 %: 10 Stamina of 2205 health); remaining "low"
+confidences are real (Rage of the Storm's Stormstrike bonus, Gigaflux's Use: damage; milestone 4).
+Quillord was still "low": Forever writes "chance to Block attacks ... by 2.0%" (capital B) and also
+gives it as block rating, so the line was neither a known stat line nor extra: stat-line matching is
+now case-blind (0.3.2).
 
 ## Milestone 2: basic evaluation (0.2.0)
 

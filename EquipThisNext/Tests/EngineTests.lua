@@ -341,6 +341,11 @@ T.Test("0.3.1: '+2% block' on non-shield gear counts (regression: Quillord Mail 
   local extra, used = IT.ExtraStats(lines, SD.Normalize({ RESISTANCE0_NAME = 300, ITEM_MOD_STAMINA_SHORT = 10 }))
   T.Eq(extra.BLOCK_PCT, 2, "2% block"); T.Eq(#used, 1, "the line is used")
   T.Eq(#ns.ItemEffects.Uncounted(lines), 0, "and not an uncounted effect")
+  -- as Forever writes it, with the % also given as block rating (regression: 0.3.1 "confidence low")
+  local fl = { "Equip: Increases your chance to Block attacks with a shield by 2.0%." }
+  T.Eq(#ns.ItemEffects.Uncounted(fl), 0, "'Block', '2.0%': a stat line, not an effect")
+  local e3 = IT.ExtraStats(fl, SD.Normalize({ ITEM_MOD_BLOCK_RATING_SHORT = 10 }))
+  T.Eq(next(e3), nil, "given as block rating too: counted once")
   local e2 = IT.ExtraStats({ "Equip: Improves your chance to get a critical strike by 1%." }, SD.Normalize({ ITEM_MOD_CRIT_RATING_SHORT = 14 }))
   T.Eq(next(e2), nil, "a % already given by the item's rating isn't counted twice")
   local s = SE.Apply(SE.Baseline(fixture3()), { BLOCK_PCT = 2 }, nil)
