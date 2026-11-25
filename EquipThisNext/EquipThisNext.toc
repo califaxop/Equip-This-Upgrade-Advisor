@@ -1,0 +1,57 @@
+## Interface: 16001
+## Title: Equip This! Next (test)
+## Notes: Test build of the new Equip This! engine (milestone 4): compares gear (armor, weapons, sets, enchants, procs) by modelled DPS (melee, abilities, imbues, procs, spells), healing, threat, PvP and effective health from your own character sheet. /eqn
+## Author: califaxop
+## Version: 0.9.0
+## SavedVariables: EquipThisNextDB
+
+# Core: namespace, events, saved data, caches
+Core\Bootstrap.lua
+Core\Events.lua
+Core\Database.lua
+Core\Cache.lua
+
+# API: every call into the game goes through here
+API\Compatibility.lua
+API\ItemAPI.lua
+API\EquipmentAPI.lua
+API\CharacterAPI.lua
+API\TalentAPI.lua
+API\AuraAPI.lua
+API\SpellAPI.lua
+API\MeterAPI.lua
+
+# Data and engine: pure Lua, no game API (testable outside the game)
+Data\StatDefinitions.lua
+Data\Talents.lua
+Data\ItemEffects.lua
+Data\ItemText.lua
+Data\Generated.lua
+Data\MeasuredProcs.lua
+Data\Rotations.lua
+Engine\CharacterProfile.lua
+Engine\TalentInterpreter.lua
+Engine\AbilityInterpreter.lua
+Engine\StatEngine.lua
+Engine\Models\Melee.lua
+Engine\Models\Spells.lua
+Engine\Models\Ranged.lua
+Engine\Models\Threat.lua
+Engine\Models\Survival.lua
+Engine\Evaluator.lua
+
+# Scanners: game data -> the normalized CharacterProfile
+Scanner\StatScanner.lua
+Scanner\EquipmentScanner.lua
+Scanner\TalentScanner.lua
+Scanner\BuffScanner.lua
+Scanner\SpellScanner.lua
+Scanner\AbilityScanner.lua
+Scanner\FightRecorder.lua
+Scanner\CalcScanner.lua
+Scanner\BagScanner.lua
+Scanner\CharacterScanner.lua
+
+# UI: tooltip comparisons, diagnostics (/eqn)
+UI\Tooltip.lua
+UI\Diagnostics.lua
