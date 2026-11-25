@@ -138,6 +138,8 @@ def write_enchants(out, build=None):
 AURA_STAT = {"99": "AP", "124": "RAP", "13": "SP", "135": "HEAL", "57": "SPELLCRIT", "52": "CRIT", "54": "HIT",
              "55": "SPELLHIT", "85": "MP5", "34": "HEALTH"}
 MOD_STAT = {"0": "STR", "1": "AGI", "2": "STA", "3": "INT", "4": "SPI"}
+RESIST = {"0": "ARMOR", "1": "RES_HOLY", "2": "RES_FIRE", "3": "RES_NATURE", "4": "RES_FROST", "5": "RES_SHADOW",
+          "6": "RES_ARCANE"}
 ITEM_MOD = {"3": "AGI", "4": "STR", "5": "INT", "6": "SPI", "7": "STA", "45": "SP", "38": "AP", "41": "HEAL"}
 
 
@@ -187,6 +189,12 @@ def build_enchants(build):
             return {"stat": k, "amount": v, "seconds": dur / 1000}
         return None
 
+    def spell_points(spell, n):
+        for e in effects.get(spell, []):
+            if e.get("EffectIndex") == str(n - 1):
+                return fmt(abs(fnum(e["EffectBasePointsF"])))
+        return "$"
+
     out = []
     for r in table("SpellItemEnchantment", build):
         name = (r.get("Name_lang") or "").strip()
@@ -195,11 +203,22 @@ def build_enchants(build):
         temp = fnum(r.get("Duration")) > 0
         if temp:
             continue  # (imbues, poisons, stones, oils: buffs, not part of an item)
+        # "$k1", "$k2"... in a name are the enchant's own effect amounts (EffectPointsMin_0, _1...):
+        # 8485 "Spell Power +$k2 and Armor +$k1" is "Spell Power +4 and Armor +24" in game
+        name = re.sub(r"\$k(\d)", lambda m: fmt(fnum(r.get(f"EffectPointsMin_{int(m.group(1)) - 1}"))), name)
+        # "$1220754s2", "$1220596M1": that spell's effect 2's (1's) amount
+        name = re.sub(r"\$(\d+)[sSmM](\d)", lambda m: spell_points(m.group(1), int(m.group(2))), name)
+        if "$" in name:
+            continue  # ("+$i Agility": a level-scaled amount this table doesn't give)
         dmg, stats, pr = 0, {}, None
         for i in range(3):
             eff, pts, arg = r.get(f"Effect_{i}"), fnum(r.get(f"EffectPointsMin_{i}")), r.get(f"EffectArg_{i}")
             if eff == "2":
                 dmg += pts
+            elif eff == "4":  # (armor or a resistance; arg = school, 0 = armor)
+                k = RESIST.get(arg or "0")
+                if k and pts:  # (0: a level-scaled amount, "+$i Fire Resistance": not known here)
+                    stats[k] = stats.get(k, 0) + pts
             elif eff == "5":
                 k = ITEM_MOD.get(arg)
                 if k:
