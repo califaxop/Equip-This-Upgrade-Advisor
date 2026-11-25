@@ -15,7 +15,7 @@ runs alongside the released Equip This! without touching it, on the `next-founda
 | 1. Foundation: compatibility layer, scanners, diagnostics | **done: 0.1.3 validated in game (level 42 Shaman, build 71091)** |
 | 2. Basic evaluation | **done: validated in game (0.2.1; the tooltip %s look right to the tester)** |
 | 3. Complete gear evaluation | **done: validated in game (0.3.0-0.3.3)** |
-| 4. Simulation (DPS, healing, tanking, PvP) | **4a: melee DPS with abilities, imbues, procs: 0.4.0 read right in game; 0.4.1 measured in game (Windfury agrees); 0.4.2 fixes the meter's "Attack" and untrained worn weapons**; **4b: spells, learned rotation, HPS: 0.5.0 matched new fights in game; 0.5.1 school spell damage, spell penetration**; **4c (0.6.0): threat and PvP: built, offline tests pass (77), waiting for the in-game test** |
+| 4. Simulation (DPS, healing, tanking, PvP) | **4a: melee DPS with abilities, imbues, procs: 0.4.0 read right in game; 0.4.1 measured in game (Windfury agrees); 0.4.2 fixes the meter's "Attack" and untrained worn weapons**; **4b: spells, learned rotation, HPS: 0.5.0 matched new fights in game; 0.5.1 school spell damage, spell penetration**; **4c: threat and PvP: 0.6.0 checked in game (threat on a tank still to check)** |
 | 5. All classes and builds | not started |
 | 6. Optimization and validation | not started |
 
@@ -177,6 +177,14 @@ shows it):
 - survival: EHP vs players: half physical, half magic (assumed), attacker your level, no crushing.
 - Not counted: crowd control, trinkets that break it, healing during a fight, Resilience (Forever
   has none).
+
+In-game results (0.6.0): /eqn model: DPS 308 (auto attack 24%, Stormstrike 17%, Windfury 16%,
+Flame Shock 14%, Earth Shock 14%, Lightning Shield 9%, Chain Lightning 5%, Lightning Bolt 2%);
+threat 216 a second (Spirit Weapons -30%); PvP burst 3163 in 6 s, sustained 267 DPS (armor cuts
+24%), survival 2614. The Flayer + Savage Boar's Guard vs Rage of the Storm: PvE DPS -12.2%, EHP
++19.0%; PvP burst -5.5%, sustained -10.7%, survival +8.8% (the shield's armor does nothing vs the
+magic half). `/eqn role tank` showed threat in place of DPS. 0.6.1: "/eqn model" said "melee DPS"
+for the total with spells; now "DPS".
 
 In-game test (0.6.0):
 1. `/eqn model`: the PvP line (burst, sustained, survival) and threat (with Spirit Weapons -30%).

@@ -220,7 +220,7 @@ function Diag.Model()
     ctx.melee and "melee (DPS = auto attacks, weapon strikes, imbue, item procs, spells)" or (ctx.healer and "healer (HPS from your heals)" or "caster (DPS from your spells)"))
   if b.dps and b.dpsInfo and b.dpsInfo.table then
     local t = b.dpsInfo.table
-    f("melee DPS %s: swing %s every %.2fs; miss %.1f%% dodge %.1f%% glancing %.1f%% (-%d%%) crit %.1f%% hit %.1f%%%s; speed x%.3f%s",
+    f("DPS %s; melee: swing %s every %.2fs; miss %.1f%% dodge %.1f%% glancing %.1f%% (-%d%%) crit %.1f%% hit %.1f%%%s; speed x%.3f%s",
       n1(b.dps), n1(s.swing), s.speed, t.miss, t.dodge, t.glance, t.glancePenalty * 100 + 0.5, t.crit, t.hit,
       t.assumedGlancing and " (glancing assumed)" or "", b.dpsInfo.speedMult,
       b.dpsInfo.flurryUptime > 0 and string.format(" (Flurry up %d%%)", b.dpsInfo.flurryUptime * 100 + 0.5) or "")
