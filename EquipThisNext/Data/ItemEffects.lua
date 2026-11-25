@@ -28,6 +28,9 @@ IE.STAT_LINES = {
   "^Equip: Increases your chance to block attacks with a shield by %d+%.?%d*%%%.?$",
   "^Equip: Increases the block value of your shield by %d+%.?$",
   "^Equip: %+%d+ Weapon Damage%.?$",
+  "^Equip: Increases damage done by %a+ spells and effects by up to %d+%.?$",
+  "^Equip: Your spells pierce %d+ Magical Resistance%.?$",
+  "^Equip: Decreases the magical resistances of your spell targets by %d+%.?$",
 }
 
 -- effects that change neither damage nor survivability (listed, but they don't lower confidence)

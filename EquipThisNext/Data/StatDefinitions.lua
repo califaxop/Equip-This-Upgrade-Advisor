@@ -75,6 +75,8 @@ end
 SD.NAMES = {
   STR = "Strength", AGI = "Agility", STA = "Stamina", INT = "Intellect", SPI = "Spirit", ARMOR = "Armor",
   AP = "Attack Power", RAP = "Ranged AP", SP = "Spell Damage", HEAL = "Healing", MP5 = "Mana per 5",
+  SP_HOLY = "Holy Spell Damage", SP_FIRE = "Fire Spell Damage", SP_NATURE = "Nature Spell Damage", SP_FROST = "Frost Spell Damage",
+  SP_SHADOW = "Shadow Spell Damage", SP_ARCANE = "Arcane Spell Damage",
   HP5 = "Health per 5", HEALTH = "Health", CRIT_RATING = "Crit Rating", HIT_RATING = "Hit Rating",
   HASTE_RATING = "Haste Rating", EXPERTISE_RATING = "Expertise Rating", DEFENSE_RATING = "Defense Rating",
   DODGE_RATING = "Dodge Rating", PARRY_RATING = "Parry Rating", BLOCK_RATING = "Block Rating",

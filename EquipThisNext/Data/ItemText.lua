@@ -56,6 +56,7 @@ end
 local COVERED_BY = { CRIT_PCT = { "CRIT_RATING", "CRIT_MELEE_RATING" }, HIT_PCT = { "HIT_RATING", "HIT_MELEE_RATING" },
   SPELLCRIT_PCT = { "CRIT_RATING", "CRIT_SPELL_RATING" }, DODGE_PCT = { "DODGE_RATING" }, PARRY_PCT = { "PARRY_RATING" },
   BLOCK_PCT = { "BLOCK_RATING" } }
+local GENERIC_SP = "[Ii]ncreases damage and healing done by magical spells"
 function IT.ExtraStats(lines, normalizedStats)
   local extra, used = {}, {}
   for _, l in ipairs(lines or {}) do
@@ -70,7 +71,16 @@ function IT.ExtraStats(lines, normalizedStats)
           if not has then covered = false end
         end
         if not covered then
-          for k, v in pairs(s) do extra[k] = (extra[k] or 0) + v end
+          for k, v in pairs(s) do
+            extra[k] = (extra[k] or 0) + v
+            -- one school's spell damage the stat table gives as plain spell damage (same amount, no
+            -- line for all schools): it's that school's only
+            if k:find("^SP_") and normalizedStats.SP == v then
+              local generic = false
+              for _, l2 in ipairs(lines) do if l2:find(GENERIC_SP) then generic = true end end
+              if not generic then extra.SP = (extra.SP or 0) - v end
+            end
+          end
           used[#used + 1] = l
         end
       end
@@ -104,10 +114,16 @@ local SENTENCES = {
   { "^Increases your chance to [Bb]lock attacks with a shield by (%d+%.?%d*)%%%.?$", "BLOCK_PCT" },
   { "^Increases the block value of your shield by (%d+)%.?$", "BLOCK_VALUE" },
   { "^Restores (%d+) health per 5 sec%.?$", "HP5" },
+  { "^Your spells pierce (%d+) Magical Resistance%.?$", "SPELL_PEN" },
+  { "^Decreases the magical resistances of your spell targets by (%d+)%.?$", "SPELL_PEN" },
 }
 function IT.ParseStatText(text)
   if type(text) ~= "string" then return nil end
   text = text:gsub("^Enchanted: ", ""):gsub("^Equip: ", ""):gsub("%s+$", "")
+  -- one school's spell damage: "Increases damage done by Arcane spells and effects by up to 51."
+  local school, n = text:match("^Increases damage done by (%a+) spells and effects by up to (%d+)%.?$")
+  local SCHOOL_SP = { HOLY = true, FIRE = true, NATURE = true, FROST = true, SHADOW = true, ARCANE = true }
+  if school and SCHOOL_SP[school:upper()] then return { ["SP_" .. school:upper()] = tonumber(n) } end
   -- a whole sentence
   for _, sn in ipairs(SENTENCES) do
     local v = tonumber(text:match(sn[1]))

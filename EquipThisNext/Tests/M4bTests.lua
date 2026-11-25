@@ -151,3 +151,22 @@ T.Test("M4b in game (mock): spells scanned; /eqn measure learns the rotation; /e
   T.Ok(out:find("Lightning Bolt"), "Lightning Bolt is a DPS part now")
   T.Eq(ns5.errors.count, 0, "no errors")
 end)
+
+T.Test("0.5.1: one school's spell damage and spell penetration are stats (regression: Windweaver Staff 'confidence low')", function()
+  local IT = ns.ItemText
+  local lines = { "Equip: Your spells pierce 3 Magical Resistance.", "Equip: Increases damage done by Arcane spells and effects by up to 51." }
+  T.Eq(#IE.Uncounted(lines), 0, "neither is an uncounted effect")
+  local extra = IT.ExtraStats(lines, ns.StatDefs.Normalize({ ITEM_MOD_STAMINA_SHORT = 17, ITEM_MOD_SPELL_PENETRATION_SHORT = 3 }))
+  T.Eq(extra.SP_ARCANE, 51); T.Eq(extra.SPELL_PEN, nil, "already in the stat table")
+  -- if the stat table gives it as plain spell damage, it's moved to its school
+  local e2 = IT.ExtraStats(lines, ns.StatDefs.Normalize({ ITEM_MOD_SPELL_DAMAGE_DONE_SHORT = 51 }))
+  T.Eq(e2.SP_ARCANE, 51); T.Eq(e2.SP, -51)
+  -- arcane spell damage does nothing for a shaman's nature and fire spells; nature does
+  local p = fixture()
+  local ctx = Ev.Context(p, { targetOffset = 0, lastMeasurement = realMeasurement(Ev.RotationKey(p)) })
+  local function dps(d) return Ev.Performance(SE.Apply(ctx.state, d, ctx.talents), ctx).dps end
+  T.Near(dps({ SP_ARCANE = 51 }), ctx.base.dps, 1e-9, "arcane: nothing")
+  T.Ok(dps({ SP_NATURE = 51 }) > ctx.base.dps, "nature: more")
+  T.Ok(dps({ SP = 51 }) > dps({ SP_NATURE = 51 }), "all schools: more than nature alone (Flame Shock is fire)")
+  T.Near(dps({ SPELL_PEN = 3 }), ctx.base.dps, 1e-9, "spell penetration: targets have no resistance to pierce (assumed)")
+end)

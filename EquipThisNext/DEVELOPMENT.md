@@ -15,7 +15,7 @@ runs alongside the released Equip This! without touching it, on the `next-founda
 | 1. Foundation: compatibility layer, scanners, diagnostics | **done: 0.1.3 validated in game (level 42 Shaman, build 71091)** |
 | 2. Basic evaluation | **done: validated in game (0.2.1; the tooltip %s look right to the tester)** |
 | 3. Complete gear evaluation | **done: validated in game (0.3.0-0.3.3)** |
-| 4. Simulation (DPS, healing, tanking, PvP) | **4a: melee DPS with abilities, imbues, procs: 0.4.0 read right in game; 0.4.1 measured in game (Windfury agrees); 0.4.2 fixes the meter's "Attack" and untrained worn weapons**; **4b (0.5.0): spells, learned rotation, HPS: built, offline tests pass (71), waiting for the in-game test**; 4c tanking threat and PvP: not started |
+| 4. Simulation (DPS, healing, tanking, PvP) | **4a: melee DPS with abilities, imbues, procs: 0.4.0 read right in game; 0.4.1 measured in game (Windfury agrees); 0.4.2 fixes the meter's "Attack" and untrained worn weapons**; **4b: spells, learned rotation, HPS: 0.5.0 matched new fights in game; 0.5.1 school spell damage, spell penetration**; 4c tanking threat and PvP: not started |
 | 5. All classes and builds | not started |
 | 6. Optimization and validation | not started |
 
@@ -178,6 +178,18 @@ From the 0.4.2 measurement (30 fights) the model learns: Stormstrike 7.9 a minut
 Flame Shock 5.8, Earth Shock 7.2, Lightning Shield 8.2, Lightning Bolt 2.6; attacking 87% of the
 combat time. Spell damage is then worth about as much per point as attack power for this shaman
 (10 points: +0.68% vs +0.61% DPS).
+
+In-game results (0.5.0): 11 fights, 272 s in combat, 45,895 damage. With the rotation learned
+from the earlier 30 fights, the model's split matched the new fights within 1-4 points per part
+(auto attack 30/26%, Stormstrike 17/18%, Windfury 18/15%, Flame Shock 13/15%, Earth Shock 12/15%,
+Lightning Shield 6/9%, Lightning Bolt 4/2%); Chain Lightning (5%) learned from it. Auto attacks
+were up 56% of the combat time (casting pauses them; longer fights with more travel): the learned
+rates are per second of auto-attacking, so the split is right; the model's absolute DPS (254,
+"always attacking") is above the fights' (160) and only the % changes are used.
+Windweaver Staff showed "confidence low" for "+51 Arcane" spell damage and "pierce 3 Magical
+Resistance": 0.5.1 reads them as stats. A school's spell damage counts for that school's spells
+only (the sheet's spell damage is now kept per school); spell penetration counts as nothing (mobs
+at or below your level are assumed to have no resistance to pierce).
 
 In-game test (0.5.0):
 1. `/eqn model`: "rotation: learned from your fights", and the DPS parts with your spells.

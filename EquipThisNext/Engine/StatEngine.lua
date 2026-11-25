@@ -13,6 +13,7 @@ local SE = ns and ns.Module and ns.Module("StatEngine") or {}
 -- Blizzard's Forever paper doll constants (Camelot/PaperDollFrameStats.lua)
 SE.ARMOR_PER_AGILITY = 2
 SE.BLOCK_VALUE_PER_STRENGTH = 20
+SE.SCHOOLS = { "HOLY", "FIRE", "NATURE", "FROST", "SHADOW", "ARCANE" }
 SE.AP_PER_DPS = 14            -- ATTACK_POWER_MAGIC_NUMBER
 
 local function v(p, key) return p.stats and p.stats.values and p.stats.values[key] end
@@ -54,6 +55,9 @@ function SE.Baseline(profile)
   s.expertise = v(profile, "expertise.mainHand") or 0
   s.SP = v(profile, "spellDamage.NATURE") or 0
   for _, sch in ipairs({ "FIRE", "FROST", "SHADOW", "ARCANE", "HOLY" }) do s.SP = math.max(s.SP, v(profile, "spellDamage." .. sch) or 0) end
+  -- spell damage per school, as the sheet has it (gear like "+51 Arcane" raises one school only)
+  s.spBySchool = {}
+  for _, sch in ipairs(SE.SCHOOLS) do s.spBySchool[sch] = v(profile, "spellDamage." .. sch) or s.SP end
   s.HEAL = v(profile, "healing.bonus") or 0
   s.health = v(profile, "health.max") or 0
   s.armor = v(profile, "armor.effective") or 0
@@ -147,6 +151,10 @@ function SE.Apply(state, delta, talents, weapons)
   s.haste = state.haste + rate(s, "CR_HASTE_MELEE", g("HASTE_RATING") + g("HASTE_MELEE_RATING"))
   s.expertise = state.expertise + rate(s, "CR_EXPERTISE", g("EXPERTISE_RATING"))
   s.SP = state.SP + g("SP")
+  if state.spBySchool then
+    s.spBySchool = {}
+    for _, sch in ipairs(SE.SCHOOLS) do s.spBySchool[sch] = (state.spBySchool[sch] or state.SP) + g("SP") + g("SP_" .. sch) end
+  end
   s.HEAL = state.HEAL + g("HEAL")
   s.health = state.health + g("STA") * state.slope.hpPerSTA + g("HEALTH")
   s.armor = state.armor + g("ARMOR") + g("AGI") * SE.ARMOR_PER_AGILITY

@@ -21,7 +21,8 @@ end
 
 -- average damage or healing of one cast in this state
 function S.PerCast(sp, state, ctx)
-  local power = sp.kind == "heal" and (state.HEAL or 0) or (state.SP or 0)
+  local school = sp.school and state.spBySchool and state.spBySchool[sp.school:upper()]
+  local power = sp.kind == "heal" and (state.HEAL or 0) or (school or state.SP or 0)
   local crit = math.max(0, math.min(100, state.spellCrit or 0)) / 100
   local land = sp.kind == "heal" and 1 or (1 - S.Miss(state, ctx) / 100)
   local total = 0
