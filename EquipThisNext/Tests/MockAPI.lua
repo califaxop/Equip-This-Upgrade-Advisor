@@ -269,7 +269,7 @@ MOCK.SPELL_TOOLTIP = { [17364] = { { "Stormstrike" }, { "Instant", "8 sec cooldo
 -- the game's damage meter (milestone 4): MOCK.meter = { duration, spells = { [id] = amount } }
 C_DamageMeter = {
   IsDamageMeterAvailable = function() return true, "" end,
-  GetAvailableCombatSessions = function() return MOCK.meter and { { sessionID = 7, name = "Target Dummy", durationSeconds = MOCK.meter.duration } } or {} end,
+  GetAvailableCombatSessions = function() return MOCK.meter and { { sessionID = MOCK.meter.id or 7, name = "Target Dummy", durationSeconds = MOCK.meter.duration } } or {} end,
   GetSessionDurationSeconds = function(t) return MOCK.meter and MOCK.meter.duration end,
   ResetAllCombatSessions = function() MOCK.meter = nil end,
   GetCombatSessionSourceFromType = function(t, kind, guid) return C_DamageMeter.GetCombatSessionSourceFromID(t, kind, guid) end,

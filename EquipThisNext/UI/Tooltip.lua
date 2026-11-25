@@ -14,7 +14,8 @@ function ns.Context()
   if not p then return nil, "not scanned yet" end
   local ctx, why = ns.Evaluator.Context(p, { targetOffset = ns.db and ns.db.targetOffset, confirmed = ns.db and ns.db.confirmed,
     rotation = ns.db and ns.db.rotation, lastMeasurement = ns.db and ns.db.measurements and ns.db.measurements[1],
-    pvp = ns.db and ns.db.pvp, role = ns.db and ns.db.role, fightLength = ns.db and ns.db.fightLength })
+    pvp = ns.db and ns.db.pvp, role = ns.db and ns.db.role, fightLength = ns.db and ns.db.fightLength,
+    tree = ns.db and ns.db.tree ~= "auto" and ns.db.tree or nil, magicShare = ns.db and ns.db.magicShare })
   ns.evalContext = ctx
   return ctx, why
 end
@@ -83,6 +84,7 @@ local function onItem(tooltip)
 end
 
 ns.Events.On("PLAYER_LOGIN", "tooltip", function()
+  if ns.bundled then return end   -- (inside Equip This!: its own tooltip line shows the results)
   local TDP = TooltipDataProcessor
   if TDP and TDP.AddTooltipPostCall and Enum and Enum.TooltipDataType then
     TDP.AddTooltipPostCall(Enum.TooltipDataType.Item, function(tt) ns.Safe("tooltip", onItem, tt) end)

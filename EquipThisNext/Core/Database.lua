@@ -11,7 +11,13 @@ DB.DEFAULTS = {
   pvp = false,
   fightLength = 180, -- seconds a fight lasts, for mana (/eqn fight)       -- PvP numbers on tooltips too (burst, sustained, survival vs players)
   role = "auto",     -- "auto" (Protection spec or a threat stance/form/aura: tank), "tank", "notank"
-  confirmed = {},   -- [model part] = true: a measurement (/eqn measure) agreed with the model
+  confirmed = {},
+  learn = true,      -- learn how you fight from the game's damage meter after each fight (stays on your computer)
+  share = false,     -- opt in: keep anonymous fight records to share (/eqn report): class, spec, level, damage per spell
+  fightLog = {},     -- ["CLASS:Tree"] = { duration, fights, spells = { [name] = damage }, healing = { ... } }
+  shared = {},       -- the opt-in records (at most 100)
+  tree = "auto",     -- the spec to evaluate for: "auto" (your talents) or a tree name
+  magicShare = nil,  -- share of incoming damage that's magic (Equip This!'s raid choice at 60); nil: the model's   -- [model part] = true: a measurement (/eqn measure) agreed with the model
   measurements = {},
   rotation = {},    -- ["CLASS:Tree"] = how often you use each ability and spell, learned by /eqn measure  -- the last /eqn measure results (model vs the game's damage meter)   -- ["Name-Realm"] = { taken = time, profile = CharacterProfile }
 }

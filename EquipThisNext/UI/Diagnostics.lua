@@ -557,6 +557,8 @@ local HELP = {
   "/eqn abilities - your abilities, imbue and item effects as the model counts them",
   "/eqn pvp - PvP numbers on tooltips on/off (burst, sustained, survival vs players)",
   "/eqn fight <seconds> - how long a fight lasts, for mana (default 180)",
+  "/eqn learn - learning how you fight after each fight (the game's damage meter) on/off",
+  "/eqn share - opt in: keep anonymous fight records to send the author (/eqn report) on/off",
   "/eqn bench - how long comparisons take, and the addon's memory",
   "/eqn role auto|tank|notank - tank: threat on tooltips (auto: Protection, or a threat stance/form/aura)",
   "/eqn measure [last|reset] - the model's DPS parts vs the game's damage meter (all fights since reset, or the last)",
@@ -585,6 +587,19 @@ SlashCmdList.EQUIPTHISNEXT = function(msg)
       P(string.format("fight length for mana: %ds", ns.db.fightLength or 180))
     end,
     bench = function() Diag.Bench() end,
+    learn = function()
+      ns.db.learn = not ns.db.learn
+      P("learning how you fight after each fight: " .. (ns.db.learn and "on" or "off"))
+    end,
+    share = function()
+      ns.db.share = not ns.db.share
+      P("anonymous fight records to share: " .. (ns.db.share and "on (class, spec, level, damage per spell; /eqn report)" or "off"))
+    end,
+    report = function()
+      local text, n = ns.FightRecorder.ReportText()
+      if n == 0 then return P("no shared fight records yet (/eqn share turns them on)") end
+      for line in text:gmatch("[^\n]+") do P(line) end
+    end,
     pvp = function()
       ns.db.pvp = not ns.db.pvp; ns.evalContext = nil; ns.Cache.Invalidate("evaluation")
       P("PvP on tooltips " .. (ns.db.pvp and "on (a player of your level, armored like you; no glancing blows; half physical, half magic damage)" or "off"))
@@ -615,5 +630,6 @@ SlashCmdList.EQUIPTHISNEXT = function(msg)
 end
 
 ns.Events.On("PLAYER_LOGIN", "hello", function()
+  if ns.bundled then return end
   ns.Print("loaded (test build " .. ns.version .. ": compares gear by modelled DPS, HPS and EHP). /eqn for commands.")
 end)

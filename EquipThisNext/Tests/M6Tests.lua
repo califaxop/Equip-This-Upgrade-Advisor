@@ -89,3 +89,37 @@ T.Test("0.8.1: caches have a limit (every hovered item was kept all session); /e
   PRINTS = {}; SlashCmdList.EQUIPTHISNEXT("bench")
   T.Ok(table.concat(PRINTS, " "):find("after a garbage collection"), table.concat(PRINTS, " "))
 end)
+
+T.Test("5.0: after each fight the rotation is learned from the damage meter; opt-in records are anonymous", function()
+  MOCK.Reset()
+  MOCK.windfury = true
+  local n5 = LoadAddon()
+  for id in pairs(MOCK.ITEMS) do MOCK.cached[id] = true end
+  MOCK.Fire("ADDON_LOADED", "EquipThisNext"); MOCK.Fire("PLAYER_LOGIN"); MOCK.Fire("PLAYER_ENTERING_WORLD"); MOCK.RunTimers()
+  T.Eq(n5.db.learn, true, "learning on by default"); T.Eq(n5.db.share, false, "sharing off by default")
+  local ctx = n5.Context()
+  local by = {}
+  for _, part in ipairs(ctx.base.dpsInfo.parts) do by[part.name] = part.dps end
+  local key = n5.Evaluator.RotationKey(n5.profile)
+  local function fight(id)
+    MOCK.meter = { id = id, duration = 20, spells = { [6603] = by["auto attack"] * 18, [17364] = by["Stormstrike"] * 12, [403] = 400 } }
+    MOCK.Fire("PLAYER_REGEN_ENABLED"); MOCK.RunTimers()
+  end
+  for i = 1, 7 do fight(100 + i) end
+  T.Eq(n5.db.rotation[key], nil, "not yet: fewer than 8 fights")
+  fight(108)
+  local rot = n5.db.rotation[key]
+  T.Ok(rot and rot.auto and rot.source == "measured", "learned after 8 fights")
+  T.Ok(rot.rates["Lightning Bolt"], "Lightning Bolt learned")
+  fight(108)
+  T.Eq(n5.db.fightLog[key].fights, 8, "the same fight isn't counted twice")
+  T.Eq(#n5.db.shared, 0, "nothing kept to share unless opted in")
+  SlashCmdList.EQUIPTHISNEXT("share")
+  fight(109)
+  T.Eq(#n5.db.shared, 1)
+  local text, n = n5.FightRecorder.ReportText()
+  T.Eq(n, 1)
+  T.Ok(text:find("EQT5|") and text:find("SHAMAN") and text:find("Lightning Bolt="), text)
+  T.Ok(not text:find(tostring(UnitName and UnitName("player") or "Mocky")) and not text:find("Player%-"), "no name or GUID")
+  T.Eq(n5.errors.count, 0)
+end)

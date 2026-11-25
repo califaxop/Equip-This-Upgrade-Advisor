@@ -198,6 +198,33 @@ function Ev.RotationFromLogs(ctx, logs)
   return out
 end
 
+-- which of your spells (by the game's name) a model part is: the damage meter calls auto attacks
+-- "Attack" (spell 6603, seen in game 0.4.1); a part named "Windfury 2" is any "Windfury..." spell
+Ev.PART_NAMES = { ["auto attack"] = { "^attack$", "auto attack", "^melee$" }, ["off-hand"] = { "off%-hand", "offhand" },
+  ["auto shot"] = { "^auto shot$" } }
+function Ev.PartMatches(partName, spellName)
+  local s, key = tostring(spellName):lower(), partName:lower()
+  for _, w in ipairs(Ev.PART_NAMES[key] or { (key:gsub(" %d+$", "")) }) do if s:find(w) then return true end end
+  return false
+end
+
+-- A measurement record from damage and healing by spell name (the game's damage meter), for
+-- LearnRotation: amounts matched to the model's parts, the rest kept by name
+function Ev.RecordFrom(ctx, byName, healByName, duration, fights)
+  local rec = { duration = duration, fights = fights, level = ctx.state.level, key = Ev.RotationKey(ctx.profile),
+    parts = {}, other = {}, healing = healByName or {} }
+  local used = {}
+  for _, part in ipairs(ctx.base.dpsInfo and ctx.base.dpsInfo.parts or {}) do
+    local amt = 0
+    for n, a in pairs(byName or {}) do
+      if not used[n] and Ev.PartMatches(part.name, n) then amt = amt + a; used[n] = true end
+    end
+    rec.parts[#rec.parts + 1] = { name = part.name, measured = amt }
+  end
+  for n, a in pairs(byName or {}) do if not used[n] then rec.other[#rec.other + 1] = { name = n, amount = a } end end
+  return rec
+end
+
 -- A rotation from a measurement (rec: /eqn measure's record): each ability's and spell's casts
 -- per second of fighting = its damage (or healing) / the model's damage per cast / the time you
 -- were fighting. "Fighting" time = combat time x your auto-attack uptime (measured auto-attack
@@ -345,6 +372,15 @@ function Ev.AverageStats(state, landed, burst)
 end
 
 function Ev.Context(profile, settings)
+  -- a spec chosen in the settings instead of the one the talents say
+  if settings and settings.tree and profile.talents and settings.tree ~= profile.talents.primaryTree then
+    local p, t = {}, {}
+    for k, v in pairs(profile) do p[k] = v end
+    for k, v in pairs(profile.talents) do t[k] = v end
+    t.primaryTree = settings.tree
+    p.talents = t
+    profile = p
+  end
   local state, why = ns.StatEngine.Baseline(profile)
   if not state then return nil, why end
   state.effects = Ev.EffectsOf(profile.equipment.slots)
