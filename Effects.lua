@@ -622,8 +622,11 @@ local function PerMin(e, f)
   if e.trigger == "crit" or e.trigger == "spellcrit" then per = per * CritRate(spell) end
   -- the chance: the item's own words, else the game's tables (Procs.lua), else about once a minute
   local chance = e.chance or (not e.enchant and f and f.id and ns.PROC_CHANCE and ns.PROC_CHANCE[f.id])
-  if not chance then return e.skillTrig and math.min(per, PPM) or PPM end
-  return chance / 100 * per
+  if chance then return chance / 100 * per end
+  -- the game keeps this one's rate on its server: measured on Warcraft Logs (Procs.lua), else about once a minute
+  local measured = not e.enchant and f and f.id and ns.PROC_PPM and ns.PROC_PPM[f.id]
+  local rate = measured or PPM
+  return e.skillTrig and math.min(per, rate) or rate, measured and true or nil
 end
 
 -- one effect: its points for these weights, and a line saying how
@@ -643,8 +646,9 @@ function E.Value(e, weights, f)
   -- damage per second -> points: weapon DPS for melee, spell damage for casters
   local function dmg(dps) if melee and e.trigger ~= "spell" then return dps * dpsPts end return dps * spPts end
   if (e.trigger == "melee" or e.trigger == "crit") and not melee then return 0, what .. ": your spec doesn't hit with weapons" end
-  local perMin = e.use and (60 / e.cd) or PerMin(e, f)
-  local every = e.use and format(" every %ss", Secs(e.cd)) or format(" x %.1f/min", perMin)
+  local perMin, measured
+  if e.use then perMin = 60 / e.cd else perMin, measured = PerMin(e, f) end
+  local every = e.use and format(" every %ss", Secs(e.cd)) or format(" x %.1f/min%s", perMin, measured and " (measured on Warcraft Logs)" or "")
   if e.kind == "procDamage" or e.kind == "useDamage" then
     local dps = e.avg * perMin / 60
     return dmg(dps), format("%s: %d damage%s = +%.1f DPS", what, e.avg, every, dps)

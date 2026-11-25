@@ -9,6 +9,7 @@ Source: wago.tools (product wowf). Run:  python tools/procs/build.py [build]   (
 """
 import csv
 import io
+import json
 import os
 import re
 import sys
@@ -71,6 +72,18 @@ def main():
         v = out[item]
         lines.append("[%d]=%s," % (item, ("%g" % v)))
     lines.append("}")
+    # rates the game keeps on its server, measured on Warcraft Logs (tools/procs/measured.json: procs
+    # a minute of players wearing the item in recent public 40-player raid fights)
+    measured = os.path.join(HERE, "measured.json")
+    if os.path.exists(measured):
+        with open(measured) as f:
+            m = json.load(f)
+        lines.append("-- Procs a minute for items whose rate the game keeps on its server, measured on Warcraft Logs")
+        lines.append("-- (%s)." % m.get("source", ""))
+        lines.append("ns.PROC_PPM = {")
+        for item in sorted(m["ppm"], key=int):
+            lines.append("[%s]=%s," % (item, "%g" % m["ppm"][item]))
+        lines.append("}")
     with open(OUT, "w", newline="\n") as f:
         f.write("\n".join(lines) + "\n")
     print("items with a proc chance: %d -> %s" % (len(out), OUT))
