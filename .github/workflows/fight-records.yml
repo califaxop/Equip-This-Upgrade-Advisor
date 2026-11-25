@@ -1,0 +1,27 @@
+# Numbers each fight records submission: a new issue from the "Fight records" form (label
+# fight-records) is renamed "EQT Submission <n>", n counting every fight-records issue so far
+# (open or closed) up to and including this one. Players don't have to think of a title.
+name: Number fight records
+
+on:
+  issues:
+    types: [opened]
+
+permissions:
+  issues: write
+
+jobs:
+  number:
+    if: contains(github.event.issue.labels.*.name, 'fight-records')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Rename to EQT Submission <n>
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          NUMBER: ${{ github.event.issue.number }}
+        run: |
+          N=$(gh issue list --repo "$REPO" --label fight-records --state all --limit 5000 --json number \
+            --jq "[.[] | select(.number <= $NUMBER)] | length")
+          gh issue edit "$NUMBER" --repo "$REPO" --title "EQT Submission $N"
+          echo "issue #$NUMBER is EQT Submission $N"

@@ -1,5 +1,6 @@
 name: Fight records
 description: Share your Equip This! fight records (optional, anonymous) to help make it better for your class and spec
+title: "EQT Submission"
 labels: ["fight-records"]
 body:
   - type: markdown

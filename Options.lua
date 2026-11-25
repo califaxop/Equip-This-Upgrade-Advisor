@@ -14,7 +14,14 @@ local function E(key) return { function() return ns.Engine.db and ns.Engine.db[k
 
 -- The fight records export (like Questie's trace export): a link to the form, the line to copy,
 -- what's in it, and "I reported this" (the next export holds only what's new).
+-- (the form's version field filled in: Equip This!'s own version)
+local function AddonVersion()
+  local get = C_AddOns and C_AddOns.GetAddOnMetadata or GetAddOnMetadata
+  local ok, v = pcall(get, "EquipThis", "Version")
+  return ok and type(v) == "string" and v or nil
+end
 local SUBMIT_URL = "https://github.com/califaxop/Equip-This-Upgrade-Advisor/issues/new?template=fight_records.yml"
+  .. ((AddonVersion() and ("&version=" .. AddonVersion())) or "")
 local INCLUDED = "Included: your class, spec and level, how long each fight lasted, your damage and healing per spell, and Equip This!'s own estimate. Never: your name, realm, guild, other players or any IDs."
 local function hms(s)
   s = math.floor(s or 0)
