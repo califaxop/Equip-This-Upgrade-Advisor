@@ -14,7 +14,9 @@ FR.MIN_FIGHT = 6        -- seconds: shorter fights are left out
 FR.LEARN_AFTER = 8      -- fights before the first learning
 FR.RELEARN_EVERY = 3    -- fights between learnings
 FR.HALVE_AFTER = 60     -- fights: then the totals halve
-FR.SHARE_MAX = 100
+FR.SHARE_MAX = 200
+FR.REMIND_AT = 25       -- new records before the "time to share" reminder
+FR.REMIND_EVERY = 7 * 24 * 3600   -- and at most once a week (seconds)
 
 local function byName(spells)
   local out = {}
@@ -69,6 +71,7 @@ function FR.Share(ctx, dmg, heal, duration)
   end
   table.insert(db.shared, rec)
   while #db.shared > FR.SHARE_MAX do table.remove(db.shared, 1) end
+  FR.MaybeRemind()
   return rec
 end
 
@@ -116,3 +119,73 @@ Events.On("PLAYER_REGEN_ENABLED", "fights", function()
   -- (the meter's session closes a moment after combat ends)
   Events.Debounce("fightRecord", 2, function() ns.Safe("fight recorder", FR.OnCombatEnd) end)
 end)
+
+---------------------------------------------------------------------------
+-- Sharing (5.0, like Questie's trace export): what's waiting, one line to copy, and a reminder.
+---------------------------------------------------------------------------
+-- what the records hold, for the export window: { fights, seconds, specs = { "Enhancement Shaman" },
+-- spells (distinct), levels = { min, max }, sentBefore }
+function FR.Summary()
+  local db = ns.db or {}
+  local out = { fights = 0, seconds = 0, specs = {}, spells = 0, sentBefore = db.reported or 0 }
+  local specSeen, spellSeen = {}, {}
+  for _, r in ipairs(db.shared or {}) do
+    out.fights = out.fights + 1
+    out.seconds = out.seconds + (r.d or 0)
+    local spec = tostring(r.t) .. " " .. tostring(r.c):sub(1, 1) .. tostring(r.c):sub(2):lower()
+    if not specSeen[spec] then specSeen[spec] = true; out.specs[#out.specs + 1] = spec end
+    for n in pairs(r.dmg or {}) do spellSeen[n] = true end
+    for n in pairs(r.heal or {}) do spellSeen[n] = true end
+    if r.l then
+      out.levels = out.levels or { r.l, r.l }
+      out.levels[1], out.levels[2] = math.min(out.levels[1], r.l), math.max(out.levels[2], r.l)
+    end
+  end
+  for _ in pairs(spellSeen) do out.spells = out.spells + 1 end
+  return out
+end
+
+-- everything waiting, as one line to copy (readable on purpose: what you send is what you see):
+--   EquipThis:Fights:1!v=5.0.0,c=SHAMAN,t=Enhancement,l=42,d=34.2,dmg=Attack:1234;Stormstrike:2000,heal=,mdl=auto attack:24.3!...!End:EquipThis:Fights:1
+local function clean(x) return (tostring(x):gsub("[!,;:=|]", " ")) end
+local function pairsText(t)
+  local keys = {}
+  for k in pairs(t or {}) do keys[#keys + 1] = k end
+  table.sort(keys)
+  local out = {}
+  for _, k in ipairs(keys) do out[#out + 1] = clean(k) .. ":" .. tostring(t[k]) end
+  return table.concat(out, ";")
+end
+function FR.ExportString()
+  local parts = { "EquipThis:Fights:1" }
+  for _, r in ipairs(ns.db and ns.db.shared or {}) do
+    parts[#parts + 1] = string.format("v=%s,c=%s,t=%s,l=%s,d=%s,dmg=%s,heal=%s,mdl=%s", clean(r.v), clean(r.c), clean(r.t),
+      clean(r.l), clean(r.d), pairsText(r.dmg), pairsText(r.heal), pairsText(r.mdl))
+  end
+  parts[#parts + 1] = "End:EquipThis:Fights:1"
+  return table.concat(parts, "!"), #parts - 2
+end
+
+-- you've sent them: they're cleared (the next export is only what's new)
+function FR.MarkReported()
+  local db = ns.db
+  local n = #(db.shared or {})
+  db.reported = (db.reported or 0) + n
+  db.shared = {}
+  db.lastReported = time and time() or 0
+  FR.reminded = nil
+  return n
+end
+
+-- at most once a week (and once a session), when enough new records are waiting, out of combat
+function FR.MaybeRemind()
+  local db = ns.db
+  if not (db and db.share) or FR.reminded or Compat.InCombat() then return end
+  if #(db.shared or {}) < FR.REMIND_AT then return end
+  local now = time and time() or 0
+  if db.lastReminded and now - db.lastReminded < FR.REMIND_EVERY then return end
+  FR.reminded = true
+  db.lastReminded = now
+  if FR.OnRemind then FR.OnRemind(#db.shared)
+  else ns.Print(string.format("%d fight records are waiting to be shared (optional): /eqn report", #db.shared)) end
+end
