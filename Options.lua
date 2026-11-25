@@ -92,7 +92,7 @@ function ns.ShowReport()
   w.line:SetFocus(); w.line:HighlightText()
 end
 
--- the reminder in chat (at most once a week, with 25+ new records; the engine decides when)
+-- the reminder in chat (twice a week at most: after Wednesday's maintenance and on Sunday, with 25+ new records; the engine decides when)
 function ns.RemindToShare(n)
   ns.Print(format("You have %d new fight records to share (optional). Each export only covers what's been recorded so far, so please share again now and then. "
     .. "|cff40ff40|Haddon:EquipThis:records|h[Click here to open the export window]|h|r", n))

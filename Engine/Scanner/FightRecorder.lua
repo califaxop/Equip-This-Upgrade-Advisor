@@ -17,7 +17,9 @@ FR.RELEARN_EVERY = 3    -- fights between learnings
 FR.HALVE_AFTER = 60     -- fights: then the totals halve
 FR.SHARE_MAX = 200
 FR.REMIND_AT = 25       -- new records before the "time to share" reminder
-FR.REMIND_EVERY = 7 * 24 * 3600   -- and at most once a week (seconds)
+-- ...and at most once per reminder window, twice a week: after the weekly maintenance (Wednesday,
+-- Equip This!'s release time: 12:00 UTC) and on Sunday (midnight, your own time)
+FR.MAINTENANCE = { wday = 3, hour = 12 }   -- (UTC; weekday 0 = Sunday ... 3 = Wednesday)
 
 local function byName(spells)
   local out = {}
@@ -178,13 +180,29 @@ function FR.MarkReported()
   return n
 end
 
--- at most once a week (and once a session), when enough new records are waiting, out of combat
+-- the start of the latest reminder window at or before `now` (seconds since 1970, UTC)
+function FR.WindowStart(now)
+  -- after maintenance: the latest Wednesday 12:00 UTC (1 Jan 1970 was a Thursday: weekday 4)
+  local day = math.floor(now / 86400)
+  local back = ((day + 4) % 7 - FR.MAINTENANCE.wday) % 7
+  local maint = (day - back) * 86400 + FR.MAINTENANCE.hour * 3600
+  if maint > now then maint = maint - 7 * 86400 end
+  -- Sunday: the latest Sunday midnight, your own time
+  local sun = 0
+  if date then
+    local t = date("*t", now)
+    sun = time({ year = t.year, month = t.month, day = t.day - (t.wday - 1), hour = 0, min = 0, sec = 0 })
+  end
+  return math.max(maint, sun)
+end
+
+-- once per reminder window (twice a week) and once a session, with enough new records, out of combat
 function FR.MaybeRemind()
   local db = ns.db
   if not (db and db.share) or FR.reminded or Compat.InCombat() then return end
   if #(db.shared or {}) < FR.REMIND_AT then return end
   local now = time and time() or 0
-  if db.lastReminded and now - db.lastReminded < FR.REMIND_EVERY then return end
+  if db.lastReminded and db.lastReminded >= FR.WindowStart(now) then return end
   FR.reminded = true
   db.lastReminded = now
   if FR.OnRemind then FR.OnRemind(#db.shared)
