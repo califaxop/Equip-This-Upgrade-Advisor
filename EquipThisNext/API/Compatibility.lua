@@ -72,7 +72,8 @@ Compat.KNOWN = {
   -- milestone 4: spell tooltips (cooldowns), the game's damage meter (to check the model)
   ["C_TooltipInfo.GetSpellByID"] = "docs", ["C_DamageMeter.IsDamageMeterAvailable"] = "docs",
   ["C_DamageMeter.GetAvailableCombatSessions"] = "docs", ["C_DamageMeter.GetCombatSessionSourceFromID"] = "docs",
-  ["C_DamageMeter.GetCombatSessionFromID"] = "docs",
+  ["C_DamageMeter.GetCombatSessionFromID"] = "docs", ["C_DamageMeter.GetCombatSessionSourceFromType"] = "docs",
+  ["C_DamageMeter.GetSessionDurationSeconds"] = "docs", ["C_DamageMeter.ResetAllCombatSessions"] = "docs",
 }
 
 local function resolve(path)

@@ -28,9 +28,31 @@ function Meter.LastSession()
   return best
 end
 
--- your damage per spell in a session: { total, duration, spells = { [spellID] = amount } } or nil, why
+-- every finished fight the meter keeps: { { id, name, duration } }
+function Meter.Sessions()
+  local ok, list = Compat.Call("C_DamageMeter.GetAvailableCombatSessions")
+  local out = {}
+  if not ok or type(list) ~= "table" then return out end
+  for _, s in ipairs(list) do
+    local id, d = Compat.Field(s, "sessionID"), Compat.Field(s, "durationSeconds")
+    if type(id) == "number" then out[#out + 1] = { id = id, name = Compat.Field(s, "name"), duration = type(d) == "number" and d or nil } end
+  end
+  return out
+end
+
+-- all fights since the meter was last reset (DamageMeterSessionType.Overall = 0)
+Meter.OVERALL = 0
+function Meter.OverallDuration() return Compat.Value("C_DamageMeter.GetSessionDurationSeconds", Meter.OVERALL) end
+function Meter.Reset() return Compat.Call("C_DamageMeter.ResetAllCombatSessions") end
+
+-- your damage per spell in a session (sessionID, or "overall"): { total, spells = { [spellID] = amount } } or nil, why
 function Meter.MySpells(sessionID, guid)
-  local ok, src = Compat.Call("C_DamageMeter.GetCombatSessionSourceFromID", sessionID, Meter.DAMAGE_DONE, guid)
+  local ok, src
+  if sessionID == "overall" then
+    ok, src = Compat.Call("C_DamageMeter.GetCombatSessionSourceFromType", Meter.OVERALL, Meter.DAMAGE_DONE, guid)
+  else
+    ok, src = Compat.Call("C_DamageMeter.GetCombatSessionSourceFromID", sessionID, Meter.DAMAGE_DONE, guid)
+  end
   if not ok or type(src) ~= "table" then return nil, "no data for that fight" end
   local spells, total = {}, 0
   local list = Compat.Field(src, "combatSpells")

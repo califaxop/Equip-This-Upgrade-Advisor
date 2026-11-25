@@ -14,8 +14,11 @@ local _, ns = ...
 local AI = ns and ns.Module and ns.Module("AbilityInterpreter") or {}
 
 -- Elemental Weapons: % more Windfury effect per rank. Forever's talent description shows rank 1's 13%
--- only (as for every talent); Classic's ranks are 13 / 27 / 40. Used until a measurement says otherwise.
+-- only; Classic's ranks are 13 / 27 / 40. Rank 3's 40% is confirmed in game (0.4.0): Windfury rank 2's
+-- description showed 202 attack power at level 42 = (119 + 12.8 x 2) x 1.40. A spell's description
+-- already includes it (the game resolves talents into it): it's only added to the game-data fallback.
 AI.ELEMENTAL_WEAPONS_WF = { 13, 27, 40 }
+AI.ELEMENTAL_WEAPONS_CONFIRMED = { [3] = true }
 
 local function rankOf(profile, name)
   for _, n in ipairs(profile.talents and profile.talents.nodes or {}) do
@@ -66,20 +69,24 @@ function AI.Interpret(profile, talents, confirmed)
         ap = data.ap.base + data.ap.perLevel * math.max(0, lv - data.ap.baseLevel)
         apSource = "game data"
       end
+      if not attacks and data.attacks then attacks = data.attacks end
       if not attacks then
         attacks = 1
         out.unchecked = out.unchecked + 1
         out.notes[#out.notes + 1] = "Windfury: number of extra attacks not in its description: 1 assumed"
       end
       local ew = rankOf(profile, "Elemental Weapons")
-      local ewPct = ew > 0 and AI.ELEMENTAL_WEAPONS_WF[math.min(ew, 3)] or 0
-      local checked = confirmed and confirmed[data.name]
-      if ew > 0 and not checked then out.unchecked = out.unchecked + 1 end
+      local ewPct = 0
+      if apSource == "game data" and ew > 0 then
+        ewPct = AI.ELEMENTAL_WEAPONS_WF[math.min(ew, 3)]
+        local checked = (confirmed and confirmed[data.name]) or AI.ELEMENTAL_WEAPONS_CONFIRMED[ew]
+        if not checked then out.unchecked = out.unchecked + 1 end
+      end
       out.imbue = { kind = "windfury", slot = slot, name = data.name, chance = chance, icd = data.icd or 0,
         attacks = attacks, ap = (ap or 0) * (1 + ewPct / 100), apSource = apSource, elementalWeapons = ewPct }
       out.notes[#out.notes + 1] = string.format("%s: %d%% chance per hit (internal cooldown %gs, game data) for %d extra attack(s) with %d attack power (%s%s)",
         data.name, chance, data.icd or 0, attacks, (ap or 0) * (1 + ewPct / 100) + 0.5, apSource,
-        ewPct > 0 and string.format(", +%d%% Elemental Weapons: Classic's rank value, unconfirmed", ewPct) or "")
+        ewPct > 0 and string.format(", +%d%% Elemental Weapons", ewPct) or (ew > 0 and apSource == "description" and ", Elemental Weapons included by the game" or ""))
       break
     elseif im and data then
       out.imbue = { kind = data.kind, slot = slot, name = data.name }

@@ -272,20 +272,46 @@ local function matches(partName, spellName)
   for _, w in ipairs(MATCH[key] or { (key:gsub(" %d+$", "")) }) do if s:find(w) then return true end end
   return false
 end
-function Diag.Measure()
+-- /eqn measure [last|reset]: all fights since the meter's reset (default), or the last one
+function Diag.Measure(arg)
   local Meter = ns.MeterAPI
   local ok, why = Meter.Available()
   if not ok then return P("the game's damage meter isn't available: " .. tostring(why)) end
   if ns.Compat.InCombat() then return P("after the fight: the damage meter is hidden in combat") end
-  local sess = Meter.LastSession()
-  if not sess then return P("no finished fight yet: hit a target dummy for 2-3 minutes as you normally would, then /eqn measure") end
-  local m, why2 = Meter.MySpells(sess.id, ns.Compat.Value("UnitGUID", "player"))
+  if arg == "reset" then
+    Meter.Reset()
+    return P("damage meter cleared (the game's own meter too). Fight 15-20 mobs as you normally do, then /eqn measure.")
+  end
+  local sessions = Meter.Sessions()
+  if #sessions == 0 then return P("no finished fight yet: fight 15-20 mobs as you normally do (/eqn measure reset first), then /eqn measure") end
+  local guid = ns.Compat.Value("UnitGUID", "player")
+  local m, why2, dur, label, fights
+  if arg == "last" then
+    local sess = Meter.LastSession()
+    m, why2 = Meter.MySpells(sess.id, guid)
+    dur, label, fights = sess.duration or 0, "last fight (" .. tostring(sess.name) .. ")", { sess }
+  else
+    m, why2 = Meter.MySpells("overall", guid)
+    dur, label, fights = Meter.OverallDuration() or 0, #sessions .. " fight(s) since the meter's reset", sessions
+  end
   if not m then return P(tostring(why2)) end
   local ctx = ctxOrSay(); if not ctx then return end
   local b = ctx.base
   if not (b.dps and b.dpsInfo.parts) then return P("no DPS model for you yet") end
-  local dur = sess.duration or 0
-  f("last fight (%s): %ds, %d damage%s", tostring(sess.name), dur + 0.5, m.total, dur > 0 and string.format(", %.1f DPS", m.total / dur) or "")
+  f("%s: %ds in combat, %d damage%s", label, dur + 0.5, m.total, dur > 0 and string.format(", %.1f DPS", m.total / dur) or "")
+  -- short fights: an ability used on cooldown is also used at each pull (floor(fight / cooldown) + 1
+  -- times, not fight / cooldown): the model's share is adjusted to the fights' lengths
+  local strikeFactor = {}
+  for _, st in ipairs(ctx.abilities.strikes or {}) do
+    local real, steady = 0, 0
+    for _, fgt in ipairs(fights) do
+      if fgt.duration and fgt.duration > 0 then
+        real = real + math.floor(fgt.duration / st.cooldown) + 1
+        steady = steady + fgt.duration / st.cooldown
+      end
+    end
+    if steady > 0 then strikeFactor[st.name] = real / steady end
+  end
   -- which measured spells each model part is
   local measured, covered, modelTotal = {}, 0, 0
   local used = {}
@@ -297,13 +323,13 @@ function Diag.Measure()
     end
     measured[part.name] = amt
     covered = covered + amt
-    modelTotal = modelTotal + part.dps
+    modelTotal = modelTotal + part.dps * (strikeFactor[part.name] or 1)
   end
-  local rec = { time = time and time() or 0, duration = dur, total = m.total, level = ctx.state.level, offset = ctx.offset, parts = {}, other = {} }
+  local rec = { time = time and time() or 0, duration = dur, total = m.total, level = ctx.state.level, offset = ctx.offset, fights = #fights, parts = {}, other = {} }
   P("share of the damage the model covers (model vs measured):")
   for _, part in ipairs(b.dpsInfo.parts) do
     local ms = covered > 0 and measured[part.name] / covered or 0
-    local mo = part.dps / modelTotal
+    local mo = part.dps * (strikeFactor[part.name] or 1) / modelTotal
     local ratio = mo > 0 and ms / mo or 0
     local agree = covered > 0 and ms >= 0.05 and ratio > 0.85 and ratio < 1.15
     f("  %s: model %d%%, measured %d%%%s", part.name, mo * 100 + 0.5, ms * 100 + 0.5,
@@ -427,7 +453,7 @@ local HELP = {
   "/eqn compare <item link or ID> - full comparison: each slot, each stat's part, effects not counted",
   "/eqn target auto|0|1|2|3 - target level above yours",
   "/eqn abilities - your abilities, imbue and item effects as the model counts them",
-  "/eqn measure - after a fight: the model's DPS parts vs the game's damage meter",
+  "/eqn measure [last|reset] - the model's DPS parts vs the game's damage meter (all fights since reset, or the last)",
   "/eqn tooltip - comparison on item tooltips on/off",
   "/eqn scan - read everything again now",
   "/eqn dump - save everything to the SavedVariables file (for bug reports and tests)",
@@ -446,7 +472,7 @@ SlashCmdList.EQUIPTHISNEXT = function(msg)
     spells = function() Diag.Spells(rest) end,
     api = function() local rows = Diag.Api(); if rest == "all" then for _, r in ipairs(rows) do P(r) end end end,
     scan = function() profile(true); P("scanned.") ; Diag.Char() end,
-    model = Diag.Model, sheet = Diag.Sheet, weights = Diag.Weights, abilities = Diag.Abilities, measure = Diag.Measure,
+    model = Diag.Model, sheet = Diag.Sheet, weights = Diag.Weights, abilities = Diag.Abilities, measure = function() Diag.Measure(rest) end,
     compare = function() Diag.Compare(rawRest) end, target = function() Diag.Target(rest) end,
     tooltip = function() ns.db.tooltip = not ns.db.tooltip; P("tooltip " .. (ns.db.tooltip and "on" or "off")) end,
     dump = Diag.Dump,

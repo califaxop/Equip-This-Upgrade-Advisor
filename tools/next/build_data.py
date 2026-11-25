@@ -53,6 +53,7 @@ def main():
     levels = {r["SpellID"]: r for r in T("SpellLevels") if r.get("DifficultyID", "0") in ("0", "")}
     cds = {r["SpellID"]: r for r in T("SpellCooldowns") if r["DifficultyID"] in ("0", "")}
     names = {r["ID"]: r["Name_lang"] for r in T("SpellName")}
+    descs = {r["ID"]: r.get("Description_lang") or "" for r in T("Spell")}
 
     # item procs: an item's on-equip spell's aura (chance per qualifying hit, procs a minute, internal cooldown)
     item_effects = {r["ID"]: r for r in T("ItemEffect")}
@@ -83,6 +84,11 @@ def main():
         imb = {"kind": kind.lower(), "name": name, "spells": sorted(casts.get(r["ID"], [])),
                "chance": num(r["EffectPointsMin_0"]) or a.get("chance", 0), "icd": a.get("icd", 0), "spell": int(num(spell))}
         if kind == "Windfury":
+            # extra attacks: the "$<spell>s2" its description names (an add-extra-attacks effect, type 19)
+            m = re.search(r"\$(\d+)s2 extra", descs.get(spell, ""))
+            for e in effects.get(m.group(1) if m else "", []):
+                if e["Effect"] == "19":
+                    imb["attacks"] = num(e["EffectBasePointsF"])
             # its attack power: the spell named in its description ("$8233s1 extra melee attack power")
             ap_spell = None
             for e in effects.get(spell, []):
@@ -120,7 +126,8 @@ def main():
     for i in sorted(imbues):
         m = imbues[i]
         ap = m.get("ap")
-        aps = (", ap = { base = %s, perLevel = %s, baseLevel = %s, maxLevel = %s }" % (fmt(ap["base"]), fmt(ap["perLevel"]), fmt(ap["baseLevel"]), fmt(ap["maxLevel"]))) if ap else ""
+        aps = (", attacks = %s" % fmt(m["attacks"])) if m.get("attacks") else ""
+        aps += (", ap = { base = %s, perLevel = %s, baseLevel = %s, maxLevel = %s }" % (fmt(ap["base"]), fmt(ap["perLevel"]), fmt(ap["baseLevel"]), fmt(ap["maxLevel"]))) if ap else ""
         L.append('    [%d] = { kind = "%s", name = "%s", spells = { %s }, chance = %s, icd = %s, spell = %d%s },' % (
             i, m["kind"], m["name"].replace('"', '\\"'), ", ".join(map(str, m["spells"])), fmt(m["chance"]), fmt(m["icd"]), m["spell"], aps))
     L.append("  },")

@@ -65,16 +65,21 @@ T.Test("M4: Stormstrike and Windfury read from what the game shows; Forever's da
   T.Eq(#a.strikes, 1); T.Eq(a.strikes[1].weaponPct, 100); T.Eq(a.strikes[1].cooldown, 8, "from the tooltip")
   T.Eq(a.imbue.chance, 20); T.Eq(a.imbue.attacks, 1); T.Eq(a.imbue.ap, 145); T.Eq(a.imbue.icd, 1.5, "internal cooldown from the game's data")
   T.Eq(a.unchecked, 0)
+  -- the description already has Elemental Weapons in it (in game 0.4.0: 202 = (119 + 12.8 x 2) x 1.40)
   rank(p, "Elemental Weapons", 3)
   local b = ns.AbilityInterpreter.Interpret(p, {})
-  T.Near(b.imbue.ap, 145 * 1.4, 1e-9, "Elemental Weapons 3/3: +40% (Classic's value, unconfirmed)")
-  T.Eq(b.unchecked, 1)
-  T.Eq(ns.AbilityInterpreter.Interpret(p, {}, { ["Windfury 2"] = true }).unchecked, 0, "confirmed by a measurement")
-  -- no description (not in the spellbook...): the game's data, level-scaled
+  T.Eq(b.imbue.ap, 145, "not added twice (regression: 0.4.0 showed 283)"); T.Eq(b.unchecked, 0)
+  -- no description (not in the spellbook...): the game's data, level-scaled, plus Elemental Weapons
   p.abilities.imbues[16].desc = nil
   rank(p, "Elemental Weapons", 0)
   local c = ns.AbilityInterpreter.Interpret(p, {})
   T.Near(c.imbue.ap, 46 + 7.2 * (38 - 30), 1e-9, "439431's attack power at its max level 38"); T.Eq(c.imbue.apSource, "game data")
+  rank(p, "Elemental Weapons", 3)
+  local d = ns.AbilityInterpreter.Interpret(p, {})
+  T.Near(d.imbue.ap, (46 + 7.2 * 8) * 1.4, 1e-9, "+40% at 3/3 (confirmed in game)"); T.Eq(d.unchecked, 0)
+  rank(p, "Elemental Weapons", 2)
+  T.Eq(ns.AbilityInterpreter.Interpret(p, {}).unchecked, 1, "2/3's 27% is Classic's: unconfirmed")
+  T.Eq(ns.AbilityInterpreter.Interpret(p, {}, { ["Windfury 2"] = true }).unchecked, 0, "confirmed by a measurement")
 end)
 
 T.Test("M4: Stormstrike's DPS: weapon damage every 8 s, special attack table, +10% from Rage of the Storm", function()
@@ -164,6 +169,7 @@ T.Test("M4 in game (mock): Stormstrike and Windfury scanned; /eqn measure agains
     T.Ok(#PRINTS > 0, "/eqn " .. c)
   end
   T.Ok(table.concat(PRINTS, " "):find("no finished fight"), "measure before any fight")
+  T.Ok(not table.concat(PRINTS, " "):find("dummy"), "no target dummies in Forever")
   -- a fight whose split matches the model: Windfury is confirmed
   local parts = ctx.base.dpsInfo.parts
   local by = {}
@@ -180,5 +186,12 @@ T.Test("M4 in game (mock): Stormstrike and Windfury scanned; /eqn measure agains
   T.Ok(out:find("Lightning Shield"), "spells not modelled are listed")
   T.Eq(ns4.db.confirmed["Windfury 1"], true, "confirmed")
   T.Eq(#ns4.db.measurements, 1, "kept for the dump")
+  T.Ok(out:find("1 fight%(s%) since the meter's reset"), "all fights since the reset by default")
+  -- one 100 s fight: Stormstrike at the pull + every 8 s = 13 casts, not 12.5
+  local ss = ns4.db.measurements[1]
+  PRINTS = {}; SlashCmdList.EQUIPTHISNEXT("measure last")
+  T.Ok(table.concat(PRINTS, " "):find("last fight"), "the last fight only")
+  PRINTS = {}; SlashCmdList.EQUIPTHISNEXT("measure reset")
+  T.Eq(MOCK.meter, nil, "reset")
   T.Eq(ns4.errors.count, 0, "no errors")
 end)

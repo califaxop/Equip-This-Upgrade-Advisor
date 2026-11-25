@@ -270,6 +270,9 @@ MOCK.SPELL_TOOLTIP = { [17364] = { { "Stormstrike" }, { "Instant", "8 sec cooldo
 C_DamageMeter = {
   IsDamageMeterAvailable = function() return true, "" end,
   GetAvailableCombatSessions = function() return MOCK.meter and { { sessionID = 7, name = "Target Dummy", durationSeconds = MOCK.meter.duration } } or {} end,
+  GetSessionDurationSeconds = function(t) return MOCK.meter and MOCK.meter.duration end,
+  ResetAllCombatSessions = function() MOCK.meter = nil end,
+  GetCombatSessionSourceFromType = function(t, kind, guid) return C_DamageMeter.GetCombatSessionSourceFromID(t, kind, guid) end,
   GetCombatSessionSourceFromID = function(id, kind, guid)
     if MOCK.inCombat then return { combatSpells = { { spellID = 1, totalAmount = SECRET_VALUE } } } end
     local list = {}

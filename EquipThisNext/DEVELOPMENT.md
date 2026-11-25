@@ -15,7 +15,7 @@ runs alongside the released Equip This! without touching it, on the `next-founda
 | 1. Foundation: compatibility layer, scanners, diagnostics | **done: 0.1.3 validated in game (level 42 Shaman, build 71091)** |
 | 2. Basic evaluation | **done: validated in game (0.2.1; the tooltip %s look right to the tester)** |
 | 3. Complete gear evaluation | **done: validated in game (0.3.0-0.3.3)** |
-| 4. Simulation (DPS, healing, tanking, PvP) | **4a (0.4.0): melee DPS with abilities, imbues, procs: built, offline tests pass (63), waiting for the in-game test**; 4b casters and healing, 4c tanking threat and PvP: not started |
+| 4. Simulation (DPS, healing, tanking, PvP) | **4a: melee DPS with abilities, imbues, procs: 0.4.0 read right in game; 0.4.1 fixes Windfury's double-counted talent; waiting for `/eqn measure`**; 4b casters and healing, 4c tanking threat and PvP: not started |
 | 5. All classes and builds | not started |
 | 6. Optimization and validation | not started |
 
@@ -168,8 +168,9 @@ isn't used. Expected values throughout (rate x average), no random simulation.
   - Forever's tables: every Windfury rank's enchant runs the same spell, 439431, whose attack power
     is 46 + 7.2 per level from 30 to 38 (103.6), while each rank's description names its own rank's
     spell (rank 2: 119 + 12.8 per level). Which one the server uses is for the measurement to tell.
-  - Elemental Weapons: +13/27/40% Windfury effect per rank is Classic's; Forever's description
-    shows rank 1's 13% only. Unconfirmed (lowers confidence) until a measurement agrees.
+  - Elemental Weapons: a spell's description already includes it (the game resolves talents into
+    it). Only the game-data fallback adds it: +13/27/40% per rank (Classic's); 3/3 = 40% is
+    confirmed in game (below).
 - **Item procs** (IE.Model): damage ("Blasts the enemy for 80 Fire damage"; "Wounds the target for
   50 damage" as physical), extra attacks, stat buffs ("Increases your attack power by 120 for 10
   sec"). Rate: procs a minute measured on Warcraft Logs (4 items whose rate the server keeps), else
@@ -187,7 +188,11 @@ Flametongue / Frostbrand, Flurry from ability crits, extra attacks from Windfury
 ### Checking it: /eqn measure
 
 `C_DamageMeter` (Blizzard_APIDocumentationGenerated, build 71091; values secret in combat) gives
-your damage per spell in a finished fight. `/eqn measure` compares the model's parts with it as
+your damage per spell, per fight and over all fights since its reset. Forever has no target
+dummies, so `/eqn measure` reads all fights since `/eqn measure reset` (15-20 ordinary mob fights);
+`/eqn measure last` reads the last one. Short fights use an ability on cooldown at each pull too
+(floor(fight / cooldown) + 1 times, not fight / cooldown): the model's share is adjusted to the
+fights' lengths. `/eqn measure` compares the model's parts with it as
 shares of the damage the model covers (so downtime and unmodelled spells don't skew it), lists the
 spells not modelled, and marks a part "confirmed" when its share agrees within 15% (then its
 unconfirmed numbers stop lowering confidence). The last 5 measurements are saved for the dump.
@@ -196,9 +201,19 @@ In-game test (0.4.0):
 1. Put Windfury on your weapon. `/eqn abilities`: Stormstrike's and Windfury's text as the game
    shows them, and what the model takes from them.
 2. `/eqn model`: the DPS parts (auto attack, Stormstrike, Windfury) and procs a minute.
-3. Fight a target dummy for 2-3 minutes as you normally do, then `/eqn measure`.
+3. `/eqn measure reset`, fight 15-20 mobs as you normally do, then `/eqn measure`.
 4. Hover a few items (Rage of the Storm vs another weapon; a trinket or ring with a proc).
 5. `/eqn dump` + `/reload`, send the SavedVariables file.
+
+In-game results (0.4.0, level 42 Enhancement Shaman):
+- Stormstrike's description says **110%** weapon damage (Forever's table: 100%): the game's text is
+  what's used. 8 sec cooldown from its tooltip.
+- Windfury rank 2's description: **2 extra attacks with 202 attack power**. 202 = (119 + 12.8 x
+  (42 - 40)) x 1.40: rank 2's own spell (8236), with Elemental Weapons 3/3 = +40% already in it.
+  0.4.0 added Elemental Weapons again (283): fixed in 0.4.1. Whether the server uses that or the
+  shared spell 439431's 103.6 (x 1.4) is what `/eqn measure` will show.
+- Model: 163 DPS = auto attack 46%, Stormstrike 25%, Windfury 29% (4.2 procs a minute).
+- No target dummies in Forever: `/eqn measure` now reads all fights since a reset (0.4.1).
 
 ## Milestone 3: complete gear evaluation (0.3.0)
 
