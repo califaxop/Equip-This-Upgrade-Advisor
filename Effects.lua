@@ -653,7 +653,13 @@ function E.Value(e, weights, f)
     local mp5 = e.amount * perMin / 12
     return mp5 * ns.PointsPer("MP5", weights.MP5), format("%s: %d mana%s = +%.1f mana per 5 sec", what, e.amount, every, mp5)
   end
-  local uptime = math.min(1, (e.dur or 0) * perMin / 60)
+  -- how much of the time the buff is up. A Use effect: its length over its cooldown. A proc: they
+  -- come at random, and one while the buff is up only restarts it, so the time it's up is
+  -- 1 - e^(-procs per second x length), not procs x length (10 s at 3 a minute: 39%, not 50%)
+  local dur = e.dur or 0
+  local uptime
+  if e.use then uptime = math.min(1, dur * perMin / 60)
+  else uptime = 1 - math.exp(-(perMin / 60) * dur) end
   if e.kind == "procStat" or e.kind == "useStat" then
     local avg = e.amount * uptime
     return avg * ns.PointsPer(e.stat, weights[e.stat]), format("%s: +%s for %ss, up %d%% of the time = +%s on average",
