@@ -59,7 +59,9 @@ function ns.ShowReport()
     inc:SetPoint("TOP", 0, -258); inc:SetWidth(580); inc:SetJustifyH("CENTER")
     local inside = UI.Button(w, "What's inside", 130, function()
       local text = FR.ReportText()
-      UI.ShowText("EquipThisInsideWindow", "What's inside, fight by fight", INCLUDED, text)
+      -- (in the export window's place; closing it brings the export window back)
+      w:Hide()
+      UI.ShowText("EquipThisInsideWindow", "What's inside, fight by fight", INCLUDED, text, function() ns.ShowReport() end)
     end)
     inside:SetPoint("BOTTOMLEFT", 20, 16)
     inside.tip = "The same records, one fight a line, in plain words."
@@ -178,9 +180,12 @@ local function BuildPanel(panel)
   track({ Refresh = raidRefresh }); rows[#rows + 1] = { Refresh = raidRefresh }
   local raidSrc = at(UI.Text(panel, "note", "From Warcraft Logs of WoW Classic raids (not Forever's own logs): Forever's raids may differ."), 26, -526)
   raidSrc:SetWidth(W_)
-  local fight = UI.Slider(panel, "Fight length (mana)", 330, 60, 600, 30, S("fightLength"), function(v) return format("%d s", v) end, Changed)
+  local fight = UI.Slider(panel, "Mana needs to last", 330, 60, 600, 30, S("fightLength"),
+    function(v) return v % 60 == 0 and format("%d s (%d min)", v, v / 60) or format("%d s (%.1f min)", v, v / 60) end, Changed)
   fight:SetPoint("TOPLEFT", 26, -556)
-  fight.tip = "How long a fight lasts, for healers and casters: over it you can spend your mana pool plus what you regain, so Intellect, Spirit and mana regen count when a fight runs you short."
+  fight.tip = "For healers and casters: how long your mana has to keep you casting, in one fight (a boss fight: about 3 minutes)."
+    .. "\n\nOver that time you can spend your mana pool plus what you regain while casting. If your spells would cost more, Equip This! counts them as cast that much less, so Intellect (a bigger pool), Spirit and mana regeneration (mp5) are worth more. Longer fights make regeneration worth more than Intellect."
+    .. "\n\nNot used once Equip This! has learned how you fight from your own fights: those already show what your mana let you cast."
   track(fight)
 
   -- Learning and helping -----------------------------------------------------

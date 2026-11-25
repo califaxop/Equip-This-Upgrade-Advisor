@@ -265,6 +265,12 @@ function UI.Slider(parent, label, width, minV, maxV, step, opt, fmt, onChange, f
       function(t) local n = tonumber(t); if n then apply(n / factor) end end }, "", false, true)
     box:SetPoint("LEFT", s, "RIGHT", 10, 0)
   end
+  -- hovering the slider or its label shows f.tip, when it has one
+  local function enter(self) if f.tip then GameTooltip:SetOwner(self, "ANCHOR_TOP"); GameTooltip:SetText(f.tip, 1, 1, 1, 1, true); GameTooltip:Show() end end
+  local function leave() if f.tip then GameTooltip:Hide() end end
+  if f.SetMouseMotionEnabled then f:SetMouseMotionEnabled(true) else f:EnableMouse(true) end
+  f:SetScript("OnEnter", enter); f:SetScript("OnLeave", leave)
+  s:HookScript("OnEnter", enter); s:HookScript("OnLeave", leave)
   f.Refresh = function()
     refreshing = true
     s:SetValue(get()); value:SetText(fmt(get())); paintFill(get())
@@ -444,6 +450,7 @@ function UI.Popup(name, width, height)
       self.shade:Hide()
     end
     self.shade:SetFrameLevel(math.max(0, self:GetFrameLevel() - 1))
+    if self.Raise then self:Raise() end   -- (the newest pop-up on top of any other)
   end
   win:HookScript("OnShow", win.Place)
   win:Hide()
@@ -557,8 +564,9 @@ function UI.ShowLink(name, title, url)
   win.edit:HighlightText()
 end
 
--- A window with text to copy (several lines), selected and ready: Ctrl+C.
-function UI.ShowText(name, title, note, text)
+-- A window with text to copy (several lines), selected and ready: Ctrl+C. onClose (optional): called
+-- once when it closes (to bring back the window it was opened from).
+function UI.ShowText(name, title, note, text, onClose)
   local win = _G[name]
   if not win then
     win = UI.Popup(name, 560, 330)
@@ -577,7 +585,9 @@ function UI.ShowText(name, title, note, text)
     win.edit = edit
     local close = UI.Button(win, "Close", 90, function() win:Hide() end)
     close:SetPoint("BOTTOMRIGHT", -20, 14)
+    win:HookScript("OnHide", function() local fn = win.onClose; win.onClose = nil; if fn then fn() end end)
   end
+  win.onClose = onClose
   win.text = text
   win.title:SetText(title)
   win.note:SetText(note or "")
