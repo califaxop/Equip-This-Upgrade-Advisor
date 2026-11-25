@@ -12,7 +12,7 @@ runs alongside the released Equip This! without touching it, on the `next-founda
 
 | Milestone | State |
 |---|---|
-| 1. Foundation: compatibility layer, scanners, diagnostics | **built, offline tests pass (26), waiting for the in-game test** |
+| 1. Foundation: compatibility layer, scanners, diagnostics | **0.1.0 tested in game (see below); 0.1.1 fixes waiting for a re-test** |
 | 2. Basic evaluation | not started (waits for milestone 1's in-game test) |
 | 3. Complete gear evaluation | not started |
 | 4. Simulation (DPS, healing, tanking, PvP) | not started |
@@ -65,7 +65,7 @@ Sources:
 - **eqt:** used by the released Equip This! and working for players.
 
 `/eqn api` shows each one's source and what happened when it was called in your client.
-`Compat.KNOWN` is the full list (92 functions).
+`Compat.KNOWN` is the full list.
 
 ### Verified, used as documented
 - **Identity:** `UnitClass`, `UnitRace`, `UnitLevel`, `UnitName`, `UnitGUID`, `UnitSex`,
@@ -136,6 +136,34 @@ Sources:
   `Enum.SpellBookSpellBank.Player`.
 - **Spec index:** what `C_SpecializationInfo.GetSpecialization()` returns on Forever (3-tree
   talents) is unknown. It's recorded only.
+
+## In-game test 1 (0.1.0, level 42 Orc Shaman, Enhancement, build 71091)
+
+Worked:
+- All 17 slots match the client, every event registered, 0 errors, no items stuck loading.
+- Set 163 counted (2 pieces), enchant IDs from the links, the Windfury temp enchant (284), and the
+  weapon skill (Two-Handed Maces 209/210).
+- 150 stat values read; 118 spells; buffs.
+- The game's conversions are confirmed: `GetAttackPowerForStat(STR, 139)` = 278,
+  `GetCritChanceFromStat(AGI, 46)` = 0.03229 (a fraction: ×100 for %, as the paper doll does),
+  `GetSpellCritChanceFromStat(INT, 87)` = 0.02192, `GetDodgeChanceFromAttribute()` = 0.03229.
+- **Forever has combat ratings:** 7 crit rating gave +0.5% crit at level 42.
+- `C_SpecializationInfo.GetSpecialization()` returned 1 for an Enhancement build, so it's not the
+  talent tree. Recorded only.
+
+Found and fixed in 0.1.1:
+- **Talents:** 33 points read, but only 6 placed in a tree. A Forever talent node belongs to several
+  groups, and the tree isn't always the first. The node's tree is now whichever of its groups is a
+  tree group. Points per tree are also checked against the game's own count
+  (`C_Traits.GetGroupCurrencyInfo`, as the released Equip This! uses), and any mismatch is an issue.
+- **`GetGlancingBlowChance([playerWeaponSkill], targetDefenseSkill)`** needs arguments. It's a
+  calculator for the performance model, not a character-sheet value, so it's no longer scanned.
+- A missing optional return (no off-hand speed) was listed as "unavailable". It no longer is.
+- **`/eqn status` showed the last scan, not the present.** It now also shows live: in combat now,
+  stats hidden now (with a probe read), auras hidden now, and whether a rescan is waiting for combat
+  to end.
+
+Still to check: `CR_WEAPON_SKILL` doesn't exist on Forever (reported, fine). Mana isn't read (hidden).
 
 ## Testing
 

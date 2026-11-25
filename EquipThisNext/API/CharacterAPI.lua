@@ -40,7 +40,6 @@ Char.READS = {
   { "parry", "GetParryChance", {}, { "chance" } },
   { "block", "GetBlockChance", {}, { "chance" } },
   { "blockValue", "GetShieldBlock", {}, { "value" } },
-  { "glancing", "GetGlancingBlowChance", {}, { "chance" } },
   { "hpPerStamina", "UnitHPPerStamina", { "player" }, { "value" } },
   { "dodgeFromAgi", "GetDodgeChanceFromAttribute", {}, { "chance" } },
   { "manaFromSpirit", "GetManaRegenFromSpirit", {}, { "value" } },

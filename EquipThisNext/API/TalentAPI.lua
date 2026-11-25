@@ -37,6 +37,27 @@ function Talent.DefinitionInfo(definitionID)
   return info
 end
 
+-- Points the game says were spent per group: { [groupID] = points } (shape as the released Equip This!
+-- reads it: { { traitNodeGroupID, currencyInfos = { { spent } } } }), or nil.
+function Talent.SpentByGroup(configID, groupIDs)
+  local ok, list = Compat.Call("C_Traits.GetGroupCurrencyInfo", configID, groupIDs)
+  if not ok or type(list) ~= "table" then return nil end
+  local out = {}
+  for _, c in ipairs(list) do
+    local gid = Compat.Field(c, "traitNodeGroupID")
+    local infos = Compat.Field(c, "currencyInfos")
+    if gid then
+      local n = 0
+      for _, ci in ipairs(type(infos) == "table" and infos or {}) do
+        local s = Compat.Field(ci, "spent")
+        if type(s) == "number" then n = n + s end
+      end
+      out[gid] = n
+    end
+  end
+  return out
+end
+
 -- { { groupID, displayName, orderIndex } } for the tree, or {} (unverified shape: see DEVELOPMENT.md)
 function Talent.Groups(treeID)
   local ok, groups = Compat.Call("C_Traits.GetGroupDisplayInfoByTreeID", treeID)

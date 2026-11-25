@@ -13,7 +13,7 @@ local function put(stats, key, v, why)
   elseif type(v) == "number" then stats.values[key] = v
   elseif type(v) == "string" then stats.text[key] = v   -- (e.g. the power token "MANA")
   elseif type(v) == "boolean" then stats.values[key] = v and 1 or 0
-  elseif why then stats.missing[key] = why end
+  elseif why and why ~= "nil" then stats.missing[key] = why end   -- (nil: an optional return, e.g. no off-hand)
 end
 
 local function read(stats, key, api, args, names)

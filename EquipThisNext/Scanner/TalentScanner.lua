@@ -23,10 +23,13 @@ function TalentScanner.Scan(profile)
     profile.talents = t
     return t
   end
+  local treeGroups = {}   -- groupIDs that are talent trees (a node can be in other groups too)
   for _, treeID in ipairs(treeIDs) do
     for _, g in ipairs(Talent.Groups(treeID)) do
-      t.trees[#t.trees + 1] = { treeID = treeID, groupID = num(Compat.Field(g, "groupID")),
+      local gid = num(Compat.Field(g, "groupID"))
+      t.trees[#t.trees + 1] = { treeID = treeID, groupID = gid,
         name = Compat.Field(g, "displayName"), order = num(Compat.Field(g, "orderIndex")) }
+      if gid then treeGroups[gid] = true end
     end
     for _, nodeID in ipairs(Talent.TreeNodes(treeID)) do
       local node = Talent.NodeInfo(configID, nodeID)
@@ -41,12 +44,22 @@ function TalentScanner.Scan(profile)
         local name = def and Compat.Field(def, "overrideName")
         if (not name or name == "") and spellID then name = Spell.Name(spellID) end
         local groups = Compat.Field(node, "groupIDs")
+        local groupList, treeGroup = {}, nil
+        if type(groups) == "table" then
+          for _, gid in ipairs(groups) do
+            gid = num(gid)
+            if gid then
+              groupList[#groupList + 1] = gid
+              if not treeGroup and treeGroups[gid] then treeGroup = gid end
+            end
+          end
+        end
         if name and name ~= "" then
           t.nodes[#t.nodes + 1] = {
             nodeID = nodeID, treeID = treeID, entryID = entryID, definitionID = defID, spellID = spellID, name = name,
             rank = num(Compat.Field(node, "currentRank")) or num(Compat.Field(node, "ranksPurchased")) or 0,
             maxRank = num(Compat.Field(node, "maxRanks")) or num(entry and Compat.Field(entry, "maxRanks")),
-            groupID = type(groups) == "table" and num(groups[1]) or nil,
+            groupID = treeGroup, groupIDs = groupList,
             posX = num(Compat.Field(node, "posX")), posY = num(Compat.Field(node, "posY")),
           }
         end
@@ -59,6 +72,24 @@ function TalentScanner.Scan(profile)
     ns.CharacterProfile.AddIssue(profile, "warn", "talents-empty", "the talent configuration has no readable nodes")
   end
   ns.CharacterProfile.SumTreePoints(t)
+  -- cross-check: the points the game itself counts per tree
+  local ids = {}
+  for _, tr in ipairs(t.trees) do if tr.groupID then ids[#ids + 1] = tr.groupID end end
+  local spent = configID and #ids > 0 and Talent.SpentByGroup(configID, ids)
+  if spent then
+    for _, tr in ipairs(t.trees) do
+      tr.spentByGame = spent[tr.groupID] or 0
+      if tr.spentByGame ~= tr.points then
+        ns.CharacterProfile.AddIssue(profile, "warn", "talents-mismatch", string.format("%s: the game counts %d points, the talents read add up to %d",
+          tostring(tr.name), tr.spentByGame, tr.points or 0))
+      end
+    end
+  end
+  local loose = 0
+  for _, n in ipairs(t.nodes) do if (n.rank or 0) > 0 and not n.groupID then loose = loose + n.rank end end
+  if loose > 0 then
+    ns.CharacterProfile.AddIssue(profile, "warn", "talents-untreed", loose .. " talent point(s) in talents not matched to a tree (/eqn talents shows them)")
+  end
   profile.talents = t
   if t.readable then Cache.Set("talents", "active", ns.Database.Copy(t)) end
   return t

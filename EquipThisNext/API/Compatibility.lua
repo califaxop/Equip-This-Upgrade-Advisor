@@ -38,7 +38,9 @@ Compat.KNOWN = {
   ["GetSpellBonusDamage"] = "docs", ["GetSpellBonusHealing"] = "docs", ["GetManaRegen"] = "docs",
   ["GetSpellPenetration"] = "docs", ["GetArmorPenetration"] = "docs", ["GetDodgeChance"] = "docs",
   ["GetParryChance"] = "docs", ["GetBlockChance"] = "docs", ["GetShieldBlock"] = "docs",
-  ["GetGlancingBlowChance"] = "docs", ["CanDualWield"] = "docs",
+  ["CanDualWield"] = "docs",
+  -- (GetGlancingBlowChance([playerWeaponSkill], targetDefenseSkill) is a calculator for the
+  --  performance model, milestone 4: not a character sheet value, so not scanned)
   -- the game's own stat conversions (the paper doll uses them)
   ["GetCritChanceFromStat"] = "docs", ["GetSpellCritChanceFromStat"] = "docs", ["GetAttackPowerForStat"] = "docs",
   ["GetRangedAttackPowerForStat"] = "docs", ["GetDodgeChanceFromAttribute"] = "docs",
@@ -55,6 +57,7 @@ Compat.KNOWN = {
   ["C_ClassTalents.GetActiveConfigID"] = "docs", ["C_Traits.GetConfigInfo"] = "docs",
   ["C_Traits.GetTreeNodes"] = "docs", ["C_Traits.GetNodeInfo"] = "docs", ["C_Traits.GetEntryInfo"] = "docs",
   ["C_Traits.GetDefinitionInfo"] = "docs", ["C_Traits.GetGroupDisplayInfoByTreeID"] = "eqt",
+  ["C_Traits.GetGroupCurrencyInfo"] = "eqt",
   -- spells and auras
   ["C_Spell.GetSpellName"] = "docs", ["C_Spell.GetSpellInfo"] = "docs", ["C_SpellBook.IsSpellKnown"] = "docs",
   ["C_SpellBook.GetNumSpellBookSkillLines"] = "docs", ["C_SpellBook.GetSpellBookSkillLineInfo"] = "docs",

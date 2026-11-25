@@ -41,6 +41,7 @@ T.Test("item data arrives: rescanned and complete", function()
 end)
 
 T.Test("character sheet values", function()
+  T.Eq(ns.profile.stats.missing["speed.offHand"], nil, "no off-hand isn't 'unavailable' (regression: in game 0.1.0)")
   local v = ns.profile.stats.values
   T.Eq(v["crit.melee"], 6.2, "melee crit"); T.Eq(v["stat.AGI.effective"], 72, "agility")
   T.Eq(v["spellDamage.NATURE"], 25, "nature spell damage (school 4)")
@@ -61,6 +62,10 @@ T.Test("talents, spells and buffs", function()
   local flurry
   for _, n in ipairs(t.nodes) do if n.name == "Flurry" then flurry = n end end
   T.Eq(flurry.rank, 3, "Flurry rank"); T.Eq(flurry.maxRank, 5, "Flurry max"); T.Eq(flurry.spellID, 16253, "Flurry spell")
+  T.Eq(flurry.groupID, 11657, "a talent in several groups goes to its tree, not its first group (regression: in game 0.1.0)")
+  T.Eq(t.trees[1].points + t.trees[2].points + t.trees[3].points, t.totalPoints, "every point in a tree")
+  T.Eq(t.trees[2].spentByGame, 8, "the game's own count agrees")
+  T.Eq(issues(ns.profile, "talents-mismatch"), nil, "no mismatch")
   T.Eq(ns.profile.spells.count, 3, "spells"); T.Eq(ns.profile.spells.known[403], "Lightning Bolt (Rank 4)", "rank text kept")
   T.Eq(ns.profile.buffs.helpful[1].name, "Lightning Shield", "buff")
 end)
@@ -71,6 +76,8 @@ T.Test("combat: no scanning; forced scan keeps the last readable stats, marked s
   MOCK.Fire("UNIT_STATS", "player"); MOCK.RunTimers()
   T.Eq(ns.CharacterScanner.scans, before, "no scan in combat")
   T.Eq(ns.CharacterScanner.waitingForCombat, true, "waits for combat to end")
+  PRINTS = {}; SlashCmdList.EQUIPTHISNEXT("status")
+  T.Ok(table.concat(PRINTS, "\n"):find("now: in combat true; stats hidden true %(crit reads hidden%)"), "status shows combat live: " .. table.concat(PRINTS, " | "))
   local p = ns.CharacterScanner.Refresh(true)
   T.Eq(p.stats.restricted, true, "restricted"); T.Eq(p.stats.stale, true, "stale copy")
   T.Eq(p.stats.values["crit.melee"], 6.2, "last readable crit kept")

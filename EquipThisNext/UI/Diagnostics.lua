@@ -24,8 +24,16 @@ function Diag.Status()
   for name in pairs(ns.modules) do mods[#mods + 1] = name end
   table.sort(mods)
   f("modules (%d): %s", #mods, table.concat(mods, ", "))
-  f("scans: %d; profile %s; pending items %d; in combat %s", ns.CharacterScanner.scans,
-    p.meta.complete and (GOOD .. "complete|r") or (NOTE .. "incomplete|r"), p.meta.pendingItems or 0, tostring(p.meta.inCombat))
+  f("scans: %d; last scan %ds ago%s; profile %s; pending items %d", ns.CharacterScanner.scans,
+    (time and time() or 0) - (p.meta.time or 0), p.meta.inCombat and " (in combat)" or "",
+    p.meta.complete and (GOOD .. "complete|r") or (NOTE .. "incomplete|r"), p.meta.pendingItems or 0)
+  -- right now (not from the last scan): combat and what the game hides
+  local hiddenStats = ns.CharacterAPI.StatsRestricted()
+  local hiddenAuras = ns.AuraAPI.Restricted()
+  local probe = Compat.Value("GetCritChance")
+  f("now: in combat %s; stats hidden %s (crit reads %s); auras hidden %s; waiting for combat to end: %s",
+    tostring(Compat.InCombat()), tostring(hiddenStats), probe and string.format("%.2f", probe) or "hidden", tostring(hiddenAuras),
+    tostring(ns.CharacterScanner.waitingForCombat == true))
   local bad = ns.EquipmentAPI.VerifySlots()
   f("equipment slots vs the client: %s", #bad == 0 and (GOOD .. "all " .. #ns.EquipmentAPI.SLOTS .. " match|r") or (BAD .. table.concat(bad, "; ") .. "|r"))
   local failed = {}
@@ -127,9 +135,16 @@ function Diag.Talents(all)
     end
     f("%s%s|r (%d): %s", NOTE, tostring(tr.name), tr.points or 0, #list > 0 and table.concat(list, ", ") or "-")
   end
-  local loose = 0
-  for _, n in ipairs(t.nodes) do if not n.groupID then loose = loose + 1 end end
-  if loose > 0 then f("%d node(s) without a tree group", loose) end
+  local loose = {}
+  for _, n in ipairs(t.nodes) do
+    if not n.groupID and (all or (n.rank or 0) > 0) then
+      loose[#loose + 1] = string.format("%s %d/%s (groups %s)", n.name, n.rank or 0, tostring(n.maxRank), table.concat(n.groupIDs or {}, ","))
+    end
+  end
+  if #loose > 0 then f("%snot matched to a tree:|r %s", BAD, table.concat(loose, ", ")) end
+  local ids = {}
+  for _, tr in ipairs(t.trees) do ids[#ids + 1] = string.format("%s=%s (game counts %s)", tostring(tr.name), tostring(tr.groupID), tostring(tr.spentByGame)) end
+  f("%stree groups: %s; %d points in all|r", DIM, table.concat(ids, ", "), t.totalPoints or 0)
 end
 
 function Diag.Buffs()

@@ -187,7 +187,7 @@ C_PlayerInfo = { CanUseItem = function() return true end }
 MOCK.TALENTS = {
   { node = 501, group = 11650, def = 9001, spell = 16039, name = "Convection", rank = 0, max = 5 },
   { node = 502, group = 11657, def = 9002, spell = 16262, name = "Ancestral Knowledge", rank = 5, max = 5 },
-  { node = 503, group = 11657, def = 9003, spell = 16253, name = "Flurry", rank = 3, max = 5 },
+  { node = 503, group = 11657, groups = { 40001, 11657 }, def = 9003, spell = 16253, name = "Flurry", rank = 3, max = 5 }, -- (tree group not first, as in game)
   { node = 504, group = 11670, def = 9004, spell = 16173, name = "Tidal Focus", rank = 1, max = 5 },
 }
 C_ClassTalents = { GetActiveConfigID = function() if MOCK.noTalents then return nil end return 77 end }
@@ -198,12 +198,21 @@ C_Traits = {
     for _, n in ipairs(MOCK.TALENTS) do
       if n.node == nodeID then
         return { ID = nodeID, posX = 0, posY = 0, entryIDs = { nodeID * 10 }, activeEntry = n.rank > 0 and { entryID = nodeID * 10, rank = n.rank } or nil,
-          currentRank = n.rank, ranksPurchased = n.rank, maxRanks = n.max, groupIDs = { n.group } }
+          currentRank = n.rank, ranksPurchased = n.rank, maxRanks = n.max, groupIDs = n.groups or { n.group } }
       end
     end
   end,
   GetEntryInfo = function(_, entryID) for _, n in ipairs(MOCK.TALENTS) do if n.node * 10 == entryID then return { definitionID = n.def, maxRanks = n.max } end end end,
   GetDefinitionInfo = function(def) for _, n in ipairs(MOCK.TALENTS) do if n.def == def then return { spellID = n.spell } end end end,
+  GetGroupCurrencyInfo = function(_, ids)
+    local out = {}
+    for _, gid in ipairs(ids) do
+      local n = 0
+      for _, t in ipairs(MOCK.TALENTS) do if t.group == gid then n = n + t.rank end end
+      if n > 0 then out[#out + 1] = { traitNodeGroupID = gid, currencyInfos = { { traitCurrencyID = 3820, spent = n } } } end
+    end
+    return out
+  end,
   GetGroupDisplayInfoByTreeID = function() return {
     { groupID = 11657, displayName = "Enhancement", orderIndex = 1 }, { groupID = 11650, displayName = "Elemental", orderIndex = 0 },
     { groupID = 11670, displayName = "Restoration", orderIndex = 2 } } end,
