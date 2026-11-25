@@ -163,6 +163,13 @@ tooltip, else Forever's SpellPower table. Pool from UnitPowerMax (mana); regen f
 fights (you cast that much there, with regen and drinking between fights), nor to procs (Lightning
 Shield's orbs).
 
+In game (0.8.0, level 42 shaman, 17 items): baseline 0.82 ms, 0.24 ms a comparison, slowest 1.76
+ms. Memory 4403 KB by the game's meter: far above the offline 0.7 MB. The meter counts garbage
+not yet collected (the benchmark itself makes plenty), the saved data (dump snapshots, measurements)
+and the caches, which had no limit (every item hovered all session). 0.8.1: caches capped (400 items,
+300 comparisons); `/eqn bench` shows memory before and after a garbage collection and what the saved
+data holds; `/eqn dump clear` removes snapshots.
+
 Still not counted: talents that change spell or ability damage (measurements absorb them), Forever's
 spell miss and crit multiplier (Classic's assumed), pets.
 

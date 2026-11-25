@@ -327,9 +327,22 @@ function Diag.Bench()
   end
   local total = now() - t1
   f("baseline (your character, rotation, models): %.2f ms; %d comparisons: %.2f ms each, slowest %.2f ms", tc, n, n > 0 and total / n or 0, worst)
-  C.Call("UpdateAddOnMemoryUsage")
-  local ok, kb = C.Call("GetAddOnMemoryUsage", ns.name)
-  if ok and type(kb) == "number" then f("memory: %d KB", kb + 0.5) end
+  local function mem()
+    C.Call("UpdateAddOnMemoryUsage")
+    local ok, kb = C.Call("GetAddOnMemoryUsage", ns.name)
+    return ok and type(kb) == "number" and kb or nil
+  end
+  local before = mem()
+  pcall(collectgarbage, "collect")   -- (once, on request: the meter counts garbage not collected yet)
+  local after = mem()
+  if before then f("memory: %d KB, %s KB after a garbage collection", before + 0.5, after and string.format("%d", after + 0.5) or "?") end
+  local snaps, meas = 0, #(ns.db.measurements or {})
+  for _ in pairs(ns.db.snapshots or {}) do snaps = snaps + 1 end
+  local kept = 0
+  for _ in pairs(ns.GENERATED and ns.GENERATED.spells or {}) do kept = kept + 1 end
+  f("of which: saved data (%d dump snapshot(s): /eqn dump clear removes them; %d measurements), caches (%d items, %d comparisons), spell data (%d spells%s)",
+    snaps, meas, ns.Cache.Count("item"), ns.Cache.Count("evaluation"), kept,
+    ns.GENERATED and ns.GENERATED.prunedTo and (", " .. ns.GENERATED.prunedTo .. " only") or ", every class")
 end
 
 function Diag.Measure(arg)
@@ -549,7 +562,7 @@ local HELP = {
   "/eqn measure [last|reset] - the model's DPS parts vs the game's damage meter (all fights since reset, or the last)",
   "/eqn tooltip - comparison on item tooltips on/off",
   "/eqn scan - read everything again now",
-  "/eqn dump - save everything to the SavedVariables file (for bug reports and tests)",
+  "/eqn dump - save everything to the SavedVariables file (for bug reports and tests); /eqn dump clear removes the saved snapshots",
   "/eqn debug - print caught errors as they happen",
 }
 
@@ -584,7 +597,15 @@ SlashCmdList.EQUIPTHISNEXT = function(msg)
     end,
     compare = function() Diag.Compare(rawRest) end, target = function() Diag.Target(rest) end,
     tooltip = function() ns.db.tooltip = not ns.db.tooltip; P("tooltip " .. (ns.db.tooltip and "on" or "off")) end,
-    dump = Diag.Dump,
+    dump = function()
+      if rest == "clear" then
+        local n = 0
+        for _ in pairs(ns.db.snapshots or {}) do n = n + 1 end
+        ns.db.snapshots = {}
+        return P(n .. " snapshot(s) removed (they leave the SavedVariables file at the next /reload or logout)")
+      end
+      Diag.Dump()
+    end,
     debug = function() ns.db.debug = not ns.db.debug; P("debug " .. (ns.db.debug and "on" or "off")) end,
   }
   local fn = run[cmd]

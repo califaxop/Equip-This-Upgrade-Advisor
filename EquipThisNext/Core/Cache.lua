@@ -23,16 +23,34 @@ function Cache.Get(kind, key, fingerprint)
   return nil
 end
 
+-- most entries a store keeps (milestone 6: every item hovered was kept for the whole session):
+-- past it, the store starts over (cheap; the next look-ups read again)
+Cache.MAX = { item = 400, evaluation = 300 }
+Cache.size = {}
 function Cache.Set(kind, key, value, fingerprint)
   if not stores[kind] then stores[kind] = {}; Cache.generation[kind] = 0; Cache.hits[kind] = 0; Cache.misses[kind] = 0 end
-  stores[kind][key] = { value = value, fp = fingerprint }
+  local s = stores[kind]
+  if s[key] == nil then
+    Cache.size[kind] = (Cache.size[kind] or 0) + 1
+    if Cache.MAX[kind] and Cache.size[kind] > Cache.MAX[kind] then
+      stores[kind] = {}; s = stores[kind]
+      Cache.size[kind] = 1
+      Cache.generation[kind] = (Cache.generation[kind] or 0) + 1
+    end
+  end
+  s[key] = { value = value, fp = fingerprint }
   return value
 end
 
 function Cache.Invalidate(kind, key)
   if not stores[kind] then return end
-  if key ~= nil then stores[kind][key] = nil; return end
+  if key ~= nil then
+    if stores[kind][key] ~= nil then Cache.size[kind] = math.max(0, (Cache.size[kind] or 1) - 1) end
+    stores[kind][key] = nil
+    return
+  end
   stores[kind] = {}
+  Cache.size[kind] = 0
   Cache.generation[kind] = (Cache.generation[kind] or 0) + 1
 end
 

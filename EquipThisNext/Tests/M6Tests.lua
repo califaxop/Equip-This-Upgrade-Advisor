@@ -69,3 +69,23 @@ T.Test("M6: a rotation measured in your fights isn't mana-limited (you cast that
   T.Eq(m.rotation.source, "measured")
   T.Eq(m.base.manaInfo, nil, "no mana limit")
 end)
+
+T.Test("0.8.1: caches have a limit (every hovered item was kept all session); /eqn dump clear", function()
+  local C = ns.Cache
+  C.Invalidate("item")
+  for i = 1, C.MAX.item + 5 do C.Set("item", "item:" .. i, { i = i }) end
+  T.Ok(C.Count("item") <= C.MAX.item, "at most " .. C.MAX.item .. ": " .. C.Count("item"))
+  C.Set("item", "x", 1); C.Set("item", "x", 2)
+  T.Eq(C.Get("item", "x"), 2, "a key set twice counts once")
+  MOCK.Reset()
+  local n4 = LoadAddon()
+  for id in pairs(MOCK.ITEMS) do MOCK.cached[id] = true end
+  MOCK.Fire("ADDON_LOADED", "EquipThisNext"); MOCK.Fire("PLAYER_LOGIN"); MOCK.Fire("PLAYER_ENTERING_WORLD"); MOCK.RunTimers()
+  SlashCmdList.EQUIPTHISNEXT("dump")
+  local n = 0; for _ in pairs(n4.db.snapshots) do n = n + 1 end
+  T.Eq(n, 1, "a snapshot")
+  PRINTS = {}; SlashCmdList.EQUIPTHISNEXT("dump clear")
+  T.Eq(next(n4.db.snapshots), nil, "cleared")
+  PRINTS = {}; SlashCmdList.EQUIPTHISNEXT("bench")
+  T.Ok(table.concat(PRINTS, " "):find("after a garbage collection"), table.concat(PRINTS, " "))
+end)
