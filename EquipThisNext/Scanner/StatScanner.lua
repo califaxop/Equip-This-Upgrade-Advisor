@@ -53,6 +53,8 @@ function StatScanner.Scan(profile)
   end
   local stats = { values = {}, text = {}, hidden = {}, missing = {}, weaponSkills = {}, takenAt = time and time() or 0 }
   for _, r in ipairs(Char.READS) do read(stats, r[1], r[2], r[3], r[4]) end
+  local dw = ns.Compat.Value("CanDualWield")
+  stats.values["dualWield"] = dw and 1 or 0
   for i, s in ipairs(Char.STATS) do
     read(stats, "stat." .. s, "UnitStat", { "player", i }, { "base", "effective", "pos", "neg" })
     local eff = stats.values["stat." .. s .. ".effective"]
@@ -89,6 +91,16 @@ function StatScanner.Scan(profile)
       local line = skillID and Char.SkillLine(skillID)
       stats.weaponSkills[slot] = { skillLineID = skillID, name = line and line.name, rank = line and line.rank,
         modifier = line and line.modifier, maxRank = line and line.maxRank }
+    end
+  end
+  -- every weapon skill you have (rank + modifier), by skill line
+  stats.skillByLine = {}
+  local seen = {}
+  for _, line in pairs(ns.StatDefs.WEAPON_SKILL) do
+    if not seen[line] then
+      seen[line] = true
+      local info = Char.SkillLine(line)
+      if info and type(info.rank) == "number" and info.rank > 0 then stats.skillByLine[line] = info.rank + (info.modifier or 0) end
     end
   end
   profile.stats = stats

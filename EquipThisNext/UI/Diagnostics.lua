@@ -286,13 +286,18 @@ function Diag.Compare(arg)
   for _, o in ipairs(res.options or {}) do
     if o.status == "ok" then
       f("%s%s|r: DPS %s, EHP %s", o == res.best and NOTE or DIM, o.slotName, ns.Tooltip.Pct(o.dps) or "-", ns.Tooltip.Pct(o.ehp) or "-")
+      for _, n in ipairs(o.notes or {}) do f("   %s", n) end
       for i, part in ipairs(o.parts) do
         if i > 8 then break end
-        f("   %+g %s: DPS %s, EHP %s", part.amount, ns.StatDefs.NAMES[part.stat] or part.stat, ns.Tooltip.Pct(part.dps) or "-", ns.Tooltip.Pct(part.ehp) or "-")
+        local name = part.stat == "WEAPON" and "the weapon itself (damage, speed, skill)" or string.format("%+g %s", part.amount, ns.StatDefs.NAMES[part.stat] or part.stat)
+        f("   %s: DPS %s, EHP %s", name, ns.Tooltip.Pct(part.dps) or "-", ns.Tooltip.Pct(part.ehp) or "-")
       end
+      if o.carry and #o.carry > 0 then f("   enchant carried over: %s", table.concat(o.carry, "; ")) end
+      for _, t in ipairs(o.setGained or {}) do f("   set bonus gained: %s", t) end
+      for _, t in ipairs(o.setLost or {}) do f("   set bonus lost: %s", t) end
       if o.lost and #o.lost > 0 then f("   %sthe replaced item's effects (not counted): %s|r", NOTE, table.concat(o.lost, " | ")) end
     else
-      f("%s%s: %s|r", DIM, o.slotName, o.status)
+      f("%s%s: %s%s|r", DIM, tostring(o.slotName), o.status, o.why and (" - " .. o.why) or "")
     end
   end
   local item = ns.EquipmentScanner.ReadItem(link)

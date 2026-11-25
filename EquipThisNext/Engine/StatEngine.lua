@@ -68,7 +68,25 @@ function SE.Baseline(profile)
   if mn and mx and sp and sp > 0 then s.swing, s.speed = (mn + mx) / 2, sp end
   local ws = profile.stats.weaponSkills and profile.stats.weaponSkills[16]
   s.weaponSkill = ws and ws.rank and (ws.rank + (ws.modifier or 0)) or (s.level * 5)
+  s.baseSkill = s.weaponSkill
   if not (ws and ws.rank) then s.assumed[#s.assumed + 1] = "weapon skill = 5 x level" end
+  -- weapons worn: { dps, speed, subclass, twoHand }; the swing's flat part (beyond weapon and AP:
+  -- "+N weapon damage" gear, imbues...) is what's left of the sheet's swing
+  s.skills = profile.stats.skillByLine or {}
+  local eq = profile.equipment and profile.equipment.slots or {}
+  local function weapon(it)
+    if it and it.loaded and it.weapon and it.weapon.dps and it.weapon.speed then
+      return { dps = it.weapon.dps, speed = it.weapon.speed, subclass = it.subclassID,
+        twoHand = it.equipLoc == "INVTYPE_2HWEAPON" }
+    end
+  end
+  s.mh, s.oh = weapon(eq[16]), weapon(eq[17])
+  local o = eq[17]
+  s.hasShield = o and o.loaded and o.classID == ns.StatDefs.SHIELD.class and o.subclassID == ns.StatDefs.SHIELD.subclass or false
+  if s.mh and s.swing then
+    s.flat = s.swing - (s.mh.dps + s.AP / SE.AP_PER_DPS) * s.mh.speed
+    s.speed = s.mh.speed     -- (the weapon's own speed: haste is applied by the model)
+  end
   -- the game's conversions, per point, measured on this character
   local function per(key, stat)
     local x, n = v(profile, key), s[stat]
@@ -105,8 +123,9 @@ local function rate(state, cr, points)
 end
 
 -- A copy of state with a gear difference applied (delta: engine stats, + gained / - lost).
--- talents: TalentInterpreter output (conversions). Returns the new state.
-function SE.Apply(state, delta, talents)
+-- talents: TalentInterpreter output (conversions). weapons (optional): { mh = weapon, oh = weapon or
+-- false, shield = bool } for a weapon change (delta then has no WEAPON_DPS). Returns the new state.
+function SE.Apply(state, delta, talents, weapons)
   local d = {}
   for k, x in pairs(delta or {}) do d[k] = x end
   -- talent conversions (from the stat as the item gives it)
@@ -137,7 +156,28 @@ function SE.Apply(state, delta, talents)
   s.parry = state.parry + rate(s, "CR_PARRY", g("PARRY_RATING")) + (state.parry > 0 and dDef * 0.04 or 0)
   s.block = state.block + rate(s, "CR_BLOCK", g("BLOCK_RATING")) + (state.block > 0 and dDef * 0.04 or 0)
   s.blockValue = state.blockValue + g("BLOCK_VALUE") + g("STR") / SE.BLOCK_VALUE_PER_STRENGTH
-  if state.swing and state.speed then
+  -- stats given in % (set bonuses: "+1% crit"...)
+  s.crit = s.crit + g("CRIT_PCT")
+  s.hit = s.hit + g("HIT_PCT")
+  s.spellCrit = s.spellCrit + g("SPELLCRIT_PCT") + g("CRIT_PCT")
+  s.dodge = s.dodge + g("DODGE_PCT")
+  s.defense = s.defense + g("DEFENSE_SKILL")
+  if g("DEFENSE_SKILL") ~= 0 then s.dodge = s.dodge + g("DEFENSE_SKILL") * 0.04 end
+  if weapons then
+    -- a weapon change: main hand, off-hand (false = none), shield
+    s.mh = weapons.mh or state.mh
+    if weapons.oh == false then s.oh = nil elseif weapons.oh then s.oh = weapons.oh else s.oh = state.oh end
+    if weapons.shield ~= nil then s.hasShield = weapons.shield end
+    if s.mh and state.flat then
+      s.speed = s.mh.speed
+      s.swing = (s.mh.dps + s.AP / SE.AP_PER_DPS) * s.mh.speed + state.flat + g("WEAPON_DMG")
+      local line = s.mh.subclass and ns.StatDefs.WEAPON_SKILL[s.mh.subclass]
+      local sk = line and state.skills and state.skills[line]
+      if sk then s.weaponSkill = sk else s.weaponSkill = state.level * 5; s.assumedSkill = true end
+    elseif not s.mh then
+      s.swing, s.speed = nil, nil
+    end
+  elseif state.swing and state.speed then
     s.swing = state.swing + dAP / SE.AP_PER_DPS * state.speed + g("WEAPON_DMG") + g("WEAPON_DPS") * state.speed
   end
   return s

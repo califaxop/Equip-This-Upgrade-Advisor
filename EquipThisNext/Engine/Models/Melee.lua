@@ -14,17 +14,22 @@ local _, ns = ...
 local M = ns and ns.Module and ns.Module("MeleeModel") or {}
 
 M.MISS = { [0] = 5.0, 5.2, 5.4, 9.0 }
+M.DUAL_WIELD_MISS = 19     -- (Classic: +19 % miss for both hands while dual wielding: assumed for Forever)
+M.OFFHAND_DAMAGE = 0.5     -- (Classic: an off-hand hit does half damage)
 M.DODGE = { [0] = 5.0, 5.5, 6.0, 6.5 }
 M.CRIT_MULT = 2.0
 
 -- ctx: { offset = 0..3, glancing = { chance (0-1), penalty (0-1) } or nil, talents = TalentInterpreter output }
-function M.Table(state, ctx)
+function M.Table(state, ctx, weaponSkill, dualWield)
   local off = math.max(0, math.min(3, ctx.offset or 0))
-  local diff = (state.level + off) * 5 - (state.weaponSkill or state.level * 5)   -- target defense - your skill
+  weaponSkill = weaponSkill or state.weaponSkill or state.level * 5
+  local diff = (state.level + off) * 5 - weaponSkill   -- target defense - your skill
   local skill = diff * 0.04
-  local miss = math.max(0, M.MISS[off] + skill - (state.hit or 0))
+  local miss = math.max(0, M.MISS[off] + (dualWield and M.DUAL_WIELD_MISS or 0) + skill - (state.hit or 0))
   local dodge = math.max(0, M.DODGE[off] + skill)
-  local g = ctx.glancing
+  -- glancing: the game's numbers for this skill (or the main-hand's when that's all there is)
+  local bySkill = ctx.glancingBySkill and ctx.glancingBySkill[weaponSkill]
+  local g = (bySkill and bySkill[off]) or (weaponSkill == state.baseSkill and ctx.glancing) or (not ctx.glancingBySkill and ctx.glancing) or nil
   local glance, penalty, assumed
   if g and g.chance then
     glance, penalty = g.chance * 100, g.penalty or 0
@@ -41,7 +46,8 @@ end
 -- Auto-attack DPS, or nil and why.
 function M.DPS(state, ctx)
   if not (state.swing and state.speed and state.speed > 0) then return nil, "no main-hand weapon damage on the sheet" end
-  local t = M.Table(state, ctx)
+  local dw = state.oh ~= nil
+  local t = M.Table(state, ctx, nil, dw)
   local perSwing = (t.hit + t.glance * (1 - t.glancePenalty) + t.crit * M.CRIT_MULT) / 100
   local speedMult = 1 + (state.haste or 0) / 100
   local f = ctx.talents and ctx.talents.flurry
@@ -52,5 +58,14 @@ function M.DPS(state, ctx)
     speedMult = speedMult * (1 + f.haste * flurryUp)
   end
   local dps = state.swing / state.speed * perSwing * speedMult
-  return dps, { table = t, perSwing = perSwing, speedMult = speedMult, flurryUptime = flurryUp }
+  local ohDps
+  if dw and state.oh.speed and state.oh.speed > 0 then
+    local line = state.oh.subclass and ns.StatDefs.WEAPON_SKILL[state.oh.subclass]
+    local ohSkill = line and state.skills and state.skills[line] or state.weaponSkill
+    local to = M.Table(state, ctx, ohSkill, true)
+    local ohSwing = (state.oh.dps + (state.AP or 0) / 14) * state.oh.speed * M.OFFHAND_DAMAGE
+    ohDps = ohSwing / state.oh.speed * (to.hit + to.glance * (1 - to.glancePenalty) + to.crit * M.CRIT_MULT) / 100 * speedMult
+    dps = dps + ohDps
+  end
+  return dps, { table = t, perSwing = perSwing, speedMult = speedMult, flurryUptime = flurryUp, offHand = ohDps }
 end

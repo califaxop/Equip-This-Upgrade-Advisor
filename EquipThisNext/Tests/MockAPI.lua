@@ -82,7 +82,7 @@ function UnitStat(_, i) local t = STATS[i]; return s(t[1]), s(t[2]), s(t[2] - t[
 function UnitArmor() return s(1800), s(2100), s(2100), s(300) end
 function UnitAttackPower() return s(320), s(40), s(0) end
 function UnitRangedAttackPower() return s(60), s(0), s(0) end
-function UnitDamage() return s(120), s(160), s(0), s(0), s(0), s(0), s(1) end
+function UnitDamage() local avg = (38.47 + 360 / 14) * 3.6 + 5; return s(avg - 20), s(avg + 20), s(0), s(0), s(0), s(0), s(1) end
 function UnitRangedDamage() return s(0), s(0), s(0), s(0), s(0), s(1) end
 function UnitAttackSpeed() return s(3.6), nil, nil end
 function UnitHealthMax() return s(2400) end
@@ -130,15 +130,20 @@ Enum = {
     Sword2H = 8, Staff = 10, Unarmed = 13, Generic = 14, Dagger = 15, Thrown = 16, Crossbow = 18, Wand = 19 },
   SpellBookSpellBank = { Player = 0, Pet = 1 },
 }
-C_SkillInfo = { GetSkillLineInfoByID = function(id) if id == 172 then return { name = "Two-Handed Axes", rank = 205, modifier = 0, maxRank = 210 } end end }
+C_SkillInfo = { GetSkillLineInfoByID = function(id)
+  if id == 172 then return { name = "Two-Handed Axes", rank = 205, modifier = 0, maxRank = 210 } end
+  if id == 43 then return { name = "Swords", rank = 190, modifier = 0, maxRank = 210 } end
+end }
 
 -- items: itemID -> { name, equipLoc, classID, subclassID, quality, ilvl, setID, stats }
 MOCK.ITEMS = {
   [1001] = { "Helm of the Test", "INVTYPE_HEAD", 4, 3, 2, 40, nil, { ITEM_MOD_STAMINA_SHORT = 12, ITEM_MOD_INTELLECT_SHORT = 8, RESISTANCE0_NAME = 220 } },
-  [1002] = { "Axe of Testing", "INVTYPE_2HWEAPON", 2, 1, 3, 42, nil, { ITEM_MOD_STRENGTH_SHORT = 15, ITEM_MOD_DAMAGE_PER_SECOND_SHORT = 38.5 } },
+  [1002] = { "Axe of Testing", "INVTYPE_2HWEAPON", 2, 1, 3, 42, nil, { ITEM_MOD_STRENGTH_SHORT = 15, ITEM_MOD_DAMAGE_PER_SECOND_SHORT = 38.47 } },
   [1003] = { "Ring of Sets", "INVTYPE_FINGER", 4, 0, 3, 45, 77, { ITEM_MOD_AGILITY_SHORT = 6 } },
   [1004] = { "Band of Sets", "INVTYPE_FINGER", 4, 0, 3, 45, 77, { ITEM_MOD_AGILITY_SHORT = 5 } },
   [1005] = { "Totem of Testing", "INVTYPE_RELIC", 4, 9, 2, 40, nil, {} },
+  [1010] = { "Blade of Bags", "INVTYPE_WEAPON", 2, 7, 3, 42, nil, { ITEM_MOD_STRENGTH_SHORT = 5, ITEM_MOD_DAMAGE_PER_SECOND_SHORT = 26 } },
+  [1011] = { "Shield of Bags", "INVTYPE_SHIELD", 4, 6, 3, 42, nil, { RESISTANCE0_NAME = 900, ITEM_MOD_STAMINA_SHORT = 6 } },
 }
 MOCK.WORN = {
   [1] = "|cff1eff00|Hitem:1001:0:0:0:0:0:0:0:42|h[Helm of the Test]|h|r",
@@ -258,15 +263,30 @@ C_Spell.GetSpellDescription = function(id)
   if id == 16253 then return "Increases your attack speed by 20% for your next 3 swing attacks after dealing a critical strike." end
 end
 MOCK.TOOLTIP_LINES = {
-  [1003] = { "Ring of Sets", "Equip: +6 Agility" },
+  -- a line is text, or { left, right }
+  [1002] = { "Axe of Testing", { "Two-Hand", "Axe" }, { "120 - 157 Damage", "Speed 3.60" }, "+15 Strength" },
+  [1010] = { "Blade of Bags", { "One-Hand", "Sword" }, { "50 - 80 Damage", "Speed 2.50" }, "+5 Strength" },
+  [1011] = { "Shield of Bags", { "Off Hand", "Shield" }, "900 Armor", "18 Block", "+6 Stamina" },
+  [1003] = { "Ring of Sets", "Equip: +6 Agility", "(2) Set: +10 Attack Power.", "(3) Set: Chance on hit: zaps the target." },
+  [1004] = { "Band of Sets", "(2) Set: +10 Attack Power.", "(3) Set: Chance on hit: zaps the target." },
   [1008] = { "Ring of Procs", "Chance on hit: Wounds the target for 50 damage.", "Equip: Improves your chance to get a critical strike by 1%." },
 }
 C_TooltipInfo = { GetHyperlink = function(link)
-  local id = tonumber(tostring(link):match("item:(%d+)"))
+  local id, ench = tostring(link):match("item:(%d+):(%d*)")
+  id = tonumber(id)
   local lines = {}
-  for _, t in ipairs(MOCK.TOOLTIP_LINES[id] or {}) do lines[#lines + 1] = { leftText = t } end
+  for _, t in ipairs(MOCK.TOOLTIP_LINES[id] or {}) do
+    if type(t) == "table" then lines[#lines + 1] = { leftText = t[1], rightText = t[2] } else lines[#lines + 1] = { leftText = t } end
+  end
+  if tonumber(ench) and tonumber(ench) > 0 then lines[#lines + 1] = { leftText = "Enchanted: +5 Weapon Damage" } end
   return { lines = lines }
 end }
+C_Item.GetItemUniquenessByID = function() return false end
+MOCK.BAGS = {}
+C_Container = {
+  GetContainerNumSlots = function(bag) return bag == 0 and 16 or 0 end,
+  GetContainerItemLink = function(bag, slot) return bag == 0 and MOCK.BAGS[slot] or nil end,
+}
 Enum.TooltipDataType = { Item = 0 }
 TooltipDataProcessor = { AddTooltipPostCall = function(_, fn) MOCK.tooltipHook = fn end }
 function MOCK.MakeTooltip(link)

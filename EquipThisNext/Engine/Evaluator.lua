@@ -19,9 +19,6 @@ Ev.SLOTS = {
   INVTYPE_ROBE = { 5 }, INVTYPE_WRIST = { 9 }, INVTYPE_HAND = { 10 }, INVTYPE_WAIST = { 6 }, INVTYPE_LEGS = { 7 },
   INVTYPE_FEET = { 8 }, INVTYPE_FINGER = { 11, 12 }, INVTYPE_TRINKET = { 13, 14 },
 }
-Ev.LATER = { INVTYPE_WEAPON = 3, INVTYPE_2HWEAPON = 3, INVTYPE_WEAPONMAINHAND = 3, INVTYPE_WEAPONOFFHAND = 3,
-  INVTYPE_SHIELD = 3, INVTYPE_HOLDABLE = 3, INVTYPE_RANGED = 3, INVTYPE_RANGEDRIGHT = 3, INVTYPE_THROWN = 3,
-  INVTYPE_RELIC = 3 }
 
 function Ev.IsMelee(profile)
   local class = profile.identity and profile.identity.class
@@ -50,7 +47,9 @@ function Ev.Context(profile, settings)
     profile = profile, state = state, gear = gear, talents = talents, offset = offset,
     melee = Ev.IsMelee(profile),
     glancing = calc.glancing and calc.glancing[offset], armorEffect = calc.armorEffect,
+    glancingBySkill = calc.glancingBySkill and next(calc.glancingBySkill) and calc.glancingBySkill or nil,
     baselineArmor = state.armor, magicShare = settings and settings.magicShare,
+    canDualWield = settings and settings.canDualWield,
   }
   ctx.base = Ev.Performance(state, ctx)
   -- buffs and talents in the sheet beyond gear, per primary stat (stat.X.pos - gear)
@@ -96,65 +95,225 @@ function Ev.Weights(ctx, step)
   return out
 end
 
--- candidate: an item record (EquipmentScanner.ReadItem): { link, itemID, equipLoc, loaded, stats, effects }
-function Ev.Compare(ctx, candidate)
-  local res = { link = candidate.link, options = {} }
-  if not candidate.loaded then res.status = "loading"; return res end
-  local loc = candidate.equipLoc
-  if Ev.LATER[loc] then res.status = "later"; res.why = "weapons, shields, off-hands and relics come in milestone " .. Ev.LATER[loc]; return res end
-  local slots = Ev.SLOTS[loc]
-  if not slots then res.status = "none"; res.why = "not an equippable slot this evaluates"; return res end
-  local cand = ns.StatDefs.Normalize(candidate.stats)
-  local eq = ctx.profile.equipment.slots
-  for _, slot in ipairs(slots) do
-    local old = eq[slot]
-    local opt = { slot = slot, slotName = old and old.slotName or tostring(slot), old = old }
-    if old and not old.empty and not old.loaded then
-      opt.status = "loading"
-    elseif old and old.link and old.link == candidate.link then
-      opt.status = "equipped"
-    else
-      local oldStats = (old and not old.empty) and ns.StatDefs.Normalize(old.stats) or {}
-      local delta = ns.StatDefs.Add(cand, oldStats, -1)
-      local s = ns.StatEngine.Apply(ctx.state, delta, ctx.talents)
-      local p = Ev.Performance(s, ctx)
-      opt.delta, opt.perf = delta, p
-      opt.dps, opt.ehp = pct(p.dps, ctx.base.dps), pct(p.ehp, ctx.base.ehp)
-      -- each stat on its own: why it's up or down
-      opt.parts = {}
-      for k, d in pairs(delta) do
-        if d ~= 0 then
-          local p1 = Ev.Performance(ns.StatEngine.Apply(ctx.state, { [k] = d }, ctx.talents), ctx)
-          opt.parts[#opt.parts + 1] = { stat = k, amount = d, dps = pct(p1.dps, ctx.base.dps), ehp = pct(p1.ehp, ctx.base.ehp) }
+-- Set bonuses: which are active with a given set of worn items, and what changes when items change.
+-- bonuses come from the tooltips of the set's items ("(2) Set: +10 Attack Power").
+local function setBonusDelta(ctx, removed, added)
+  local profile = ctx.profile
+  local count, bonuses = {}, {}
+  local function learn(it)
+    if it and it.setID and it.setBonuses and #it.setBonuses > 0 then bonuses[it.setID] = it.setBonuses end
+  end
+  for _, it in pairs(profile.equipment.slots) do
+    if it.loaded and it.setID then count[it.setID] = (count[it.setID] or 0) + 1 end
+    learn(it)
+  end
+  local after = {}
+  for k, v in pairs(count) do after[k] = v end
+  for _, it in ipairs(removed) do if it.setID then after[it.setID] = (after[it.setID] or 0) - 1 end end
+  for _, it in ipairs(added) do
+    learn(it)
+    if it.setID then after[it.setID] = (after[it.setID] or 0) + 1 end
+  end
+  local delta, gained, lost, unknown = {}, {}, {}, {}
+  for setID, list in pairs(bonuses) do
+    local b, a = count[setID] or 0, after[setID] or 0
+    for _, bonus in ipairs(list) do
+      local was, now = b >= bonus.pieces, a >= bonus.pieces
+      if was ~= now then
+        local stats = ns.ItemText.ParseStatText(bonus.text)
+        local txt = string.format("(%d) %s", bonus.pieces, bonus.text)
+        if now then gained[#gained + 1] = txt else lost[#lost + 1] = txt end
+        if stats then
+          delta = ns.StatDefs.Add(delta, stats, now and 1 or -1)
+        else
+          unknown[#unknown + 1] = txt
         end
       end
-      table.sort(opt.parts, function(a, b)
-        return math.abs(a.dps or a.ehp or 0) > math.abs(b.dps or b.ehp or 0)
-      end)
-      opt.lost = old and old.effects or nil
-      opt.status = "ok"
     end
+  end
+  return delta, gained, lost, unknown
+end
+
+local function statsOf(it)
+  if not it or it.empty or not it.stats then return {} end
+  local s = ns.StatDefs.Normalize(it.stats)
+  s.WEAPON_DPS = nil                     -- (a weapon's damage is handled as the weapon itself)
+  if it.shieldBlock then s.BLOCK_VALUE = (s.BLOCK_VALUE or 0) + it.shieldBlock end
+  return s
+end
+
+local function weaponOf(it)
+  if it and it.weapon and it.weapon.dps and it.weapon.speed then
+    return { dps = it.weapon.dps, speed = it.weapon.speed, subclass = it.subclassID, twoHand = it.equipLoc == "INVTYPE_2HWEAPON" }
+  end
+end
+local function isShield(it) return it and it.classID == ns.StatDefs.SHIELD.class and it.subclassID == ns.StatDefs.SHIELD.subclass end
+local function isTwoHand(it) return it and it.equipLoc == "INVTYPE_2HWEAPON" end
+local ONE_HAND = { INVTYPE_WEAPON = true, INVTYPE_WEAPONMAINHAND = true }
+local OFF_HAND = { INVTYPE_SHIELD = true, INVTYPE_HOLDABLE = true, INVTYPE_WEAPONOFFHAND = true }
+local RANGED = { INVTYPE_RANGED = true, INVTYPE_RANGEDRIGHT = true, INVTYPE_THROWN = true, INVTYPE_RELIC = true }
+
+-- One resulting setup: { [slot] = item or false (emptied) } -> option with performance and %.
+function Ev.Evaluate(ctx, changes, label, notes)
+  local eq = ctx.profile.equipment.slots
+  local removed, added = {}, {}
+  local delta = {}
+  local weaponsChange, newMH, newOH = nil, nil, nil
+  for slot, new in pairs(changes) do
+    local old = eq[slot]
+    if old and not old.empty then
+      if not old.loaded then return { status = "loading", label = label } end
+      removed[#removed + 1] = old
+      delta = ns.StatDefs.Add(delta, statsOf(old), -1)
+    end
+    if new then
+      added[#added + 1] = new
+      delta = ns.StatDefs.Add(delta, statsOf(new))
+    end
+    if slot == 16 or slot == 17 then weaponsChange = true end
+  end
+  local weapons
+  if weaponsChange then
+    if not ctx.state.flat and ctx.melee then return { status = "unknown", label = label, why = "your main-hand weapon's speed couldn't be read" } end
+    local mhItem = changes[16] == nil and eq[16] or changes[16] or nil
+    local ohItem = changes[17] == nil and eq[17] or changes[17] or nil
+    weapons = { mh = weaponOf(mhItem) or false, oh = weaponOf(ohItem) or false, shield = isShield(ohItem) and true or false }
+    if not weapons.mh then weapons.mh = nil end
+  end
+  local setDelta, gained, lost, setUnknown = setBonusDelta(ctx, removed, added)
+  delta = ns.StatDefs.Add(delta, setDelta)
+  local s = ns.StatEngine.Apply(ctx.state, delta, ctx.talents, weapons)
+  if weapons and weapons.mh == nil and changes[16] == false then s.swing, s.speed = nil, nil end
+  local p = Ev.Performance(s, ctx)
+  local opt = { status = "ok", label = label, changes = changes, removed = removed, added = added, delta = delta, perf = p,
+    dps = pct(p.dps, ctx.base.dps), ehp = pct(p.ehp, ctx.base.ehp), notes = notes or {},
+    setGained = gained, setLost = lost, setUnknown = setUnknown }
+  -- each stat on its own
+  opt.parts = {}
+  for k, d in pairs(delta) do
+    if d ~= 0 then
+      local p1 = Ev.Performance(ns.StatEngine.Apply(ctx.state, { [k] = d }, ctx.talents), ctx)
+      opt.parts[#opt.parts + 1] = { stat = k, amount = d, dps = pct(p1.dps, ctx.base.dps), ehp = pct(p1.ehp, ctx.base.ehp) }
+    end
+  end
+  table.sort(opt.parts, function(a, b) return math.abs(a.dps or a.ehp or 0) > math.abs(b.dps or b.ehp or 0) end)
+  if weapons then
+    local w1 = Ev.Performance(ns.StatEngine.Apply(ctx.state, {}, ctx.talents, weapons), ctx)
+    table.insert(opt.parts, 1, { stat = "WEAPON", amount = 0, dps = pct(w1.dps, ctx.base.dps), ehp = pct(w1.ehp, ctx.base.ehp) })
+  end
+  -- effects of the removed items that aren't counted; enchants that carry over
+  opt.lost, opt.carry = {}, {}
+  for _, it in ipairs(removed) do
+    for _, e in ipairs(it.effects or {}) do opt.lost[#opt.lost + 1] = e end
+    if it.enchantText then opt.carry[#opt.carry + 1] = it.enchantText end
+  end
+  if s.assumedSkill then opt.notes[#opt.notes + 1] = "weapon skill for this weapon type unknown: 5 x level assumed" end
+  return opt
+end
+
+-- the best of a list of bag items for a slot when paired (by the main metric)
+local function bestPartner(ctx, list, makeChanges)
+  local best
+  for _, it in ipairs(list) do
+    local o = Ev.Evaluate(ctx, makeChanges(it), nil)
+    local key = ctx.melee and "dps" or "ehp"
+    if o.status == "ok" and (not best or (o[key] or -math.huge) > (best.opt[key] or -math.huge)) then best = { item = it, opt = o } end
+  end
+  return best and best.item
+end
+
+-- candidate: an item record (EquipmentScanner.ReadItem): { link, itemID, equipLoc, loaded, stats, effects, ... }
+function Ev.Compare(ctx, candidate)
+  local res = { link = candidate.link, options = {}, notes = {} }
+  if not candidate.loaded then res.status = "loading"; return res end
+  if candidate.canUse == false then res.status = "cantuse"; res.why = "you can't use this (class, armor or weapon skill)"; return res end
+  local level = ctx.profile.identity.level or 1
+  if candidate.minLevel and candidate.minLevel > level then res.notes[#res.notes + 1] = "usable at level " .. candidate.minLevel end
+  local loc = candidate.equipLoc
+  local eq = ctx.profile.equipment.slots
+  local bags = ctx.profile.bags or {}
+  local canDW = ctx.profile.stats.values["dualWield"] == 1 or ctx.canDualWield
+  local configs = {}   -- { changes, label, notes }
+  local function add(changes, label, notes) configs[#configs + 1] = { changes, label, notes } end
+  local mh, oh = eq[16], eq[17]
+  if Ev.SLOTS[loc] then
+    for _, slot in ipairs(Ev.SLOTS[loc]) do add({ [slot] = candidate }, eq[slot] and eq[slot].slotName or tostring(slot)) end
+  elseif loc == "INVTYPE_2HWEAPON" then
+    add({ [16] = candidate, [17] = false }, "Main hand")
+  elseif ONE_HAND[loc] then
+    if isTwoHand(mh) then
+      local offs = {}
+      for _, it in ipairs(bags) do if OFF_HAND[it.equipLoc] and (it.equipLoc ~= "INVTYPE_WEAPONOFFHAND" or canDW) then offs[#offs + 1] = it end end
+      if canDW then for _, it in ipairs(bags) do if it.equipLoc == "INVTYPE_WEAPON" and it.link ~= candidate.link then offs[#offs + 1] = it end end end
+      local partner = bestPartner(ctx, offs, function(it) return { [16] = candidate, [17] = it } end)
+      add({ [16] = candidate, [17] = partner or false }, "Main hand",
+        { partner and ("with " .. tostring(partner.name) .. " from your bags in the off-hand") or "with an empty off-hand (no off-hand in your bags)" })
+    else
+      add({ [16] = candidate }, "Main hand")
+    end
+    if loc == "INVTYPE_WEAPON" and canDW and mh and not isTwoHand(mh) and not mh.empty then add({ [17] = candidate }, "Off hand") end
+  elseif OFF_HAND[loc] then
+    if loc == "INVTYPE_WEAPONOFFHAND" and not canDW then res.status = "cantuse"; res.why = "you can't dual wield"; return res end
+    if isTwoHand(mh) then
+      local ones = {}
+      for _, it in ipairs(bags) do if ONE_HAND[it.equipLoc] then ones[#ones + 1] = it end end
+      local partner = bestPartner(ctx, ones, function(it) return { [16] = it, [17] = candidate } end)
+      if partner then
+        add({ [16] = partner, [17] = candidate }, "Off hand", { "with " .. tostring(partner.name) .. " from your bags instead of your two-hander" })
+      else
+        res.status = "none"; res.why = "needs a one-hander (you wield a two-hander and have none in your bags)"; return res
+      end
+    else
+      add({ [17] = candidate }, "Off hand")
+    end
+  elseif RANGED[loc] then
+    add({ [18] = candidate }, "Ranged / relic", { "its own damage (ranged attacks) isn't modelled yet" })
+  else
+    res.status = "none"; res.why = "not an item slot this evaluates"; return res
+  end
+  for _, c in ipairs(configs) do
+    local changes = c[1]
+    local same = false
+    for slot, it in pairs(changes) do if it and eq[slot] and eq[slot].link and it.link == eq[slot].link then same = true end end
+    local opt
+    if same then
+      opt = { status = "equipped", label = c[2] }
+    else
+      -- unique: the same item already worn in another slot that isn't being replaced
+      local dup = false
+      if candidate.unique then
+        for slot, it in pairs(eq) do
+          if changes[slot] == nil and it.itemID and it.itemID == candidate.itemID then dup = true end
+        end
+      end
+      if dup then opt = { status = "unique", label = c[2] }
+      else opt = Ev.Evaluate(ctx, changes, c[2], c[3]) end
+    end
+    local first = next(changes)
+    opt.slot, opt.slotName = first, c[2]
+    opt.old = eq[first]
     res.options[#res.options + 1] = opt
   end
-  -- best slot, on the main metric (DPS for melee specs, else EHP)
   local key = ctx.melee and "dps" or "ehp"
   for _, o in ipairs(res.options) do
     if o.status == "ok" and (not res.best or (o[key] or -math.huge) > (res.best[key] or -math.huge)) then res.best = o end
   end
   res.metric = key
   res.status = res.best and "ok" or (res.options[1] and res.options[1].status or "none")
-  -- confidence: lowered by effects not counted (on the new item or the one it replaces), assumptions
-  -- and talent numbers not confirmed
+  -- confidence
   local reasons = {}
   if candidate.effects and #candidate.effects > 0 then reasons[#reasons + 1] = "the item has effects not counted yet" end
-  if res.best and res.best.lost and #res.best.lost > 0 then reasons[#reasons + 1] = "the replaced item has effects not counted yet" end
+  local b = res.best
+  if b and b.lost and #b.lost > 0 then reasons[#reasons + 1] = "a replaced item has effects not counted yet" end
+  if b and b.setUnknown and #b.setUnknown > 0 then reasons[#reasons + 1] = "a set bonus that changes isn't a plain stat" end
   if #ctx.state.assumed > 0 then reasons[#reasons + 1] = "assumed: " .. table.concat(ctx.state.assumed, ", ") end
   if ctx.talents.unchecked > 0 then reasons[#reasons + 1] = "a talent's number isn't confirmed" end
   if ctx.state.missingRating and next(ctx.state.missingRating) then reasons[#reasons + 1] = "a rating conversion is unknown" end
   if ctx.profile.stats.stale then reasons[#reasons + 1] = "stats are from before combat" end
   if ctx.melee then reasons[#reasons + 1] = "abilities, imbues and procs not in DPS yet" end
+  if b and b.notes then for _, n in ipairs(b.notes) do if n:find("assumed") or n:find("isn't modelled") then reasons[#reasons + 1] = n end end end
   res.reasons = reasons
-  local serious = (candidate.effects and #candidate.effects > 0) or (res.best and res.best.lost and #res.best.lost > 0)
+  local serious = (candidate.effects and #candidate.effects > 0) or (b and b.lost and #b.lost > 0) or (b and b.setUnknown and #b.setUnknown > 0)
   res.confidence = serious and "low" or (#reasons > 1 and "medium" or "high")
   return res
 end

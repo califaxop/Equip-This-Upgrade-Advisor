@@ -35,6 +35,7 @@ function P.New()
     buffs = { helpful = {}, harmful = {} },
     spells = { known = {}, count = 0 },
     calc = {},
+    bags = {},
     issues = {},
   }
 end

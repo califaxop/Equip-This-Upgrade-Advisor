@@ -41,6 +41,7 @@ Char.READS = {
   { "block", "GetBlockChance", {}, { "chance" } },
   { "blockValue", "GetShieldBlock", {}, { "value" } },
   { "hpPerStamina", "UnitHPPerStamina", { "player" }, { "value" } },
+  { "dualWield", "CanDualWield", {}, { false } },
   { "dodgeFromAgi", "GetDodgeChanceFromAttribute", {}, { "chance" } },
   { "manaFromSpirit", "GetManaRegenFromSpirit", {}, { "value" } },
   { "healthFromSpirit", "GetHealthRegenFromSpirit", {}, { "value" } },

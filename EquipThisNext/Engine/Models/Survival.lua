@@ -35,7 +35,7 @@ function S.EHP(state, ctx)
   local miss = math.max(0, 5 - adj)
   local dodge = math.max(0, (state.dodge or 0) - adj)
   local parry = math.max(0, (state.parry or 0) - adj)
-  local block = math.max(0, (state.block or 0) - adj)
+  local block = state.hasShield and math.max(0, (state.block or 0) - adj) or 0   -- (no shield: no block)
   local crit = math.max(0, 5 + adj)
   local crushGap = a * 5 - math.min(state.defense or 0, state.level * 5)
   local crush = crushGap >= 15 and math.max(0, crushGap * 2 - 15) or 0

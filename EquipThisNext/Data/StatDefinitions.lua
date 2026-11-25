@@ -82,3 +82,11 @@ SD.NAMES = {
   WEAPON_DPS = "Weapon DPS", RES_HOLY = "Holy Res.", RES_FIRE = "Fire Res.", RES_NATURE = "Nature Res.",
   RES_FROST = "Frost Res.", RES_SHADOW = "Shadow Res.", RES_ARCANE = "Arcane Res.",
 }
+
+-- weapon subclass (Enum.ItemWeaponSubclass in Forever's docs: Axe1H 0, Axe2H 1, Bows 2, Guns 3, Mace1H 4,
+-- Mace2H 5, Polearm 6, Sword1H 7, Sword2H 8, Staff 10, Unarmed 13, Dagger 15, Thrown 16, Crossbow 18,
+-- Wand 19) -> weapon skill line (Blizzard's Camelot paper doll map)
+SD.WEAPON_SKILL = { [7] = 43, [0] = 44, [2] = 45, [3] = 46, [4] = 54, [8] = 55, [10] = 136, [5] = 160, [1] = 172,
+  [15] = 173, [16] = 176, [18] = 226, [19] = 228, [6] = 229, [13] = 162 }
+SD.TWO_HAND = { [1] = true, [5] = true, [6] = true, [8] = true, [10] = true }
+SD.SHIELD = { class = 4, subclass = 6 }   -- (Enum.ItemArmorSubclass.Shield = 6)

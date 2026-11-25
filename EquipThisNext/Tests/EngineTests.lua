@@ -102,14 +102,129 @@ T.Test("comparing a ring: it replaces the weaker ring, with the % per metric and
   T.Ok(ap and ap.dps > 0, "the AP part is shown")
 end)
 
-T.Test("the same item, equipped: no comparison; weapons wait for milestone 3", function()
+T.Test("the same item, equipped: no comparison; a weapon without your weapon's speed: says so", function()
   local p = fixture()
   local ctx = Ev.Context(p, { targetOffset = 0 })
   local worn = p.equipment.slots[10]
   local res = Ev.Compare(ctx, worn)
   T.Eq(res.options[1].status, "equipped", "equipped")
   local axe = Ev.Compare(ctx, { link = "x", loaded = true, equipLoc = "INVTYPE_2HWEAPON", stats = {} })
-  T.Eq(axe.status, "later", "two-hander later")
+  T.Eq(axe.status, "unknown", "the fixture (a 0.1.0 dump) has no weapon speed: not guessed")
+end)
+
+-- milestone 3: the fixture with what 0.3.0 reads from tooltips (Rage of the Storm: 3.60 speed)
+local function fixture3()
+  local p = fixture()
+  local mh = p.equipment.slots[16]
+  mh.weapon = { dps = mh.stats.ITEM_MOD_DAMAGE_PER_SECOND_SHORT, speed = 3.6 }
+  p.stats.skillByLine = { [160] = 209, [44] = 205, [54] = 210 }   -- 2H maces (sheet), axes, maces
+  return p
+end
+-- I'lalai Flayer as the game shows it: one-hand axe, 52 - 97 damage, speed 2.60, 28.7 DPS, +4 Str +3 Agi +8 Sta
+local FLAYER = { link = "item:279887", itemID = 279887, name = "I'lalai Flayer", loaded = true, equipLoc = "INVTYPE_WEAPON",
+  classID = 2, subclassID = 0, canUse = true, effects = {},
+  stats = { ITEM_MOD_STRENGTH_SHORT = 4, ITEM_MOD_AGILITY_SHORT = 3, ITEM_MOD_STAMINA_SHORT = 8, ITEM_MOD_DAMAGE_PER_SECOND_SHORT = 28.65 },
+  weapon = { dps = 28.65, speed = 2.6 } }
+
+T.Test("the swing's flat part: 2 weapon damage from the ring (the sheet minus weapon and AP)", function()
+  local s = SE.Baseline(fixture3())
+  T.Near(s.flat, 2, 0.01, "flat")
+  T.Eq(s.speed, 3.6, "the weapon's own speed")
+end)
+
+T.Test("a one-hander for a two-hander: the new swing from its damage and speed, its skill, no off-hand in bags", function()
+  local p = fixture3()
+  local ctx = Ev.Context(p, { targetOffset = 0 })
+  local res = Ev.Compare(ctx, FLAYER)
+  T.Eq(res.status, "ok", "evaluated")
+  local o = res.best
+  T.Ok(o.notes[1]:find("empty off%-hand"), "says the off-hand is empty: " .. tostring(o.notes[1]))
+  local s = SE.Apply(ctx.state, o.delta, ctx.talents, { mh = { dps = 28.65, speed = 2.6, subclass = 0 }, oh = false, shield = false })
+  -- AP: 502 - 2 x 16 (Rage's Str) + 2 x 4 (Flayer's Str) = 478; swing = (28.65 + 478/14) x 2.6 + 2
+  T.Near(s.AP, 478, 1e-9, "AP")
+  T.Near(s.swing, (28.65 + 478 / 14) * 2.6 + 2, 1e-4, "swing (the flat part is 2.0000035: the game gives the speed as 3.6000001)")
+  T.Eq(s.weaponSkill, 205, "axe skill")
+  T.Ok(o.dps < 0, "a 2.6 one-hander loses auto-attack DPS to the 3.6 two-hander here")
+  T.Eq(o.removed[1].name, "Rage of the Storm", "replaces the two-hander")
+end)
+
+T.Test("with a shield in your bags: the one-hander is paired with it; block counts with a shield only", function()
+  local p = fixture3()
+  local shield = { link = "item:6001", itemID = 6001, name = "Savage Boar's Guard", loaded = true, equipLoc = "INVTYPE_SHIELD",
+    classID = 4, subclassID = 6, canUse = true, effects = {}, shieldBlock = 12,
+    stats = { RESISTANCE0_NAME = 1100, ITEM_MOD_STAMINA_SHORT = 6 } }
+  p.bags = { shield }
+  local ctx = Ev.Context(p, { targetOffset = 0 })
+  T.Eq(ctx.state.hasShield, false, "no shield now: the sheet's 4.8% block isn't counted")
+  local res = Ev.Compare(ctx, FLAYER)
+  T.Ok(res.best.notes[1]:find("Savage Boar's Guard"), "paired with the shield: " .. tostring(res.best.notes[1]))
+  T.Ok(res.best.ehp > 5, "a shield's armor and block raise EHP a lot: " .. tostring(res.best.ehp))
+  -- the shield itself, while wielding a two-hander: needs a one-hander from the bags
+  local r2 = Ev.Compare(ctx, shield)
+  T.Eq(r2.status, "none", "no one-hander in the bags")
+  p.bags = { FLAYER }
+  local r3 = Ev.Compare(Ev.Context(p, { targetOffset = 0 }), shield)
+  T.Eq(r3.status, "ok", "with the Flayer from the bags")
+  T.Ok(r3.best.notes[1]:find("I'lalai Flayer"), "says so")
+end)
+
+T.Test("set bonuses: breaking a 2-piece loses its bonus; completing one gains it", function()
+  local p = fixture3()
+  local bonus = { { pieces = 2, text = "+10 Attack Power." }, { pieces = 3, text = "Chance on hit: zaps the target." } }
+  p.equipment.slots[6].setBonuses = bonus; p.equipment.slots[7].setBonuses = bonus
+  local ctx = Ev.Context(p, { targetOffset = 0 })
+  local belt = { link = "item:7001", name = "Plain Belt", loaded = true, equipLoc = "INVTYPE_WAIST", canUse = true, effects = {},
+    stats = { ITEM_MOD_STRENGTH_SHORT = 12, ITEM_MOD_STAMINA_SHORT = 10, RESISTANCE0_NAME = 136 } }
+  local r = Ev.Compare(ctx, belt)
+  T.Eq(r.best.setLost[1], "(2) +10 Attack Power.", "the 2-piece bonus is lost")
+  T.Near(r.best.delta.AP, -10, 1e-9, "its 10 AP leaves")
+  T.Ok(r.best.dps < 0, "same stats, minus the bonus: a downgrade")
+  local helm = { link = "item:7002", name = "Scarlet Helm", loaded = true, equipLoc = "INVTYPE_HEAD", canUse = true, effects = {},
+    setID = 163, setBonuses = bonus, stats = { ITEM_MOD_STAMINA_SHORT = 9 } }
+  local r2 = Ev.Compare(ctx, helm)
+  T.Eq(r2.best.setGained[1], "(3) Chance on hit: zaps the target.", "3-piece gained")
+  T.Eq(r2.confidence, "low", "a bonus that isn't a stat: low confidence")
+end)
+
+T.Test("restrictions: can't use, level, unique", function()
+  local ctx = Ev.Context(fixture3(), { targetOffset = 0 })
+  local r = Ev.Compare(ctx, { link = "item:1", loaded = true, equipLoc = "INVTYPE_HEAD", canUse = false, stats = {} })
+  T.Eq(r.status, "cantuse", "class / armor")
+  local r2 = Ev.Compare(ctx, { link = "item:2", loaded = true, equipLoc = "INVTYPE_HEAD", canUse = true, minLevel = 45, stats = { ITEM_MOD_STAMINA_SHORT = 20 }, effects = {} })
+  T.Eq(r2.notes[1], "usable at level 45", "still compared, with a note")
+  local eq = ctx.profile.equipment.slots
+  local r3 = Ev.Compare(ctx, { link = "item:x274614", itemID = 274614, unique = true, loaded = true, equipLoc = "INVTYPE_FINGER", canUse = true, stats = { ITEM_MOD_STAMINA_SHORT = 9 }, effects = {} })
+  local statuses = {}
+  for _, o in ipairs(r3.options) do statuses[o.slot] = o.status end
+  T.Eq(statuses[12], "unique", "can't add a second Knucklebone Ring next to the one in Ring 1")
+  T.Eq(statuses[11], "ok", "can replace it")
+end)
+
+T.Test("enchants: the replaced item's enchant is carried (not lost), and its text is shown", function()
+  local p = fixture3()
+  p.equipment.slots[5].enchantText = "Enchanted: +3 Stamina"
+  local ctx = Ev.Context(p, { targetOffset = 0 })
+  local chest = { link = "item:7003", name = "New Chest", loaded = true, equipLoc = "INVTYPE_CHEST", canUse = true, effects = {},
+    stats = { RESISTANCE0_NAME = 106, ITEM_MOD_STRENGTH_SHORT = 10, ITEM_MOD_STAMINA_SHORT = 5, ITEM_MOD_SPIRIT_SHORT = 11 } }
+  local r = Ev.Compare(ctx, chest)
+  T.Eq(r.best.carry[1], "Enchanted: +3 Stamina", "named")
+  T.Ok(math.abs(r.best.ehp) < 1e-9, "identical stats, the enchant carried: no change")
+end)
+
+T.Test("item text: speed, damage, block, set lines, enchant and set bonus stat parsing", function()
+  local IT = ns.ItemText
+  local tip = { left = { "I'lalai Flayer", "One-Hand", "52 - 97 Damage", "(28.7 damage per second)", "1100 Armor", "21 Block",
+    "(2) Set: +10 Attack Power.", "(3) Set: Increases damage and healing done by magical spells and effects by up to 12." },
+    right = { [2] = "Axe", [3] = "Speed 2.60" } }
+  T.Eq(IT.Speed(tip), 2.6, "speed"); local a, b = IT.Damage(tip); T.Eq(a, 52, "min"); T.Eq(b, 97, "max")
+  T.Eq(IT.ShieldBlock(tip), 21, "block")
+  local sb = IT.SetBonuses(tip); T.Eq(#sb, 2, "two set lines"); T.Eq(sb[1].pieces, 2, "pieces")
+  T.Eq(IT.ParseStatText(sb[1].text).AP, 10, "+10 AP")
+  local sp = IT.ParseStatText(sb[2].text); T.Eq(sp.SP, 12, "spell dmg"); T.Eq(sp.HEAL, 12, "healing")
+  local e = IT.ParseStatText("Enchanted: +3 Agility and +3 Strength"); T.Eq(e.AGI, 3, "agi"); T.Eq(e.STR, 3, "str")
+  T.Eq(IT.ParseStatText("+5 All Resistances").RES_FIRE, 5, "all res")
+  T.Eq(IT.ParseStatText("Chance on hit: zaps the target."), nil, "not a stat")
+  T.Eq(IT.ParseStatText("Improves your chance to get a critical strike by 1%.").CRIT_PCT, 1, "crit %")
 end)
 
 T.Test("an item with a proc: listed as not counted, confidence low", function()
@@ -171,4 +286,33 @@ end)
 T.Test("stat lines with decimals are stats, not effects (regression: the cloak's 0.5% crit line in 0.2.0)", function()
   T.Eq(#ns.ItemEffects.Uncounted({ "Equip: Improves your chance to get a critical strike by 0.5%." }), 0, "0.5%")
   T.Eq(#ns.ItemEffects.Uncounted({ "Equip: Reduces the mana cost of Flame Shock and Lightning Bolt by 5 Mana." }), 1, "a real effect stays")
+end)
+
+T.Test("in game (mock), milestone 3: weapon speed and enchant read from tooltips, bag pairing, sets, flat part", function()
+  MOCK.Reset()
+  local ns3 = LoadAddon()
+  for id in pairs(MOCK.ITEMS) do MOCK.cached[id] = true end
+  MOCK.BAGS = { [1] = "|cff0070dd|Hitem:1011::::::::42|h[Shield of Bags]|h|r" }
+  MOCK.Fire("ADDON_LOADED", "EquipThisNext"); MOCK.Fire("PLAYER_LOGIN"); MOCK.Fire("PLAYER_ENTERING_WORLD"); MOCK.RunTimers()
+  local p = ns3.profile
+  local axe = p.equipment.slots[16]
+  T.Eq(axe.weapon.speed, 3.6, "speed from the tooltip's right side")
+  T.Eq(axe.enchantText, "Enchanted: +5 Weapon Damage", "the enchant's own line (tooltip with vs without it)")
+  T.Eq(#axe.effects, 0, "the enchant line isn't counted as the axe's own effect")
+  T.Eq(p.sets[77].count, 2, "set pieces"); T.Eq(#p.equipment.slots[11].setBonuses, 2, "set bonuses read")
+  T.Eq(#p.bags, 1, "the bag shield found")
+  T.Eq(p.stats.skillByLine[43], 190, "sword skill scanned")
+  local ctx = ns3.Context()
+  T.Near(ctx.state.flat, 5, 1e-6, "flat part = the enchant's 5 weapon damage")
+  local blade = "|cff0070dd|Hitem:1010::::::::42|h[Blade of Bags]|h|r"
+  local tt = MOCK.MakeTooltip(blade)
+  MOCK.tooltipHook(tt)
+  local all = table.concat(tt.lines, " | ")
+  T.Ok(all:find("DPS") and all:find("Shield of Bags"), "one-hander paired with the bag shield: " .. all)
+  T.Ok(all:find("Axe of Testing"), "says it replaces the two-hander")
+  T.Ok(all:find("with your enchant on it"), "the axe's enchant carries over")
+  PRINTS = {}; SlashCmdList.EQUIPTHISNEXT("compare " .. blade)
+  local out = table.concat(PRINTS, "\n")
+  T.Ok(out:find("the weapon itself"), "the weapon's own part is listed")
+  T.Eq(ns3.errors.count, 0, "no errors")
 end)

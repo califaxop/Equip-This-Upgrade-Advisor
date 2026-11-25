@@ -6,7 +6,7 @@ local _, ns = ...
 local CharacterScanner = ns.Module("CharacterScanner")
 local Events, Cache, P, Compat = ns.Events, ns.Cache, ns.CharacterProfile, ns.Compat
 
-local PARTS = { "identity", "stats", "equipment", "talents", "buffs", "spells", "calc" }
+local PARTS = { "identity", "stats", "equipment", "talents", "buffs", "spells", "calc", "bags" }
 local dirty = {}
 for _, p in ipairs(PARTS) do dirty[p] = true end
 CharacterScanner.scans = 0
@@ -18,7 +18,8 @@ local function scanPart(profile, part)
   elseif part == "talents" then ns.TalentScanner.Scan(profile)
   elseif part == "buffs" then ns.BuffScanner.Scan(profile)
   elseif part == "spells" then ns.SpellScanner.Scan(profile)
-  elseif part == "calc" then ns.CalcScanner.Scan(profile) end
+  elseif part == "calc" then ns.CalcScanner.Scan(profile)
+  elseif part == "bags" then ns.BagScanner.Scan(profile) end
 end
 
 -- Rescan the parts marked dirty (or all, with force). Returns the profile.
@@ -80,7 +81,8 @@ Events.On("ADDON_LOADED", "db", function(_, name)
   if name == ns.name then ns.Database.Load() end
 end)
 Events.On("PLAYER_ENTERING_WORLD", "scan", function() mark(unpack(PARTS)) end)
-Events.On("PLAYER_EQUIPMENT_CHANGED", "scan", function() mark("equipment", "stats") end)
+Events.On("PLAYER_EQUIPMENT_CHANGED", "scan", function() mark("equipment", "stats", "bags") end)
+Events.On("BAG_UPDATE_DELAYED", "bags", function() mark("bags") end)
 Events.On("PLAYER_LEVEL_UP", "scan", function() mark("identity", "stats", "spells") end)
 -- item data arriving: rescan when it's one we're waiting for
 local function itemArrived(_, itemID, success)

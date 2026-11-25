@@ -40,8 +40,9 @@ function TT.Lines(res)
   local L = {}
   local head = "|cff33ff99EqT Next:|r "
   if res.status == "loading" then L[1] = head .. DIM .. "loading...|r"; return L end
-  if res.status == "later" or res.status == "none" then L[1] = head .. DIM .. tostring(res.why) .. "|r"; return L end
+  if res.status == "none" or res.status == "cantuse" or res.status == "unknown" then L[1] = head .. DIM .. tostring(res.why) .. "|r"; return L end
   if res.status == "equipped" then L[1] = head .. DIM .. "equipped|r"; return L end
+  if res.status == "unique" then L[1] = head .. DIM .. "unique: you already wear one|r"; return L end
   local b = res.best
   if not b then L[1] = head .. DIM .. "can't compare yet|r"; return L end
   local parts = {}
@@ -49,8 +50,15 @@ function TT.Lines(res)
   if b.ehp then parts[#parts + 1] = "EHP " .. fmt(b.ehp) end
   if #parts == 0 then parts[1] = DIM .. "no change measured|r" end
   L[1] = head .. table.concat(parts, "  ")
-  local where = b.old and not b.old.empty and ("vs " .. (b.old.name or b.slotName)) or ("into the empty " .. b.slotName .. " slot")
+  local names = {}
+  for _, it in ipairs(b.removed or {}) do names[#names + 1] = it.name or "?" end
+  local where = #names > 0 and ("vs " .. table.concat(names, " + ")) or ("into the empty " .. tostring(b.slotName) .. " slot")
   L[2] = DIM .. where .. " · confidence " .. res.confidence .. "|r"
+  for _, n in ipairs(b.notes or {}) do L[#L + 1] = DIM .. n .. "|r" end
+  for _, n in ipairs(res.notes or {}) do L[#L + 1] = NOTE .. n .. "|r" end
+  if b.carry and #b.carry > 0 then L[#L + 1] = DIM .. "with your enchant on it (" .. table.concat(b.carry, "; ") .. ")|r" end
+  for _, t in ipairs(b.setGained or {}) do L[#L + 1] = GOOD .. "set bonus gained: " .. t .. "|r" end
+  for _, t in ipairs(b.setLost or {}) do L[#L + 1] = BAD .. "set bonus lost: " .. t .. "|r" end
   if res.metric == "ehp" then L[#L + 1] = DIM .. "spell damage / healing: milestone 4|r" end
   return L
 end

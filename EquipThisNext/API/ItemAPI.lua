@@ -71,18 +71,40 @@ function Item.Stats(link)
   return out
 end
 
--- The item's tooltip text lines (left side), or nil
-function Item.TooltipLines(link)
+-- The item's tooltip: { left = { text... }, right = { [i] = text } } (same line numbers), or nil
+function Item.Tooltip(link)
   local ok, data = Compat.Call("C_TooltipInfo.GetHyperlink", link)
   if not ok or type(data) ~= "table" then return nil end
   local lines = Compat.Field(data, "lines")
   if type(lines) ~= "table" then return nil end
-  local out = {}
+  local out = { left = {}, right = {} }
   for _, l in ipairs(lines) do
     local t = Compat.Field(l, "leftText")
-    if type(t) == "string" and t ~= "" then out[#out + 1] = t end
+    local r = Compat.Field(l, "rightText")
+    if type(t) == "string" and t ~= "" then
+      out.left[#out.left + 1] = t
+      if type(r) == "string" and r ~= "" then out.right[#out.left] = r end
+    end
   end
   return out
+end
+-- (left lines only)
+function Item.TooltipLines(link)
+  local t = Item.Tooltip(link)
+  return t and t.left or nil
+end
+
+-- the same link without its permanent enchant (item:ID:enchant: -> item:ID::)
+function Item.WithoutEnchant(link)
+  if type(link) ~= "string" then return nil end
+  local out, n = link:gsub("(item:%-?%d+):%-?%d*:", "%1::", 1)
+  return n > 0 and out or link
+end
+
+function Item.IsUnique(linkOrID)
+  local ok, unique = Compat.Call("C_Item.GetItemUniquenessByID", linkOrID)
+  if not ok or unique == Compat.SECRET then return nil end
+  return unique and true or false
 end
 
 function Item.NumSockets(linkOrID) return Compat.Value("C_Item.GetItemNumSockets", linkOrID) end

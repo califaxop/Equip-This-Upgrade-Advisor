@@ -13,8 +13,8 @@ runs alongside the released Equip This! without touching it, on the `next-founda
 | Milestone | State |
 |---|---|
 | 1. Foundation: compatibility layer, scanners, diagnostics | **done: 0.1.3 validated in game (level 42 Shaman, build 71091)** |
-| 2. Basic evaluation | **0.2.0 tested in game; 0.2.1 fixes (42 tests) waiting for a re-test** |
-| 3. Complete gear evaluation | not started |
+| 2. Basic evaluation | **done: validated in game (0.2.1; the tooltip %s look right to the tester)** |
+| 3. Complete gear evaluation | **0.3.0 built, offline tests pass (50), waiting for the in-game test** |
 | 4. Simulation (DPS, healing, tanking, PvP) | not started |
 | 5. All classes and builds | not started |
 | 6. Optimization and validation | not started |
@@ -138,6 +138,55 @@ Sources:
 - **Spec index:** what `C_SpecializationInfo.GetSpecialization()` returns on Forever (3-tree
   talents) is unknown. It's recorded only.
 
+
+## Milestone 3: complete gear evaluation (0.3.0)
+
+Every comparison is now a complete resulting setup: which items come off, which go on, and what that
+does to stats, set bonuses and weapons.
+
+- **Weapons.** Speed comes from the tooltip's right side ("Speed 3.60"); damage per swing is its DPS x
+  speed. The swing's flat part is what's left of the sheet's swing after weapon damage and attack power
+  ("+N weapon damage" gear, a weapon enchant). On the real Shaman it's exactly the ring's 2.
+  - **A two-hander** replaces the main hand and the off-hand.
+  - **A one-hander** goes in the main hand. If you wield a two-hander, it's paired with your best shield
+    or off-hand from your bags (chosen by the main metric), or with an empty off-hand, and the tooltip
+    says which. If you can dual wield (`CanDualWield`), it's also tried in the off-hand.
+  - **A shield or held-in-off-hand item** goes in the off-hand. If you wield a two-hander, it's paired
+    with your best one-hander from your bags, or reported as needing one.
+  - **Weapon skill** follows the weapon type: every weapon skill is scanned, and the game's glancing
+    numbers are taken for each skill value.
+  - **Dual wield:** off-hand swings at half damage, and +19 % miss on both hands (Classic; assumed for
+    Forever).
+  - **Ranged weapons and relics:** their stats and effects; ranged attacks aren't modelled.
+- **Block only with a shield.** The sheet shows 4.84 % block with a two-hander. EHP now counts block
+  only when a shield is worn, and a shield's "N Block" value counts as block value.
+- **Enchants.** `GetItemStats` doesn't include them (the dump: Stamina gear 105 vs sheet 108). An
+  enchant's text is the tooltip lines the enchanted item has and the same item without the enchant
+  hasn't. Comparisons keep your enchant (it moves to the new item) and say so ("with your enchant on it
+  (...)").
+- **Set bonuses.** "(N) Set: ..." lines are read from the set's items. Before and after the swap, each
+  bonus that turns on or off is gained or lost. Plain-stat bonuses count; others are listed and lower
+  confidence to low.
+- **Restrictions.**
+  - `C_PlayerInfo.CanUseItem` false: "you can't use this".
+  - Required level above yours: still compared, with "usable at level N".
+  - `C_Item.GetItemUniquenessByID`: a unique item can't go in the second ring or trinket slot next to
+    itself.
+- **The breakdown** lists "the weapon itself (damage, speed, skill)" as one part, then each stat.
+
+Real numbers (0.2.0 dump with 3.6 speed): the I'lalai Flayer (2.6 one-hand axe) for Rage of the Storm
+(3.6 two-hand mace).
+- Auto-attack DPS -11.6 %: the weapon itself -9.4 % (28.7 vs 35.6 DPS) and -12 Strength -2.4 %.
+- EHP -2.9 % with an empty off-hand; +12.8 % paired with a 900-armor shield.
+- A slow two-hander's real edge for Enhancement is Windfury and Stormstrike, which come with
+  milestone 4.
+
+In-game test (0.3.0):
+1. `/eqn gear`: weapons show speed; enchanted items show their enchant's text.
+2. Hover one-handers, shields and two-handers: the tooltip says what it pairs with and what it replaces.
+3. Hover items of your Scarlet set and other belts or legs: set bonus gained or lost.
+4. `/eqn compare` on a weapon: "the weapon itself" part, then stats.
+5. `/eqn dump` + `/reload`: weapon speeds, enchant texts and set bonuses become test data.
 
 ## Milestone 2: basic evaluation (0.2.0)
 
@@ -292,7 +341,7 @@ the game's own count for each tree; 0 errors, no issues, all slots and events fi
 Offline (no game): `python3 tools/run_next_tests.py` (needs `pip install lupa`), or
 `cd EquipThisNext && lua5.1 Tests/run.lua`. The runner loads the files in the .toc's order against
 `Tests/MockAPI.lua`, a stand-in client shaped like the documented API. Knobs can turn on hidden stats,
-hidden auras, items that load late, missing events and API errors. 28 tests cover the cache, the
+hidden auras, items that load late, missing events and API errors. 50 tests cover the cache, the
 compatibility layer, link parsing, sets, talent points, profile validation, fingerprints, the full
 scan, late-loading items, combat, gear and talent changes, and every `/eqn` command.
 
