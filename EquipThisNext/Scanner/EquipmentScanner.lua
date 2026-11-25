@@ -58,6 +58,9 @@ function EquipmentScanner.ReadItem(link, slot, slotName)
     end
     data.effects = keep
   end
+  -- effects the models count (milestone 4: procs, use effects, ability bonuses): out of the
+  -- "not counted" list
+  data.modeled, data.effects = ns.ItemEffects.Split(data.effects, parsed.itemID)
   if data.setID then data.setBonuses = IT.SetBonuses(tip) end
   -- a permanent enchant: the lines its tooltip has that the same item without it hasn't
   if parsed.enchantID and tip then

@@ -217,7 +217,7 @@ function Diag.Model()
   local ctx = ctxOrSay(); if not ctx then return end
   local b, s = ctx.base, ctx.state
   f("target: %d level(s) above you (%s); spec: %s", ctx.offset, ns.db.targetOffset == "auto" and "auto" or "set",
-    ctx.melee and "melee (DPS = auto-attacks for now)" or "caster/healer (DPS and healing in milestone 4)")
+    ctx.melee and "melee (DPS = auto attacks, weapon strikes, imbue, item procs)" or "caster/healer (DPS and healing: later in milestone 4)")
   if b.dps then
     local t = b.dpsInfo.table
     f("melee DPS %s: swing %s every %.2fs; miss %.1f%% dodge %.1f%% glancing %.1f%% (-%d%%) crit %.1f%% hit %.1f%%%s; speed x%.3f%s",
@@ -225,6 +225,19 @@ function Diag.Model()
       t.assumedGlancing and " (glancing assumed)" or "", b.dpsInfo.speedMult,
       b.dpsInfo.flurryUptime > 0 and string.format(" (Flurry up %d%%)", b.dpsInfo.flurryUptime * 100 + 0.5) or "")
   elseif b.why.dps then f("DPS: %s", b.why.dps) end
+  if b.dps and b.dpsInfo.parts then
+    local rows = {}
+    for _, part in ipairs(b.dpsInfo.parts) do
+      rows[#rows + 1] = string.format("%s %s (%d%%)%s", part.name, n1(part.dps), part.dps / b.dps * 100 + 0.5,
+        part.procsPerMin and string.format(" [%.1f/min%s]", part.procsPerMin, part.rateSource == "assumed" and ", rate assumed" or "") or "")
+    end
+    P("  DPS parts: " .. table.concat(rows, ", "))
+    if b.dpsInfo.procStats then
+      local st = {}
+      for k, v in pairs(b.dpsInfo.procStats) do st[#st + 1] = string.format("%s +%.1f", ns.StatDefs.NAMES[k] or k, v) end
+      P("  procs and use effects, averaged: " .. table.concat(st, ", "))
+    end
+  end
   if b.ehp then
     local e = b.ehpInfo
     f("EHP %d: %d health, you take %.1f%% of the damage (melee %.1f%%: armor cuts %.1f%%%s; spells %.1f%%)",
@@ -232,6 +245,89 @@ function Diag.Model()
       e.spell * 100)
   end
   for _, note in ipairs(ctx.talents.notes) do P("talent: " .. note) end
+end
+
+-- Milestone 4: abilities and imbues as the model reads them
+function Diag.Abilities()
+  local ctx = ctxOrSay(); if not ctx then return end
+  local A = ctx.profile.abilities or {}
+  for id, sp in pairs(A.spells or {}) do
+    f("%s (%d): %s%s", ns.SpellAPI.Name(id) or "?", id, tostring(sp.desc), sp.cooldownText and (" [" .. sp.cooldownText .. "]") or "")
+  end
+  for slot, im in pairs(A.imbues or {}) do
+    f("imbue on slot %d: enchant %s, your spell %s: %s", slot, tostring(im.enchantID), tostring(im.castSpell), tostring(im.desc or im.procDesc))
+  end
+  for _, n in ipairs(ctx.abilities.notes) do P("model: " .. n) end
+  if #ctx.abilities.notes == 0 then P("no damage abilities or imbues modelled for you yet") end
+  local fx = {}
+  for _, e in ipairs(ctx.state.effects or {}) do fx[#fx + 1] = string.format("%s: %s", tostring(e.item), e.kind) end
+  f("item effects counted: %s", #fx > 0 and table.concat(fx, "; ") or "none")
+end
+
+-- Milestone 4: the model against the game's own damage meter, for your last fight. Compared as
+-- shares of the damage the model covers (so downtime and spells it doesn't model don't skew it).
+local MATCH = { ["auto attack"] = { "auto attack", "melee" }, ["off-hand"] = { "off%-hand", "offhand" } }
+local function matches(partName, spellName)
+  local s, key = spellName:lower(), partName:lower()
+  for _, w in ipairs(MATCH[key] or { (key:gsub(" %d+$", "")) }) do if s:find(w) then return true end end
+  return false
+end
+function Diag.Measure()
+  local Meter = ns.MeterAPI
+  local ok, why = Meter.Available()
+  if not ok then return P("the game's damage meter isn't available: " .. tostring(why)) end
+  if ns.Compat.InCombat() then return P("after the fight: the damage meter is hidden in combat") end
+  local sess = Meter.LastSession()
+  if not sess then return P("no finished fight yet: hit a target dummy for 2-3 minutes as you normally would, then /eqn measure") end
+  local m, why2 = Meter.MySpells(sess.id, ns.Compat.Value("UnitGUID", "player"))
+  if not m then return P(tostring(why2)) end
+  local ctx = ctxOrSay(); if not ctx then return end
+  local b = ctx.base
+  if not (b.dps and b.dpsInfo.parts) then return P("no DPS model for you yet") end
+  local dur = sess.duration or 0
+  f("last fight (%s): %ds, %d damage%s", tostring(sess.name), dur + 0.5, m.total, dur > 0 and string.format(", %.1f DPS", m.total / dur) or "")
+  -- which measured spells each model part is
+  local measured, covered, modelTotal = {}, 0, 0
+  local used = {}
+  for _, part in ipairs(b.dpsInfo.parts) do
+    local amt = 0
+    for id, a in pairs(m.spells) do
+      local name = ns.SpellAPI.Name(id) or tostring(id)
+      if not used[id] and matches(part.name, name) then amt = amt + a; used[id] = true end
+    end
+    measured[part.name] = amt
+    covered = covered + amt
+    modelTotal = modelTotal + part.dps
+  end
+  local rec = { time = time and time() or 0, duration = dur, total = m.total, level = ctx.state.level, offset = ctx.offset, parts = {}, other = {} }
+  P("share of the damage the model covers (model vs measured):")
+  for _, part in ipairs(b.dpsInfo.parts) do
+    local ms = covered > 0 and measured[part.name] / covered or 0
+    local mo = part.dps / modelTotal
+    local ratio = mo > 0 and ms / mo or 0
+    local agree = covered > 0 and ms >= 0.05 and ratio > 0.85 and ratio < 1.15
+    f("  %s: model %d%%, measured %d%%%s", part.name, mo * 100 + 0.5, ms * 100 + 0.5,
+      covered > 0 and (agree and " - agrees" or (ms < 0.05 and mo >= 0.05 and " - not seen in the fight" or "")) or "")
+    rec.parts[#rec.parts + 1] = { name = part.name, model = part.dps, measured = measured[part.name] }
+    if agree and part.name ~= "auto attack" then ns.db.confirmed[part.name] = true end
+  end
+  local other = {}
+  for id, a in pairs(m.spells) do
+    if not used[id] then
+      local name = ns.SpellAPI.Name(id) or tostring(id)
+      other[#other + 1] = string.format("%s %d%%", name, a / m.total * 100 + 0.5)
+      rec.other[#rec.other + 1] = { id = id, name = name, amount = a }
+    end
+  end
+  if #other > 0 then f("  not modelled yet (spells): %s", table.concat(other, ", ")) end
+  if dur > 0 then
+    f("model DPS %s (always attacking) vs measured %s for the same parts over the fight (lower with downtime)",
+      n1(b.dps), n1(covered / dur))
+  end
+  ns.db.measurements = ns.db.measurements or {}
+  table.insert(ns.db.measurements, 1, rec)
+  while #ns.db.measurements > 5 do table.remove(ns.db.measurements) end
+  ns.evalContext = nil; ns.Cache.Invalidate("evaluation")
 end
 
 function Diag.Sheet()
@@ -289,7 +385,9 @@ function Diag.Compare(arg)
       for _, n in ipairs(o.notes or {}) do f("   %s", n) end
       for i, part in ipairs(o.parts) do
         if i > 8 then break end
-        local name = part.stat == "WEAPON" and "the weapon itself (damage, speed, skill)" or string.format("%+g %s", part.amount, ns.StatDefs.NAMES[part.stat] or part.stat)
+        local name = part.stat == "WEAPON" and "the weapon itself (damage, speed, skill)"
+          or part.stat == "EFFECTS" and "item effects (procs, use effects, ability bonuses)"
+          or string.format("%+g %s", part.amount, ns.StatDefs.NAMES[part.stat] or part.stat)
         f("   %s: DPS %s, EHP %s", name, ns.Tooltip.Pct(part.dps) or "-", ns.Tooltip.Pct(part.ehp) or "-")
       end
       if o.carry and #o.carry > 0 then f("   enchant carried over: %s", table.concat(o.carry, "; ")) end
@@ -328,6 +426,8 @@ local HELP = {
   "/eqn weights - what 10 points of each stat change, right now",
   "/eqn compare <item link or ID> - full comparison: each slot, each stat's part, effects not counted",
   "/eqn target auto|0|1|2|3 - target level above yours",
+  "/eqn abilities - your abilities, imbue and item effects as the model counts them",
+  "/eqn measure - after a fight: the model's DPS parts vs the game's damage meter",
   "/eqn tooltip - comparison on item tooltips on/off",
   "/eqn scan - read everything again now",
   "/eqn dump - save everything to the SavedVariables file (for bug reports and tests)",
@@ -346,7 +446,7 @@ SlashCmdList.EQUIPTHISNEXT = function(msg)
     spells = function() Diag.Spells(rest) end,
     api = function() local rows = Diag.Api(); if rest == "all" then for _, r in ipairs(rows) do P(r) end end end,
     scan = function() profile(true); P("scanned.") ; Diag.Char() end,
-    model = Diag.Model, sheet = Diag.Sheet, weights = Diag.Weights,
+    model = Diag.Model, sheet = Diag.Sheet, weights = Diag.Weights, abilities = Diag.Abilities, measure = Diag.Measure,
     compare = function() Diag.Compare(rawRest) end, target = function() Diag.Target(rest) end,
     tooltip = function() ns.db.tooltip = not ns.db.tooltip; P("tooltip " .. (ns.db.tooltip and "on" or "off")) end,
     dump = Diag.Dump,
@@ -359,5 +459,5 @@ SlashCmdList.EQUIPTHISNEXT = function(msg)
 end
 
 ns.Events.On("PLAYER_LOGIN", "hello", function()
-  ns.Print("loaded (test build " .. ns.version .. ": compares gear by modelled melee DPS and EHP). /eqn for commands.")
+  ns.Print("loaded (test build " .. ns.version .. ": compares gear by modelled melee DPS - abilities, imbues, procs - and EHP). /eqn for commands.")
 end)

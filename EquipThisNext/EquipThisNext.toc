@@ -1,8 +1,8 @@
 ## Interface: 16001
 ## Title: Equip This! Next (test)
-## Notes: Test build of the new Equip This! engine (milestone 2): compares gear (armor, weapons, sets, enchants) by modelled melee DPS and effective health from your own character sheet. /eqn
+## Notes: Test build of the new Equip This! engine (milestone 4): compares gear (armor, weapons, sets, enchants, procs) by modelled melee DPS (abilities, imbues, procs) and effective health from your own character sheet. /eqn
 ## Author: califaxop
-## Version: 0.3.3
+## Version: 0.4.0
 ## SavedVariables: EquipThisNextDB
 
 # Core: namespace, events, saved data, caches
@@ -19,14 +19,18 @@ API\CharacterAPI.lua
 API\TalentAPI.lua
 API\AuraAPI.lua
 API\SpellAPI.lua
+API\MeterAPI.lua
 
 # Data and engine: pure Lua, no game API (testable outside the game)
 Data\StatDefinitions.lua
 Data\Talents.lua
 Data\ItemEffects.lua
 Data\ItemText.lua
+Data\Generated.lua
+Data\MeasuredProcs.lua
 Engine\CharacterProfile.lua
 Engine\TalentInterpreter.lua
+Engine\AbilityInterpreter.lua
 Engine\StatEngine.lua
 Engine\Models\Melee.lua
 Engine\Models\Survival.lua
@@ -38,6 +42,7 @@ Scanner\EquipmentScanner.lua
 Scanner\TalentScanner.lua
 Scanner\BuffScanner.lua
 Scanner\SpellScanner.lua
+Scanner\AbilityScanner.lua
 Scanner\CalcScanner.lua
 Scanner\BagScanner.lua
 Scanner\CharacterScanner.lua

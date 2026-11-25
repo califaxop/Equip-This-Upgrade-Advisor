@@ -66,7 +66,7 @@ T.Test("talents, spells and buffs", function()
   T.Eq(t.trees[1].points + t.trees[2].points + t.trees[3].points, t.totalPoints, "every point in a tree")
   T.Eq(t.trees[2].spentByGame, 8, "the game's own count agrees")
   T.Eq(issues(ns.profile, "talents-mismatch"), nil, "no mismatch")
-  T.Eq(ns.profile.spells.count, 3, "spells"); T.Eq(ns.profile.spells.known[403], "Lightning Bolt (Rank 4)", "rank text kept")
+  T.Eq(ns.profile.spells.count, 4, "spells"); T.Eq(ns.profile.spells.known[403], "Lightning Bolt (Rank 4)", "rank text kept")
   T.Eq(ns.profile.buffs.helpful[1].name, "Lightning Shield", "buff")
 end)
 

@@ -6,7 +6,7 @@ local _, ns = ...
 local CharacterScanner = ns.Module("CharacterScanner")
 local Events, Cache, P, Compat = ns.Events, ns.Cache, ns.CharacterProfile, ns.Compat
 
-local PARTS = { "identity", "stats", "equipment", "talents", "buffs", "spells", "calc", "bags" }
+local PARTS = { "identity", "stats", "equipment", "talents", "buffs", "spells", "abilities", "calc", "bags" }
 local dirty = {}
 for _, p in ipairs(PARTS) do dirty[p] = true end
 CharacterScanner.scans = 0
@@ -18,6 +18,7 @@ local function scanPart(profile, part)
   elseif part == "talents" then ns.TalentScanner.Scan(profile)
   elseif part == "buffs" then ns.BuffScanner.Scan(profile)
   elseif part == "spells" then ns.SpellScanner.Scan(profile)
+  elseif part == "abilities" then ns.AbilityScanner.Scan(profile)
   elseif part == "calc" then ns.CalcScanner.Scan(profile)
   elseif part == "bags" then ns.BagScanner.Scan(profile) end
 end
@@ -70,6 +71,7 @@ local function mark(...)
     local part = select(i, ...)
     dirty[part] = true
     if part == "stats" or part == "talents" or part == "equipment" then dirty.calc = true end
+    if part == "equipment" or part == "spells" then dirty.abilities = true end
   end
   Events.Debounce("rescan", 0.5, CharacterScanner.Refresh)
 end
@@ -100,6 +102,9 @@ for _, e in ipairs({ "TRAIT_CONFIG_UPDATED", "ACTIVE_COMBAT_CONFIG_CHANGED", "PL
   Events.On(e, "talents", talentsChanged)
 end
 Events.On("SPELLS_CHANGED", "spells", function() mark("spells") end)
+-- a weapon imbue put on or worn off (Windfury...): the equipment's temporary enchants and abilities
+Events.On("WEAPON_ENCHANT_CHANGED", "imbue", function() mark("equipment", "stats") end)
+Events.On("UNIT_INVENTORY_CHANGED", "imbue", playerOnly(function() mark("equipment") end))
 -- the character sheet
 for _, e in ipairs({ "UNIT_STATS", "UNIT_RESISTANCES", "UNIT_ATTACK_POWER", "UNIT_MAXHEALTH" }) do
   Events.On(e, "stats", playerOnly(function() mark("stats") end))

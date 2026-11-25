@@ -12,7 +12,7 @@ function ns.Context()
   if ns.evalContext then return ns.evalContext end
   local p = ns.profile
   if not p then return nil, "not scanned yet" end
-  local ctx, why = ns.Evaluator.Context(p, { targetOffset = ns.db and ns.db.targetOffset })
+  local ctx, why = ns.Evaluator.Context(p, { targetOffset = ns.db and ns.db.targetOffset, confirmed = ns.db and ns.db.confirmed })
   ns.evalContext = ctx
   return ctx, why
 end

@@ -7,7 +7,9 @@ DB.DEFAULTS = {
   debug = false,
   targetOffset = "auto",  -- target level above yours: "auto" (+3 at the level cap, +0 below) or 0-3
   tooltip = true,         -- the comparison line on item tooltips
-  snapshots = {},   -- ["Name-Realm"] = { taken = time, profile = CharacterProfile }
+  snapshots = {},
+  confirmed = {},   -- [model part] = true: a measurement (/eqn measure) agreed with the model
+  measurements = {},  -- the last /eqn measure results (model vs the game's damage meter)   -- ["Name-Realm"] = { taken = time, profile = CharacterProfile }
 }
 
 local function copy(v)

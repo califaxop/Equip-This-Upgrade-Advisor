@@ -69,6 +69,10 @@ Compat.KNOWN = {
   ["C_Spell.GetSpellName"] = "docs", ["C_Spell.GetSpellInfo"] = "docs", ["C_SpellBook.IsSpellKnown"] = "docs",
   ["C_SpellBook.GetNumSpellBookSkillLines"] = "docs", ["C_SpellBook.GetSpellBookSkillLineInfo"] = "docs",
   ["C_SpellBook.GetSpellBookItemInfo"] = "docs", ["C_UnitAuras.GetAuraDataByIndex"] = "docs",
+  -- milestone 4: spell tooltips (cooldowns), the game's damage meter (to check the model)
+  ["C_TooltipInfo.GetSpellByID"] = "docs", ["C_DamageMeter.IsDamageMeterAvailable"] = "docs",
+  ["C_DamageMeter.GetAvailableCombatSessions"] = "docs", ["C_DamageMeter.GetCombatSessionSourceFromID"] = "docs",
+  ["C_DamageMeter.GetCombatSessionFromID"] = "docs",
 }
 
 local function resolve(path)

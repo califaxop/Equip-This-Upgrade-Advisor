@@ -257,7 +257,8 @@ T.Test("in game (mock): the tooltip line, /eqn model, sheet, weights, compare, t
   local tt = MOCK.MakeTooltip("|cff0070dd|Hitem:1008::::::::42|h[Ring of Procs]|h|r")
   MOCK.tooltipHook(tt)
   T.Ok(tt.lines[1] and tt.lines[1]:find("DPS") and tt.lines[1]:find("EHP"), "tooltip line: " .. tostring(tt.lines[1]))
-  T.Ok(tt.lines[2] and tt.lines[2]:find("confidence low"), "proc ring: low confidence: " .. tostring(tt.lines[2]))
+  -- (milestone 4: its "Wounds the target for 50 damage" is counted, at an assumed rate: medium)
+  T.Ok(tt.lines[2] and tt.lines[2]:find("confidence medium"), "proc ring: medium confidence: " .. tostring(tt.lines[2]))
   MOCK.inCombat = true
   local tt2 = MOCK.MakeTooltip("|cff0070dd|Hitem:1008::::::::42|h[Ring of Procs]|h|r")
   MOCK.tooltipHook(tt2)

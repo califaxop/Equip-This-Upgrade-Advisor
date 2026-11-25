@@ -41,6 +41,7 @@ function MOCK.Reset()
   PRINTS = {}
   MOCK.cached, MOCK.requested = {}, {}
   MOCK.inCombat, MOCK.statsSecret, MOCK.aurasSecret, MOCK.noTalents, MOCK.windfury = false, false, false, nil, nil
+  MOCK.meter = nil
   EquipThisNextDB = nil
 end
 function MOCK.RunTimers()
@@ -223,16 +224,16 @@ C_Traits = {
     { groupID = 11657, displayName = "Enhancement", orderIndex = 1 }, { groupID = 11650, displayName = "Elemental", orderIndex = 0 },
     { groupID = 11670, displayName = "Restoration", orderIndex = 2 } } end,
 }
-local SPELLS = { [16039] = "Convection", [16262] = "Ancestral Knowledge", [16253] = "Flurry", [16173] = "Tidal Focus", [403] = "Lightning Bolt", [17364] = "Stormstrike" }
+local SPELLS = { [6603] = "Auto Attack", [8232] = "Windfury Weapon", [439440] = "Windfury Attack", [8134] = "Lightning Shield", [16039] = "Convection", [16262] = "Ancestral Knowledge", [16253] = "Flurry", [16173] = "Tidal Focus", [403] = "Lightning Bolt", [17364] = "Stormstrike" }
 C_Spell = { GetSpellName = function(id) return SPELLS[id] end }
 C_SpellBook = {
   GetNumSpellBookSkillLines = function() return 2 end,
   GetSpellBookSkillLineInfo = function(i)
     if i == 1 then return { name = "General", itemIndexOffset = 0, numSpellBookItems = 1 } end
-    return { name = "Enhancement", itemIndexOffset = 1, numSpellBookItems = 2 }
+    return { name = "Enhancement", itemIndexOffset = 1, numSpellBookItems = 3 }
   end,
   GetSpellBookItemInfo = function(i)
-    local list = { { 6603, "Attack" }, { 403, "Lightning Bolt", "Rank 4" }, { 17364, "Stormstrike" } }
+    local list = { { 6603, "Attack" }, { 403, "Lightning Bolt", "Rank 4" }, { 17364, "Stormstrike" }, { 8232, "Windfury Weapon", "Rank 1" } }
     local e = list[i]
     if e then return { spellID = e[1], name = e[2], subName = e[3] or "", isPassive = false } end
   end,
@@ -261,7 +262,21 @@ function GetGlancingBlowChance(skill, def) if skill == nil then error("Usage: Ge
 function GetGlancingBlowPenalty(skill, def) return s(0.05) end
 C_Spell.GetSpellDescription = function(id)
   if id == 16253 then return "Increases your attack speed by 20% for your next 3 swing attacks after dealing a critical strike." end
+  if id == 17364 then return "Instantly strike for 100% weapon damage and increase the damage you deal to the target with your next Lightning Bolt, Chain Lightning, or Earth Shock spell by 20% for 12 sec." end
+  if id == 8232 then return "Imbue the Shaman's weapon with wind.  Each hit has a 20% chance of granting you 1 extra attack with 104 extra melee attack power. Lasts for 60 minutes." end
 end
+MOCK.SPELL_TOOLTIP = { [17364] = { { "Stormstrike" }, { "Instant", "8 sec cooldown" } } }
+-- the game's damage meter (milestone 4): MOCK.meter = { duration, spells = { [id] = amount } }
+C_DamageMeter = {
+  IsDamageMeterAvailable = function() return true, "" end,
+  GetAvailableCombatSessions = function() return MOCK.meter and { { sessionID = 7, name = "Target Dummy", durationSeconds = MOCK.meter.duration } } or {} end,
+  GetCombatSessionSourceFromID = function(id, kind, guid)
+    if MOCK.inCombat then return { combatSpells = { { spellID = 1, totalAmount = SECRET_VALUE } } } end
+    local list = {}
+    for sid, a in pairs(MOCK.meter and MOCK.meter.spells or {}) do list[#list + 1] = { spellID = sid, totalAmount = a } end
+    return { combatSpells = list, totalAmount = 0 }
+  end,
+}
 MOCK.TOOLTIP_LINES = {
   -- a line is text, or { left, right }
   [1002] = { "Axe of Testing", { "Two-Hand", "Axe" }, { "120 - 157 Damage", "Speed 3.60" }, "+15 Strength" },
@@ -271,7 +286,11 @@ MOCK.TOOLTIP_LINES = {
   [1004] = { "Band of Sets", "(2) Set: +10 Attack Power.", "(3) Set: Chance on hit: zaps the target." },
   [1008] = { "Ring of Procs", "Chance on hit: Wounds the target for 50 damage.", "Equip: Improves your chance to get a critical strike by 1%." },
 }
-C_TooltipInfo = { GetHyperlink = function(link)
+C_TooltipInfo = { GetSpellByID = function(id)
+  local lines = {}
+  for _, t in ipairs(MOCK.SPELL_TOOLTIP[id] or {}) do lines[#lines + 1] = { leftText = t[1], rightText = t[2] } end
+  return { lines = lines }
+end, GetHyperlink = function(link)
   local id, ench = tostring(link):match("item:(%d+):(%d*)")
   id = tonumber(id)
   local lines = {}

@@ -34,17 +34,57 @@ function Ev.Offset(profile, settings)
   return (profile.identity.level or 1) >= (settings and settings.maxLevel or 60) and 3 or 0
 end
 
+-- the modelled effects of worn items ({ kind, ..., slot, item }), from ItemEffects.Model
+function Ev.EffectsOf(items)
+  local out = {}
+  for slot, it in pairs(items) do
+    if it and not it.empty then
+      for _, m in ipairs(it.modeled or {}) do
+        local e = {}
+        for k, v in pairs(m) do e[k] = v end
+        e.slot, e.item = slot, it.name
+        out[#out + 1] = e
+      end
+    end
+  end
+  return out
+end
+
+-- Stat procs and use effects as average stats: amount x the share of time they're up.
+--   proc: up 1 - e^(-procs a second x duration) of the time (a proc while it's up restarts it)
+--   use:  duration / cooldown (used on cooldown)
+function Ev.AverageStats(state, landed)
+  local avg = {}
+  for _, e in ipairs(state.effects or {}) do
+    local up
+    if e.kind == "procStat" and e.duration and landed then
+      local speed = e.slot == 17 and state.oh and state.oh.speed or state.speed
+      local lambda = ns.MeleeModel.ProcRate(e.rate, ns.MeleeModel.HitsFor(e.slot, landed), speed)
+      up = 1 - math.exp(-lambda * e.duration)
+    elseif e.kind == "useStat" and e.duration and e.cooldown then
+      up = math.min(1, e.duration / e.cooldown)
+    end
+    if up and up > 0 then
+      e.uptime = up
+      for k, v in pairs(e.stats or {}) do avg[k] = (avg[k] or 0) + v * up end
+    end
+  end
+  return avg
+end
+
 function Ev.Context(profile, settings)
   local state, why = ns.StatEngine.Baseline(profile)
   if not state then return nil, why end
+  state.effects = Ev.EffectsOf(profile.equipment.slots)
   local gear = ns.StatEngine.GearTotals(profile)
   -- what the sheet has beyond gear (talents measured from it: Mental Quickness...)
   local extra = { SP = state.SP - (gear.SP or 0), HEAL = state.HEAL - (gear.HEAL or 0) }
   local talents = ns.TalentInterpreter.Interpret(profile, extra)
+  local abilities = ns.AbilityInterpreter and ns.AbilityInterpreter.Interpret(profile, talents, settings and settings.confirmed) or { strikes = {}, notes = {}, unchecked = 0 }
   local offset = Ev.Offset(profile, settings)
   local calc = profile.calc or {}
   local ctx = {
-    profile = profile, state = state, gear = gear, talents = talents, offset = offset,
+    profile = profile, state = state, gear = gear, talents = talents, abilities = abilities, offset = offset,
     melee = Ev.IsMelee(profile),
     glancing = calc.glancing and calc.glancing[offset], armorEffect = calc.armorEffect,
     glancingBySkill = calc.glancingBySkill and next(calc.glancingBySkill) and calc.glancingBySkill or nil,
@@ -65,6 +105,14 @@ function Ev.Performance(state, ctx)
   local out = { why = {} }
   if ctx.melee then
     local d, info = ns.MeleeModel.DPS(state, ctx)
+    if d then
+      -- stat procs and use effects, averaged in (their uptime from this state's hit rate)
+      local avg = Ev.AverageStats(state, info.landed)
+      if next(avg) then
+        local d2, info2 = ns.MeleeModel.DPS(ns.StatEngine.Apply(state, avg, ctx.talents), ctx)
+        if d2 then d, info = d2, info2; info.procStats = avg end
+      end
+    end
     out.dps, out.dpsInfo = d, info
     if not d then out.why.dps = info end
   else
@@ -205,7 +253,16 @@ function Ev.Evaluate(ctx, changes, label, notes)
   end
   local setDelta, gained, lost, setUnknown = setBonusDelta(ctx, removed, added)
   delta = ns.StatDefs.Add(delta, setDelta)
+  -- the modelled item effects of the new setup: the worn ones not replaced, plus the new items'
+  local effects, effectsChange = {}, false
+  for _, e in ipairs(ctx.state.effects or {}) do
+    if changes[e.slot] == nil then effects[#effects + 1] = e else effectsChange = true end
+  end
+  local newItems = {}
+  for slot, new in pairs(changes) do if new then newItems[slot] = new end end
+  for _, e in ipairs(Ev.EffectsOf(newItems)) do effects[#effects + 1] = e; effectsChange = true end
   local s = ns.StatEngine.Apply(ctx.state, delta, ctx.talents, weapons)
+  s.effects = effects
   if weapons and weapons.mh == nil and changes[16] == false then s.swing, s.speed = nil, nil end
   local p = Ev.Performance(s, ctx)
   local untrainedNote
@@ -230,6 +287,17 @@ function Ev.Evaluate(ctx, changes, label, notes)
     end
   end
   table.sort(opt.parts, function(a, b) return math.abs(a.dps or a.ehp or 0) > math.abs(b.dps or b.ehp or 0) end)
+  if effectsChange then
+    local se = {}
+    for k, x in pairs(ctx.state) do se[k] = x end
+    se.effects = effects
+    local e1 = Ev.Performance(se, ctx)
+    table.insert(opt.parts, 1, { stat = "EFFECTS", amount = 0, dps = pct(e1.dps, ctx.base.dps), ehp = pct(e1.ehp, ctx.base.ehp) })
+  end
+  opt.assumedRates = {}
+  for _, e in ipairs(effects) do
+    if e.rate and e.rate.source == "assumed" and newItems[e.slot] then opt.assumedRates[#opt.assumedRates + 1] = e.item or "an item" end
+  end
   if weapons then
     local ws = ns.StatEngine.Apply(ctx.state, {}, ctx.talents, weapons)
     ws = untrainedNote and trained(ws, ctx.state) or ws
@@ -351,7 +419,9 @@ function Ev.Compare(ctx, candidate)
   if ctx.talents.unchecked > 0 then reasons[#reasons + 1] = "a talent's number isn't confirmed" end
   if ctx.state.missingRating and next(ctx.state.missingRating) then reasons[#reasons + 1] = "a rating conversion is unknown" end
   if ctx.profile.stats.stale then reasons[#reasons + 1] = "stats are from before combat" end
-  if ctx.melee then reasons[#reasons + 1] = "abilities, imbues and procs not in DPS yet" end
+  if ctx.melee then reasons[#reasons + 1] = "spells (shocks...) and mana or rage limits not in DPS yet" end
+  if ctx.abilities and ctx.abilities.unchecked > 0 then reasons[#reasons + 1] = "an ability or imbue number isn't confirmed" end
+  if b and b.assumedRates and #b.assumedRates > 0 then reasons[#reasons + 1] = "proc rate assumed (once a minute): " .. table.concat(b.assumedRates, ", ") end
   if b and b.notes then for _, n in ipairs(b.notes) do if n:find("assumed") or n:find("isn't modelled") then reasons[#reasons + 1] = n end end end
   res.reasons = reasons
   local serious = relevant(candidate.effects) > 0 or (b and relevant(b.lost) > 0) or (b and b.setUnknown and #b.setUnknown > 0)

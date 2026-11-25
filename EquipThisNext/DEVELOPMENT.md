@@ -14,8 +14,8 @@ runs alongside the released Equip This! without touching it, on the `next-founda
 |---|---|
 | 1. Foundation: compatibility layer, scanners, diagnostics | **done: 0.1.3 validated in game (level 42 Shaman, build 71091)** |
 | 2. Basic evaluation | **done: validated in game (0.2.1; the tooltip %s look right to the tester)** |
-| 3. Complete gear evaluation | **0.3.0 tested in game; 0.3.1/0.3.2 fix what it found, re-tested; next: milestone 4** |
-| 4. Simulation (DPS, healing, tanking, PvP) | not started |
+| 3. Complete gear evaluation | **done: validated in game (0.3.0-0.3.3)** |
+| 4. Simulation (DPS, healing, tanking, PvP) | **4a (0.4.0): melee DPS with abilities, imbues, procs: built, offline tests pass (63), waiting for the in-game test**; 4b casters and healing, 4c tanking threat and PvP: not started |
 | 5. All classes and builds | not started |
 | 6. Optimization and validation | not started |
 
@@ -138,6 +138,67 @@ Sources:
 - **Spec index:** what `C_SpecializationInfo.GetSpecialization()` returns on Forever (3-tree
   talents) is unknown. It's recorded only.
 
+
+## Milestone 4: performance models (in parts)
+
+Milestone 4 is four separate models (DPS, healing, tanking, PvP). It's built and tested in game in
+parts, each on a character that can check it:
+- **4a (0.4.0)**: melee DPS beyond auto attacks: weapon strikes, weapon imbues, item procs, use
+  effects, and a check against the game's own damage meter.
+- 4b: caster DPS and healing (spell coefficients, HPS, healing per mana, HoTs, overhealing).
+- 4c: tanking threat (separate from EHP) and PvP (its own assumptions: burst, sustained,
+  survivability vs players).
+
+### 4a: what's counted, and from where
+
+Every number comes first from what the game shows (the spell's description, resolved by the
+game; a tooltip's cooldown), then from Forever's own client tables (Data/Generated.lua, built by
+tools/next/build_data.py from wago.tools, product wowf, build 1.60.1.71091). A value from neither
+isn't used. Expected values throughout (rate x average), no random simulation.
+
+- **Stormstrike** (Forever's tables: 100% weapon damage, 8 s cooldown, +20% to the next nature
+  spells): used on cooldown, special attack table (no glancing, no dual-wield miss), crits double.
+  Item bonuses read from tooltips ("Increases the damage dealt by your Stormstrike ability by 10%":
+  Rage of the Storm) multiply it. Its +20% to shocks isn't counted (spells come in 4b).
+- **Windfury Weapon**: the imbue on your weapon (C_Item.GetWeaponEnchantInfo -> enchant ID ->
+  Data/Generated.lua -> the spell of yours that puts it on). Chance, extra attacks and attack power
+  from that spell's description; the internal cooldown from the tables (1.5 s on Forever's
+  Windfury). Procs from landed main-hand hits (swings and Stormstrike): rate = lambda / (1 +
+  lambda x icd). Each extra attack is a white swing with the extra attack power.
+  - Forever's tables: every Windfury rank's enchant runs the same spell, 439431, whose attack power
+    is 46 + 7.2 per level from 30 to 38 (103.6), while each rank's description names its own rank's
+    spell (rank 2: 119 + 12.8 per level). Which one the server uses is for the measurement to tell.
+  - Elemental Weapons: +13/27/40% Windfury effect per rank is Classic's; Forever's description
+    shows rank 1's 13% only. Unconfirmed (lowers confidence) until a measurement agrees.
+- **Item procs** (IE.Model): damage ("Blasts the enemy for 80 Fire damage"; "Wounds the target for
+  50 damage" as physical), extra attacks, stat buffs ("Increases your attack power by 120 for 10
+  sec"). Rate: procs a minute measured on Warcraft Logs (4 items whose rate the server keeps), else
+  the item's spell in the game's tables (chance per hit or procs a minute, internal cooldown), else
+  **assumed once a minute, and said so** (confidence). A weapon's proc uses its own hand's hits.
+  Damage procs: Classic's spell miss table (4/5/6/17%) is assumed; they don't crit.
+- **Stat procs and use effects** count as their average: amount x time up (proc: 1 - e^(-rate x
+  duration); use: duration / cooldown, used on cooldown).
+- Comparisons: each setup's modelled effects (worn ones not replaced + the new item's), with an
+  "item effects" part in the breakdown. Effects the models count no longer lower confidence.
+
+Not counted yet: spells (shocks, Lightning Bolt, Lightning Shield's damage), mana and rage limits,
+Flametongue / Frostbrand, Flurry from ability crits, extra attacks from Windfury triggering more.
+
+### Checking it: /eqn measure
+
+`C_DamageMeter` (Blizzard_APIDocumentationGenerated, build 71091; values secret in combat) gives
+your damage per spell in a finished fight. `/eqn measure` compares the model's parts with it as
+shares of the damage the model covers (so downtime and unmodelled spells don't skew it), lists the
+spells not modelled, and marks a part "confirmed" when its share agrees within 15% (then its
+unconfirmed numbers stop lowering confidence). The last 5 measurements are saved for the dump.
+
+In-game test (0.4.0):
+1. Put Windfury on your weapon. `/eqn abilities`: Stormstrike's and Windfury's text as the game
+   shows them, and what the model takes from them.
+2. `/eqn model`: the DPS parts (auto attack, Stormstrike, Windfury) and procs a minute.
+3. Fight a target dummy for 2-3 minutes as you normally do, then `/eqn measure`.
+4. Hover a few items (Rage of the Storm vs another weapon; a trinket or ring with a proc).
+5. `/eqn dump` + `/reload`, send the SavedVariables file.
 
 ## Milestone 3: complete gear evaluation (0.3.0)
 
@@ -397,8 +458,7 @@ In game (milestone 1 check):
 
 ## Outstanding
 
-- Milestone 1: done. A second class's `/eqn dump` (e.g. a rogue or warrior) would widen the fixtures.
-- Milestone 2 (after that): talent interpreter, gear-vs-buff stat separation, stat conversions from
-  the game's functions, first performance models and marginal stat values, single-slot, ring and
-  trinket comparisons.
+- Milestones 1-3: done. A second class's `/eqn dump` (e.g. a rogue or warrior) would widen the fixtures.
+- Milestone 4a: the in-game test and `/eqn measure` (Windfury's attack power, Elemental Weapons).
+- Milestone 4b: caster DPS and healing. 4c: tanking threat, PvP.
 - Released Equip This!: fix the `UnitDefense` call (see above).

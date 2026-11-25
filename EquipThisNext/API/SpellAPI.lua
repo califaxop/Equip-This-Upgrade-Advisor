@@ -34,3 +34,27 @@ function Spell.BookItem(index)
     subName = Compat.Field(info, "subName"), passive = Compat.Field(info, "isPassive"),
     itemType = Compat.Field(info, "itemType") }
 end
+
+-- A spell's tooltip as the game shows it ({ left = {...}, right = {...} }): the right side holds
+-- "8 sec cooldown", "Instant"...
+function Spell.Tooltip(spellID)
+  local ok, data = Compat.Call("C_TooltipInfo.GetSpellByID", spellID)
+  if not ok or type(data) ~= "table" then return nil end
+  local lines = Compat.Field(data, "lines")
+  if type(lines) ~= "table" then return nil end
+  local out = { left = {}, right = {} }
+  for _, l in ipairs(lines) do
+    local t, r = Compat.Field(l, "leftText"), Compat.Field(l, "rightText")
+    if type(t) == "string" and t ~= "" then
+      out.left[#out.left + 1] = t
+      if type(r) == "string" and r ~= "" then out.right[#out.left] = r end
+    end
+  end
+  return out
+end
+
+function Spell.IsKnown(spellID)
+  local v = Compat.Value("C_SpellBook.IsSpellKnown", spellID)
+  if v == nil or v == Compat.SECRET then return nil end
+  return v and true or false
+end
