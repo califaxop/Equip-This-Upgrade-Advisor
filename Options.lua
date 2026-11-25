@@ -75,13 +75,28 @@ local function BuildPanel(panel)
   -- "I tank": score survivability as a tank (any class)
   local tank = at(UI.Check(panel, "I tank: bosses and enemies hit me (score survivability as a tank)",
     { function() return ns.IsTank() end, function(v) ns.SetTanking(v) end }, W_, changed), 26, -440)
-  tank.tip = "For any class: survivability counts the way it does for a tank (bosses melee you, so armor, Defense, dodge, parry and block count fully; at 60, 12% of what comes at you is magic instead of 75%), and the build leans to survival (Auto: half and half while leveling, Tanking at 60). Protection warriors and paladins always tank."
+  tank.tip = "For any class: survivability counts the way it does for a tank (bosses melee you, so armor, Defense, dodge, parry and block count fully; at 60, far less of what comes at you is magic: see Raid at 60), and the build leans to survival (Auto: half and half while leveling, Tanking at 60). Protection warriors and paladins always tank."
   track({ Refresh = function()
     tank.Refresh()
     if tank.SetActive then tank.SetActive(not ns.IsTankSpec()) end
   end })
   rows[#rows + 1] = { Refresh = function() tank.Refresh(); if tank.SetActive then tank.SetActive(not ns.IsTankSpec()) end end }
-  local yEnd = -476
+  -- at the level cap: which raid's damage your survivability is scored against (this character)
+  at(UI.Text(panel, "line", "Raid at 60"), 26, -475)
+  local raidOpts = {}
+  for _, k in ipairs(ns.Score.RAID_ORDER) do raidOpts[#raidOpts + 1] = { k, ns.Score.RAIDS[k].name } end
+  local raid = at(UI.Selector(panel, 260, raidOpts,
+    { function() return ns.Score.Raid() end, function(v) ns.Score.SetRaid(v) end }, changed,
+    "At the level cap, survivability (EHP) counts the spell damage of the raid you're gearing for: how much of what hits you is magic, and which schools (so the right resistances count). Measured on Warcraft Logs. Kept per character. While leveling it isn't used."), 120, -472)
+  local raidNote = at(UI.Text(panel, "note", ""), 390, -475)
+  local function raidRefresh()
+    raid.Refresh()
+    local r = ns.Score.RAIDS[ns.Score.Raid()]
+    local m = ns.IsTank() and r.tank or r.other
+    raidNote:SetText(format("%d%% of what hits %s is magic", m[1] * 100 + 0.5, ns.IsTank() and "a tank" or "you"))
+  end
+  track({ Refresh = raidRefresh }); rows[#rows + 1] = { Refresh = raidRefresh }
+  local yEnd = -512
   local reset = at(UI.Button(panel, "Reset build", 110, function() ns.ResetPriorities(); changed() end), 26, yEnd)
   reset.tip = "Back to Auto: Leveling until the level cap, then Damage (tanks: Tanking)."
   local fb = UI.Button(panel, "Report a bug / suggest", 170, function()

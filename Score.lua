@@ -413,18 +413,51 @@ end
 -- Checked against the site's sim: health, armor's cut, miss and crit chance match its numbers.
 -- On top of the site's model (melee only), Equip This! counts magic damage too: a share of the raw
 -- damage coming at you is spells. While leveling 20%, split evenly (casters and elementals among the
--- enemies). At the level cap, from Naxxramas (where the site's BiS gear drops), measured on Warcraft
--- Logs (90 kills, 40-player Classic raids): tanks 12% (mostly shadow, fire, nature, frost: the Four
--- Horsemen's marks, Sapphiron, Kel'Thuzad, Loatheb), everyone else 75% (nature, shadow, frost: volleys,
--- Chain Lightning, Inevitable Doom, Frost Aura; bosses seldom melee them). Spells can't be dodged,
+-- enemies). At the level cap, from the raid you pick (Settings: Molten Core, Blackwing Lair, Temple of
+-- Ahn'Qiraj or Naxxramas, the default: where the site's BiS gear drops), measured on Warcraft Logs
+-- (recent public kills of each boss, 40-player Classic raids; tools: RAIDS below). Raw damage is what
+-- was taken plus what armor, blocks and resistances took off; a tank's melee also gets back the swings
+-- dodged, parried or missed (about a fifth); everyone else's mix weighs each boss equally, so one long
+-- fight doesn't swamp it. Bosses seldom melee anyone but the tanks. Spells can't be dodged,
 -- parried or blocked and armor doesn't touch them; your resistance to the school cuts them by 75% x
 -- resistance / (5 x the enemy's level) on average (Classic), at most 75%.
 -- { share of raw damage that's magic, { school = part of it } }
 S.MAGIC = {
   leveling = { 0.2, { RES_FIRE = 0.2, RES_FROST = 0.2, RES_NATURE = 0.2, RES_SHADOW = 0.2, RES_ARCANE = 0.2 } },
-  tank = { 0.12, { RES_SHADOW = 0.36, RES_FIRE = 0.20, RES_NATURE = 0.19, RES_FROST = 0.17, RES_HOLY = 0.04, RES_ARCANE = 0.04 } },
-  raid = { 0.75, { RES_NATURE = 0.30, RES_SHADOW = 0.25, RES_FROST = 0.25, RES_FIRE = 0.10, RES_ARCANE = 0.05, RES_HOLY = 0.05 } },
 }
+-- At the level cap, per raid (Warcraft Logs, 40-player Classic raids, 6 recent public kills of each boss):
+-- { share of raw damage that is magic, { school = part of it } } for tanks and for everyone else
+S.RAIDS = {
+  mc = { name = "Molten Core", kills = 60,
+    tank = { 0.32, { RES_FIRE = 0.78, RES_SHADOW = 0.18, RES_ARCANE = 0.04 } },
+    other = { 0.76, { RES_FIRE = 0.64, RES_SHADOW = 0.23, RES_ARCANE = 0.13 } } },
+  bwl = { name = "Blackwing Lair", kills = 48,
+    tank = { 0.32, { RES_SHADOW = 0.50, RES_FIRE = 0.49, RES_NATURE = 0.01 } },
+    other = { 0.85, { RES_FIRE = 0.75, RES_SHADOW = 0.21, RES_NATURE = 0.04 } } },
+  aq40 = { name = "Temple of Ahn'Qiraj", kills = 54,
+    tank = { 0.17, { RES_NATURE = 0.68, RES_SHADOW = 0.28, RES_FIRE = 0.02, RES_FROST = 0.01 } },
+    other = { 0.63, { RES_NATURE = 0.71, RES_SHADOW = 0.17, RES_ARCANE = 0.10, RES_FIRE = 0.01, RES_FROST = 0.01 } } },
+  naxx = { name = "Naxxramas", kills = 90,
+    tank = { 0.12, { RES_SHADOW = 0.36, RES_FIRE = 0.20, RES_NATURE = 0.19, RES_FROST = 0.16, RES_HOLY = 0.04, RES_ARCANE = 0.03 } },
+    other = { 0.69, { RES_NATURE = 0.44, RES_SHADOW = 0.28, RES_FROST = 0.16, RES_FIRE = 0.09, RES_ARCANE = 0.03 } } },
+}
+S.RAID_ORDER = { "mc", "bwl", "aq40", "naxx" }
+-- the raid your level-cap EHP is for (per character; Naxxramas unless you pick another)
+function S.Raid()
+  local r = ns.db and ns.db.raids and ns.db.raids[ns.CharKey()]
+  if r and S.RAIDS[r] then return r end
+  return "naxx"
+end
+function S.SetRaid(r)
+  ns.db.raids = ns.db.raids or {}
+  ns.db.raids[ns.CharKey()] = (r ~= "naxx") and r or nil
+end
+-- the magic mix for you now: { share, schools }, and what it's from
+function S.MagicMix(atMax)
+  if not atMax then return S.MAGIC.leveling, "enemies while leveling" end
+  local raid = S.RAIDS[S.Raid()]
+  return ns.IsTank() and raid.tank or raid.other, raid.name
+end
 local RES_INDEX = { RES_HOLY = 1, RES_FIRE = 2, RES_NATURE = 3, RES_FROST = 4, RES_SHADOW = 5, RES_ARCANE = 6 }
 ---------------------------------------------------------------------------
 local function ArmorK(a) if a > 59 then return 467.5 * a - 22167.5 end return 400 + 85 * a end
@@ -453,8 +486,8 @@ function S.EHPState()
   if st.D <= 0 then st.D = 5 * L end
   st.res = {}
   for k, i in pairs(RES_INDEX) do st.res[k] = Num(select(2, Call(UnitResistance, "player", i))) end
-  local m = S.MAGIC[(not atMax and "leveling") or (ns.IsTank() and "tank") or "raid"]
-  st.magic, st.schools = m[1], m[2]
+  local m, from = S.MagicMix(atMax)
+  st.magic, st.schools, st.from = m[1], m[2], from
   st.shield = st.block > 0
   st.extraBlock, st.uptime = 0, 0
   if st.shield then

@@ -24,6 +24,7 @@ ns.DEFAULTS = {
   rewards = true,         -- glow the best quest reward
   sellFallback = true,    -- no upgrade among the rewards: mark the one that sells for most
   bestArmorOnly = false,  -- from level 40, only mail (shamans, hunters) or plate (warriors, paladins) can be upgrades
+  raids = {},             -- per character: the raid its level-cap EHP is for ("mc", "bwl", "aq40"; none: Naxxramas)
   priorities = {},        -- per spec: { build = "leveling", survival = 0.25, levels = { STA = "highest" }, values = { SP = 0.6 } }
   flareStyle = true,
   euiStyle = true,       -- EllesmereUI look when EllesmereUI is installed (its skinning API)
@@ -36,6 +37,13 @@ local function Copy(v)
   return t
 end
 ns.Copy = Copy
+
+-- this character, for settings kept per character ("Name-Realm")
+function ns.CharKey()
+  local name = UnitName and UnitName("player") or "?"
+  local realm = GetRealmName and GetRealmName() or ""
+  return format("%s-%s", tostring(name), tostring(realm))
+end
 
 function ns.LoadDB()
   EquipThisDB = EquipThisDB or {}
