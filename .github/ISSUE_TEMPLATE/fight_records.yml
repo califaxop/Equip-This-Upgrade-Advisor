@@ -1,0 +1,22 @@
+name: Fight records
+description: Share your Equip This! fight records (optional, anonymous) to help make it better for your class and spec
+labels: ["fight-records"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thank you! In the game: /eqt, "Help improve Equip This!" ticked, then "Show my records" (or click the reminder in chat). Copy the line (Ctrl+C) and paste it below.
+        It holds your class, spec, level, how long each fight lasted, your damage and healing per spell, and Equip This!'s own estimate. Never your name, realm, guild, other players or any IDs.
+  - type: textarea
+    id: records
+    attributes:
+      label: Your fight records
+      description: The line from the export window (it starts with EquipThis:Fights and ends with End:EquipThis:Fights).
+      render: text
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Equip This! version (optional)
+      placeholder: e.g. 5.0.0

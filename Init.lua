@@ -24,6 +24,17 @@ ev:SetScript("OnEvent", function(_, event, arg1)
     ns.Bridge.Sync()
     ns.Display.HookTooltips()
     ns.Display.HookRewards()
+    -- sharing: the reminder's link opens the export window
+    local FR = ns.Engine and ns.Engine.FightRecorder
+    if FR then
+      FR.OnRemind = ns.RemindToShare
+      if EventRegistry and EventRegistry.RegisterCallback then
+        EventRegistry:RegisterCallback("SetItemRef", function(_, link)
+          if type(link) == "string" and link:find("^addon:EquipThis:records") then ns.ShowReport() end
+        end, ns)
+      end
+      C_Timer.After(30, function() pcall(FR.MaybeRemind) end)   -- (records waiting from before)
+    end
     -- the test build is part of Equip This! now
     local loaded = C_AddOns and C_AddOns.IsAddOnLoaded and C_AddOns.IsAddOnLoaded("EquipThisNext")
     if loaded then ns.Print("Equip This! Next (the test build) is part of Equip This! now: you can remove it from your AddOns folder.") end

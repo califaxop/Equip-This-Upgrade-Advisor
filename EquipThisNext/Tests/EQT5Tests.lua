@@ -33,6 +33,7 @@ local function loadEQT(db)
   UISpecialFrames = {}
   format, tinsert, tremove, wipe = string.format, table.insert, table.remove, function(t) for k in pairs(t) do t[k] = nil end return t end
   EquipThisDB = db
+  EquipThisEngineDB = nil
   local ns = {}
   local fh = assert(io.open(EQT .. "EquipThis.toc"))
   for line in fh:lines() do
@@ -110,7 +111,24 @@ T.Test("5.0: opt-in fight records: off by default; on, anonymous lines to copy",
   T.Eq(n, 1)
   T.Ok(text:find("EQT5|") and text:find("SHAMAN"), text)
   local okR, eR = pcall(ns.ShowReport)
-  T.Ok(okR, "the copy window: " .. tostring(eR))
+  T.Ok(okR, "the export window: " .. tostring(eR))
+  -- the reminder: a chat line whose link opens the export window
+  local cb
+  EventRegistry = { RegisterCallback = function(_, ev, fn) if ev == "SetItemRef" then cb = fn end end }
+  local ns2 = loadEQT(nil)
+  T.Ok(cb, "the link handler")
+  PRINTS = {}; ns2.RemindToShare(30)
+  local msg = table.concat(PRINTS, " ")
+  T.Ok(msg:find("30 new fight records") and msg:find("|Haddon:EquipThis:records|h", 1, true), msg)
+  local opened = false
+  ns2.ShowReport = function() opened = true end
+  cb(nil, "addon:EquipThis:records")
+  T.Ok(opened, "clicking it opens the export window")
+  ns2.Engine.db.share = true
+  MOCK.meter = { id = 900, duration = 30, spells = { [6603] = 3000 } }
+  MOCK.Fire("PLAYER_REGEN_ENABLED"); MOCK.RunTimers()
+  T.Eq(ns2.Engine.FightRecorder.MarkReported(), 1, "I reported this")
+  EventRegistry = nil
 end)
 
 T.Test("5.0: 4.x settings: the old scoring's are dropped, the rest kept", function()

@@ -12,15 +12,90 @@ local function S(key) return { function() return ns.db[key] end, function(v) ns.
 -- a setting of the engine's own (kept in its saved data)
 local function E(key) return { function() return ns.Engine.db and ns.Engine.db[key] end, function(v) if ns.Engine.db then ns.Engine.db[key] = v end end } end
 
-local REPORT_NOTE = "Copy it (Ctrl+C) and paste it into a new issue on the addon's GitHub page, or a comment on CurseForge. " ..
-  "It's your class, spec, level and how your damage and healing split between your spells in each fight: no name, realm or IDs."
+-- The fight records export (like Questie's trace export): a link to the form, the line to copy,
+-- what's in it, and "I reported this" (the next export holds only what's new).
+local SUBMIT_URL = "https://github.com/califaxop/Equip-This-Upgrade-Advisor/issues/new?template=fight_records.yml"
+local INCLUDED = "Included: your class, spec and level, how long each fight lasted, your damage and healing per spell, and Equip This!'s own estimate. Never: your name, realm, guild, other players or any IDs."
+local function hms(s)
+  s = math.floor(s or 0)
+  local h, m = math.floor(s / 3600), math.floor((s % 3600) / 60)
+  if h > 0 then return format("%d Hr %d Min", h, m) end
+  return format("%d Min %d Sec", m, s % 60)
+end
+local exportWin
 function ns.ShowReport()
   local FR = ns.Engine.FightRecorder
-  local text, n = FR.ReportText()
-  if n == 0 then
-    text = text .. "\n(no fights recorded yet" .. ((ns.Engine.db and ns.Engine.db.share) and "" or ": tick \"Help improve Equip This!\" in /eqt first") .. ")"
+  local w = exportWin
+  if not w then
+    w = UI.Popup("EquipThisExportWindow", 640, 392)
+    exportWin = w
+    local title = UI.Text(w, "title", "Equip This! Fight Records")
+    title:SetPoint("TOP", 0, -16)
+    w.url = UI.Edit(w, 580, { function() return SUBMIT_URL end, function() end })
+    w.url:SetPoint("TOP", 0, -44)
+    w.url:HookScript("OnTextChanged", function(self, user) if user and self:GetText() ~= SUBMIT_URL then self:SetText(SUBMIT_URL); self:HighlightText() end end)
+    w.url:HookScript("OnEditFocusGained", function(self) self:HighlightText() end)
+    local note = UI.Text(w, "note", "Copy the line below and paste it into the form at the link above (needs a GitHub account), or into a comment on Equip This!'s CurseForge page. "
+      .. "Please send it again now and then: each export only holds what's been recorded since the last one you sent. It helps the classes and specs the author can't play.")
+    note:SetPoint("TOP", 0, -74); note:SetWidth(580); note:SetJustifyH("CENTER")
+    w.line = UI.Edit(w, 580, { function() return w.text or "" end, function() end })
+    w.line:SetPoint("TOP", 0, -134)
+    w.line:HookScript("OnTextChanged", function(self, user) if user and self:GetText() ~= w.text then self:SetText(w.text or ""); self:HighlightText() end end)
+    w.line:HookScript("OnEditFocusGained", function(self) self:HighlightText() end)
+    -- what's in it (counters), two columns
+    w.stats = {}
+    local ICONS = { "Interface\\Icons\\Ability_DualWield", "Interface\\Icons\\INV_Misc_PocketWatch_01", "Interface\\Icons\\INV_Misc_Book_09",
+      "Interface\\Icons\\Spell_Nature_LightningShield", "Interface\\Icons\\INV_Misc_Note_01", "Interface\\Icons\\Achievement_Level_10" }
+    for i = 1, 6 do
+      local col, row = (i - 1) % 2, math.floor((i - 1) / 2)
+      local icon = w:CreateTexture(nil, "ARTWORK")
+      icon:SetTexture(ICONS[i]); icon:SetSize(18, 18)
+      icon:SetPoint("TOPLEFT", 40 + col * 300, -172 - row * 26)
+      local t = UI.Text(w, "line", "")
+      t:SetPoint("LEFT", icon, "RIGHT", 8, 0)
+      w.stats[i] = t
+    end
+    local inc = UI.Text(w, "note", INCLUDED)
+    inc:SetPoint("TOP", 0, -258); inc:SetWidth(580); inc:SetJustifyH("CENTER")
+    local inside = UI.Button(w, "What's inside", 130, function()
+      local text = FR.ReportText()
+      UI.ShowText("EquipThisInsideWindow", "What's inside, fight by fight", INCLUDED, text)
+    end)
+    inside:SetPoint("BOTTOMLEFT", 20, 16)
+    inside.tip = "The same records, one fight a line, in plain words."
+    w.done = UI.Button(w, "I reported this", 150, function()
+      local n = FR.MarkReported()
+      ns.Print(format("thank you! %d fight record(s) marked as sent; the next export holds only new ones.", n))
+      ns.ShowReport()
+    end)
+    w.done:SetPoint("BOTTOM", 60, 16)
+    w.done.tip = "Once you've sent it: the next export holds only fights recorded after now."
+    local close = UI.Button(w, "Close", 110, function() w:Hide() end)
+    close:SetPoint("BOTTOMRIGHT", -20, 16)
   end
-  UI.ShowText("EquipThisReportWindow", format("Your fight records (%d)", n), REPORT_NOTE, text)
+  local line, n = FR.ExportString()
+  local sum = FR.Summary()
+  local share = ns.Engine.db and ns.Engine.db.share
+  w.text = n > 0 and line or (share and "(no fights recorded since your last export: play a few and come back)"
+    or "(nothing recorded: tick \"Help improve Equip This!\" in /eqt to start)")
+  w.line:SetText(w.text)
+  local G = "|cffffd200"
+  local specs = #sum.specs > 0 and (sum.specs[1] .. (#sum.specs > 1 and format(" +%d more", #sum.specs - 1) or "")) or "-"
+  w.stats[1]:SetText("Fights recorded: " .. G .. sum.fights .. "|r")
+  w.stats[2]:SetText("Time in combat: " .. G .. hms(sum.seconds) .. "|r")
+  w.stats[3]:SetText("Spells tracked: " .. G .. sum.spells .. "|r")
+  w.stats[4]:SetText("Specs: " .. G .. specs .. "|r")
+  w.stats[5]:SetText("Sent before: " .. G .. sum.sentBefore .. " fights|r")
+  w.stats[6]:SetText("Levels: " .. G .. (sum.levels and (sum.levels[1] == sum.levels[2] and sum.levels[1] or (sum.levels[1] .. "-" .. sum.levels[2])) or "-") .. "|r")
+  if w.done.SetEnabled then w.done:SetEnabled(n > 0) end
+  w:Place(); w:Show()
+  w.line:SetFocus(); w.line:HighlightText()
+end
+
+-- the reminder in chat (at most once a week, with 25+ new records; the engine decides when)
+function ns.RemindToShare(n)
+  ns.Print(format("You have %d new fight records to share (optional). Each export only covers what's been recorded so far, so please share again now and then. "
+    .. "|cff40ff40|Haddon:EquipThis:records|h[Click here to open the export window]|h|r", n))
 end
 
 local function BuildPanel(panel)
