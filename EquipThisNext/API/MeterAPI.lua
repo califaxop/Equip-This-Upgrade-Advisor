@@ -6,6 +6,7 @@ local _, ns = ...
 local Meter = ns.Module("MeterAPI")
 local Compat = ns.Compat
 Meter.DAMAGE_DONE = 0
+Meter.HEALING_DONE = 2
 
 function Meter.Available()
   local ok, yes, why = Compat.Call("C_DamageMeter.IsDamageMeterAvailable")
@@ -46,12 +47,13 @@ function Meter.OverallDuration() return Compat.Value("C_DamageMeter.GetSessionDu
 function Meter.Reset() return Compat.Call("C_DamageMeter.ResetAllCombatSessions") end
 
 -- your damage per spell in a session (sessionID, or "overall"): { total, spells = { [spellID] = amount } } or nil, why
-function Meter.MySpells(sessionID, guid)
+function Meter.MySpells(sessionID, guid, kind)
   local ok, src
+  kind = kind or Meter.DAMAGE_DONE
   if sessionID == "overall" then
-    ok, src = Compat.Call("C_DamageMeter.GetCombatSessionSourceFromType", Meter.OVERALL, Meter.DAMAGE_DONE, guid)
+    ok, src = Compat.Call("C_DamageMeter.GetCombatSessionSourceFromType", Meter.OVERALL, kind, guid)
   else
-    ok, src = Compat.Call("C_DamageMeter.GetCombatSessionSourceFromID", sessionID, Meter.DAMAGE_DONE, guid)
+    ok, src = Compat.Call("C_DamageMeter.GetCombatSessionSourceFromID", sessionID, kind, guid)
   end
   if not ok or type(src) ~= "table" then return nil, "no data for that fight" end
   local spells, total = {}, 0

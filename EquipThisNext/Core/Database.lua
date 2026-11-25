@@ -9,7 +9,8 @@ DB.DEFAULTS = {
   tooltip = true,         -- the comparison line on item tooltips
   snapshots = {},
   confirmed = {},   -- [model part] = true: a measurement (/eqn measure) agreed with the model
-  measurements = {},  -- the last /eqn measure results (model vs the game's damage meter)   -- ["Name-Realm"] = { taken = time, profile = CharacterProfile }
+  measurements = {},
+  rotation = {},    -- ["CLASS:Tree"] = how often you use each ability and spell, learned by /eqn measure  -- the last /eqn measure results (model vs the game's damage meter)   -- ["Name-Realm"] = { taken = time, profile = CharacterProfile }
 }
 
 local function copy(v)

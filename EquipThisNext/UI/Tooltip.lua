@@ -12,7 +12,8 @@ function ns.Context()
   if ns.evalContext then return ns.evalContext end
   local p = ns.profile
   if not p then return nil, "not scanned yet" end
-  local ctx, why = ns.Evaluator.Context(p, { targetOffset = ns.db and ns.db.targetOffset, confirmed = ns.db and ns.db.confirmed })
+  local ctx, why = ns.Evaluator.Context(p, { targetOffset = ns.db and ns.db.targetOffset, confirmed = ns.db and ns.db.confirmed,
+    rotation = ns.db and ns.db.rotation, lastMeasurement = ns.db and ns.db.measurements and ns.db.measurements[1] })
   ns.evalContext = ctx
   return ctx, why
 end
@@ -47,6 +48,7 @@ function TT.Lines(res)
   if not b then L[1] = head .. DIM .. "can't compare yet|r"; return L end
   local parts = {}
   if b.dps then parts[#parts + 1] = "DPS " .. fmt(b.dps) end
+  if b.hps then parts[#parts + 1] = "HPS " .. fmt(b.hps) end
   if b.ehp then parts[#parts + 1] = "EHP " .. fmt(b.ehp) end
   if #parts == 0 then parts[1] = DIM .. "no change measured|r" end
   L[1] = head .. table.concat(parts, "  ")
@@ -59,7 +61,7 @@ function TT.Lines(res)
   if b.carry and #b.carry > 0 then L[#L + 1] = DIM .. "with your enchant on it (" .. table.concat(b.carry, "; ") .. ")|r" end
   for _, t in ipairs(b.setGained or {}) do L[#L + 1] = GOOD .. "set bonus gained: " .. t .. "|r" end
   for _, t in ipairs(b.setLost or {}) do L[#L + 1] = BAD .. "set bonus lost: " .. t .. "|r" end
-  if res.metric == "ehp" then L[#L + 1] = DIM .. "spell damage / healing: milestone 4|r" end
+
   return L
 end
 

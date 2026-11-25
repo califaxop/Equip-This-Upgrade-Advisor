@@ -217,8 +217,8 @@ function Diag.Model()
   local ctx = ctxOrSay(); if not ctx then return end
   local b, s = ctx.base, ctx.state
   f("target: %d level(s) above you (%s); spec: %s", ctx.offset, ns.db.targetOffset == "auto" and "auto" or "set",
-    ctx.melee and "melee (DPS = auto attacks, weapon strikes, imbue, item procs)" or "caster/healer (DPS and healing: later in milestone 4)")
-  if b.dps then
+    ctx.melee and "melee (DPS = auto attacks, weapon strikes, imbue, item procs, spells)" or (ctx.healer and "healer (HPS from your heals)" or "caster (DPS from your spells)"))
+  if b.dps and b.dpsInfo and b.dpsInfo.table then
     local t = b.dpsInfo.table
     f("melee DPS %s: swing %s every %.2fs; miss %.1f%% dodge %.1f%% glancing %.1f%% (-%d%%) crit %.1f%% hit %.1f%%%s; speed x%.3f%s",
       n1(b.dps), n1(s.swing), s.speed, t.miss, t.dodge, t.glance, t.glancePenalty * 100 + 0.5, t.crit, t.hit,
@@ -228,8 +228,9 @@ function Diag.Model()
   if b.dps and b.dpsInfo.parts then
     local rows = {}
     for _, part in ipairs(b.dpsInfo.parts) do
-      rows[#rows + 1] = string.format("%s %s (%d%%)%s", part.name, n1(part.dps), part.dps / b.dps * 100 + 0.5,
-        part.procsPerMin and string.format(" [%.1f/min%s]", part.procsPerMin, part.rateSource == "assumed" and ", rate assumed" or "") or "")
+      rows[#rows + 1] = string.format("%s %s (%d%%)%s%s", part.name, n1(part.dps), part.dps / b.dps * 100 + 0.5,
+        part.procsPerMin and string.format(" [%.1f/min%s]", part.procsPerMin, part.rateSource == "assumed" and ", rate assumed" or "") or "",
+        part.perMin and string.format(" [%.1f casts/min, %d a cast]", part.perMin, (part.perCast or (part.rate and part.dps / part.rate) or 0) + 0.5) or "")
     end
     P("  DPS parts: " .. table.concat(rows, ", "))
     if b.dpsInfo.procStats then
@@ -238,6 +239,16 @@ function Diag.Model()
       P("  procs and use effects, averaged: " .. table.concat(st, ", "))
     end
   end
+  if b.hps then
+    local rows = {}
+    for _, part in ipairs(b.hpsInfo.parts) do rows[#rows + 1] = string.format("%s %s (%.1f/min, %d a cast)", part.name, n1(part.hps), part.perMin, part.perCast + 0.5) end
+    f("HPS %s: %s%s", n1(b.hps), table.concat(rows, ", "),
+      b.hpsInfo.manaPerSec > 0 and string.format("; %.2f healing per mana", b.hps / b.hpsInfo.manaPerSec) or "")
+  end
+  local rot = ctx.rotation or {}
+  f("rotation: %s", rot.source == "measured" and "learned from your fights (/eqn measure)"
+    or rot.source == "none" and "your spells aren't counted until /eqn measure learns how you use them"
+    or "assumed (/eqn measure learns yours)")
   if b.ehp then
     local e = b.ehpInfo
     f("EHP %d: %d health, you take %.1f%% of the damage (melee %.1f%%: armor cuts %.1f%%%s; spells %.1f%%)",
@@ -298,12 +309,14 @@ function Diag.Measure(arg)
   if not m then return P(tostring(why2)) end
   local ctx = ctxOrSay(); if not ctx then return end
   local b = ctx.base
-  if not (b.dps and b.dpsInfo.parts) then return P("no DPS model for you yet") end
+  local dparts = b.dpsInfo and b.dpsInfo.parts or {}
   f("%s: %ds in combat, %d damage%s", label, dur + 0.5, m.total, dur > 0 and string.format(", %.1f DPS", m.total / dur) or "")
   -- short fights: an ability used on cooldown is also used at each pull (floor(fight / cooldown) + 1
   -- times, not fight / cooldown): the model's share is adjusted to the fights' lengths
   local strikeFactor = {}
+  local learned = ctx.rotation and ctx.rotation.strikes or {}
   for _, st in ipairs(ctx.abilities.strikes or {}) do
+    if learned[st.name] then break end   -- (a learned rate already has the pulls in it)
     local real, steady = 0, 0
     for _, fgt in ipairs(fights) do
       if fgt.duration and fgt.duration > 0 then
@@ -316,7 +329,7 @@ function Diag.Measure(arg)
   -- which measured spells each model part is
   local measured, covered, modelTotal = {}, 0, 0
   local used = {}
-  for _, part in ipairs(b.dpsInfo.parts) do
+  for _, part in ipairs(dparts) do
     local amt = 0
     for id, a in pairs(m.spells) do
       local name = ns.SpellAPI.Name(id) or tostring(id)
@@ -326,9 +339,15 @@ function Diag.Measure(arg)
     covered = covered + amt
     modelTotal = modelTotal + part.dps * (strikeFactor[part.name] or 1)
   end
-  local rec = { time = time and time() or 0, duration = dur, total = m.total, level = ctx.state.level, offset = ctx.offset, fights = #fights, parts = {}, other = {} }
+  local rec = { time = time and time() or 0, duration = dur, total = m.total, level = ctx.state.level, offset = ctx.offset, fights = #fights,
+    key = ns.Evaluator.RotationKey(ctx.profile), parts = {}, other = {}, healing = {} }
+  local heal = Meter.MySpells(arg == "last" and fights[1].id or "overall", guid, Meter.HEALING_DONE)
+  for id, a in pairs(heal and heal.spells or {}) do
+    local name = ns.SpellAPI.Name(id) or tostring(id)
+    rec.healing[name] = (rec.healing[name] or 0) + a
+  end
   P("share of the damage the model covers (model vs measured):")
-  for _, part in ipairs(b.dpsInfo.parts) do
+  for _, part in ipairs(dparts) do
     local ms = covered > 0 and measured[part.name] / covered or 0
     local mo = part.dps * (strikeFactor[part.name] or 1) / modelTotal
     local ratio = mo > 0 and ms / mo or 0
@@ -347,13 +366,26 @@ function Diag.Measure(arg)
     end
   end
   if #other > 0 then f("  not modelled yet (spells): %s", table.concat(other, ", ")) end
-  if dur > 0 then
+  if dur > 0 and b.dps then
     f("model DPS %s (always attacking) vs measured %s for the same parts over the fight (lower with downtime)",
       n1(b.dps), n1(covered / dur))
   end
   ns.db.measurements = ns.db.measurements or {}
   table.insert(ns.db.measurements, 1, rec)
   while #ns.db.measurements > 5 do table.remove(ns.db.measurements) end
+  -- how you fight, learned from this measurement: used for every comparison from now on
+  local rot = ns.Evaluator.LearnRotation(ctx, rec)
+  if rot.source == "measured" then
+    ns.db.rotation = ns.db.rotation or {}
+    ns.db.rotation[rec.key] = rot
+    local rows = {}
+    for name, r in pairs(rot.strikes) do rows[#rows + 1] = string.format("%s %.1f", name, r * 60) end
+    for name, r in pairs(rot.rates) do rows[#rows + 1] = string.format("%s %.1f", name, r * 60) end
+    table.sort(rows)
+    f("learned how you fight (casts a minute of fighting; you were attacking %d%% of the time in combat): %s",
+      (rot.uptime or 1) * 100 + 0.5, #rows > 0 and table.concat(rows, ", ") or "nothing to learn")
+    P("comparisons use this from now on (each /eqn measure updates it)")
+  end
   ns.evalContext = nil; ns.Cache.Invalidate("evaluation")
 end
 
@@ -486,5 +518,5 @@ SlashCmdList.EQUIPTHISNEXT = function(msg)
 end
 
 ns.Events.On("PLAYER_LOGIN", "hello", function()
-  ns.Print("loaded (test build " .. ns.version .. ": compares gear by modelled melee DPS - abilities, imbues, procs - and EHP). /eqn for commands.")
+  ns.Print("loaded (test build " .. ns.version .. ": compares gear by modelled DPS, HPS and EHP). /eqn for commands.")
 end)

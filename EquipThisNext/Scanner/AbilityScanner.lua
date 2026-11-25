@@ -4,6 +4,8 @@
 --                                                     (desc: C_Spell.GetSpellDescription, the game's
 --                                                     own resolved text; cooldownText: the tooltip's
 --                                                     right side, "8 sec cooldown")
+--   casts[name] = { spellID, desc, castText, manaText, cooldownText }   your highest rank of each
+--                                                     damage or heal spell in Data/Generated.lua
 --   imbues[slot] = { enchantID, castSpell, desc, procDesc }   a temporary weapon enchant on 16/17
 --                                                     (Windfury...): the spell of yours that puts it
 --                                                     on, and its description
@@ -11,17 +13,40 @@ local _, ns = ...
 local AbilityScanner = ns.Module("AbilityScanner")
 local Spell = ns.SpellAPI
 
-local function cooldownText(id)
-  local tip = Spell.Tooltip(id)
+local function cooldownText(id, tip)
+  tip = tip or Spell.Tooltip(id)
   for _, r in pairs(tip and tip.right or {}) do
     if r:find("[Cc]ooldown") then return r end
   end
+end
+-- "2.5 sec cast" / "Instant" and "120 Mana" from a spell's tooltip (left or right side)
+local function tipTexts(tip)
+  local cast, mana
+  for _, side in ipairs({ tip and tip.left or {}, tip and tip.right or {} }) do
+    for _, t in pairs(side) do
+      if not cast and (t:find("sec cast") or t:find("^Instant")) then cast = t end
+      if not mana and t:find("^%d+ Mana") then mana = t end
+    end
+  end
+  return cast, mana
 end
 
 function AbilityScanner.Scan(profile)
   local G = ns.GENERATED or {}
   local known = profile.spells and profile.spells.known or {}
-  local out = { spells = {}, imbues = {} }
+  local out = { spells = {}, imbues = {}, casts = {} }
+  -- damage and heal spells: your highest rank of each
+  local best = {}
+  for id in pairs(known) do
+    local d = G.spells and G.spells[id]
+    if d and (not best[d.name] or d.level > G.spells[best[d.name]].level) then best[d.name] = id end
+  end
+  for name, id in pairs(best) do
+    local tip = Spell.Tooltip(id)
+    local castText, manaText = tipTexts(tip)
+    out.casts[name] = { spellID = id, desc = Spell.Description(id), castText = castText, manaText = manaText,
+      cooldownText = cooldownText(id, tip) }
+  end
   for id in pairs(G.abilities or {}) do
     local isKnown = known[id] ~= nil or Spell.IsKnown(id) == true
     if isKnown then out.spells[id] = { known = true, desc = Spell.Description(id), cooldownText = cooldownText(id) } end

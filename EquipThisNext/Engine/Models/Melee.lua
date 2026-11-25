@@ -115,10 +115,12 @@ function M.DPS(state, ctx)
   end
   if ab and #ab.strikes > 0 then
     local y = M.Special(state, ctx)
+    local learned = ctx.rotation and ctx.rotation.strikes or {}
     for _, st in ipairs(ab.strikes) do
-      local casts = 1 / st.cooldown
+      -- how often: learned from your fights (/eqn measure: shocks share the global cooldown), else on cooldown
+      local casts = learned[st.name] or 1 / st.cooldown
       local d = casts * state.swing * st.weaponPct / 100 * (1 + (abilityPct[st.name] or 0) / 100) * (y.hit + y.crit * M.CRIT_MULT) / 100
-      parts[#parts + 1] = { name = st.name, dps = d }
+      parts[#parts + 1] = { name = st.name, dps = d, rate = casts, perMin = casts * 60 }
       dps = dps + d
       landed.mh = landed.mh + casts * (y.hit + y.crit) / 100
     end

@@ -45,7 +45,7 @@ end
 dofile(ROOT .. "Tests/MockAPI.lua")
 dofile(ROOT .. "Tests/FixtureTalents.lua")
 dofile(ROOT .. "Tests/FixtureShaman42.lua")
-for _, file in ipairs({ "CacheTests", "CompatTests", "ProfileTests", "ScannerTests", "EngineTests", "M4Tests" }) do
+for _, file in ipairs({ "CacheTests", "CompatTests", "ProfileTests", "ScannerTests", "EngineTests", "M4Tests", "M4bTests" }) do
   OUT("== " .. file)
   assert(loadfile(ROOT .. "Tests/" .. file .. ".lua"))()
 end

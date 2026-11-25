@@ -15,7 +15,7 @@ runs alongside the released Equip This! without touching it, on the `next-founda
 | 1. Foundation: compatibility layer, scanners, diagnostics | **done: 0.1.3 validated in game (level 42 Shaman, build 71091)** |
 | 2. Basic evaluation | **done: validated in game (0.2.1; the tooltip %s look right to the tester)** |
 | 3. Complete gear evaluation | **done: validated in game (0.3.0-0.3.3)** |
-| 4. Simulation (DPS, healing, tanking, PvP) | **4a: melee DPS with abilities, imbues, procs: 0.4.0 read right in game; 0.4.1 measured in game (Windfury agrees); 0.4.2 fixes the meter's "Attack" and untrained worn weapons**; 4b casters and healing, 4c tanking threat and PvP: not started |
+| 4. Simulation (DPS, healing, tanking, PvP) | **4a: melee DPS with abilities, imbues, procs: 0.4.0 read right in game; 0.4.1 measured in game (Windfury agrees); 0.4.2 fixes the meter's "Attack" and untrained worn weapons**; **4b (0.5.0): spells, learned rotation, HPS: built, offline tests pass (71), waiting for the in-game test**; 4c tanking threat and PvP: not started |
 | 5. All classes and builds | not started |
 | 6. Optimization and validation | not started |
 
@@ -148,6 +148,43 @@ parts, each on a character that can check it:
 - 4b: caster DPS and healing (spell coefficients, HPS, healing per mana, HoTs, overhealing).
 - 4c: tanking threat (separate from EHP) and PvP (its own assumptions: burst, sustained,
   survivability vs players).
+
+### 4b (0.5.0): spells, the rotation learned from your fights, healing
+
+- **Spells** (Engine/Models/Spells.lua): every class's damage and heal spells from Forever's
+  tables (Data/Generated.lua `spells`: coefficients, a DoT's per-tick coefficient and ticks, cast
+  times, cooldowns, ranks' base values per level). Your highest rank of each (spellbook); its amounts
+  from its description as the game shows it, else the tables; cast time, cooldown and mana from its
+  tooltip. A spell that does its damage through another (Lightning Shield's bolt, 26369) uses that
+  one's coefficient. Forever's coefficients are TBC-style (Lightning Bolt 0.714, Earth Shock 0.386,
+  Flame Shock 0.214 + 0.1 a tick, Lightning Shield 0.267).
+- Per cast: (amount + coefficient x spell damage or healing) x (1 - miss) x (1 + crit x 0.5), DoTs
+  and HoTs without crits. Spell miss 4/5/6/17% vs +0-3 levels, at least 1% (Classic's, assumed).
+  Not counted yet: talents that change spells (Concussion, Call of Flame, Elemental Fury...), mana.
+- **How often each is cast: learned, not guessed.** `/eqn measure` turns each ability's and spell's
+  damage (and healing) into casts per second of fighting: its damage / the model's damage per cast
+  / the time attacking (combat time x auto-attack uptime = measured auto-attack damage / the
+  model's). Kept per class and spec (`db.rotation["SHAMAN:Enhancement"]`) and used by every
+  comparison; each `/eqn measure` updates it. A 0.4.x measurement is learned from at once.
+  This also replaces "Stormstrike on cooldown" with how often you really press it.
+- Without a measurement: a melee spec's spells aren't counted (no guess at how a hybrid mixes them;
+  confidence says so); casters get DoTs kept up, cooldowns on cooldown and the best damage per
+  cast time filling the rest; healers their best healing per cast time heal, all the time (both
+  said to be assumed).
+- **Healing**: HPS (and healing per mana) from heals, the main metric for Restoration / Holy /
+  Discipline; HPS on the tooltip.
+
+From the 0.4.2 measurement (30 fights) the model learns: Stormstrike 7.9 a minute of fighting,
+Flame Shock 5.8, Earth Shock 7.2, Lightning Shield 8.2, Lightning Bolt 2.6; attacking 87% of the
+combat time. Spell damage is then worth about as much per point as attack power for this shaman
+(10 points: +0.68% vs +0.61% DPS).
+
+In-game test (0.5.0):
+1. `/eqn model`: "rotation: learned from your fights", and the DPS parts with your spells.
+2. `/eqn abilities`: your spells' text as the game shows it.
+3. Hover items with spell damage, and your Rage of the Storm vs the Flayer again.
+4. `/eqn measure reset`, 15-20 fights, `/eqn measure`: the learned numbers update.
+5. If you can, a few fights as Elemental or Restoration (or another class): `/eqn model`.
 
 ### 4a: what's counted, and from where
 

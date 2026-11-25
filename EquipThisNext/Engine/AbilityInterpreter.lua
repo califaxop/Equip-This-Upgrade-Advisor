@@ -102,3 +102,61 @@ function AI.Interpret(profile, talents, confirmed)
   end
   return out
 end
+
+-- ---------------------------------------------------------------------------------------------
+-- Milestone 4b: your damage and heal spells as model inputs.
+--   AI.Spells(profile) -> { [name] = { name, spellID, kind = "damage"|"heal", school,
+--     direct = { avg, coef }, dot = { total, coef }, cast, cooldown, gcd, mana, source } }
+-- Base amounts: the spell's own description as the game shows it ("causing 51 Fire damage
+-- immediately and 48 Fire damage over 12 sec"), else Forever's tables (base + per level).
+-- Coefficients (how much of your spell power or healing a cast gets), cast times, cooldowns and
+-- ticks: Forever's tables (a DoT's coefficient is per tick). Cast time, cooldown and mana: the
+-- spell's tooltip when it shows them.
+local function num(s) return s and tonumber(s) end
+function AI.SpellAmounts(desc, kind)
+  if type(desc) ~= "string" then return nil end
+  local out = {}
+  local a1, lo, hi, a2, one, a3, over
+  if kind == "damage" then
+    a1, _, lo, hi = desc:find("(%d+) to (%d+) %a+ damage")
+    a2, _, one = desc:find("(%d+) %a+ damage")
+    a3, _, over = desc:find("(%d+) %a+ damage over %d+ sec")
+  else
+    a1, _, lo, hi = desc:find("for (%d+) to (%d+)")
+    a2, _, one = desc:find("[Hh]eals? .-for (%d+)")
+    a3, _, over = desc:find("(%d+) over %d+ sec")
+  end
+  if lo and a1 ~= a3 then out.direct = (num(lo) + num(hi)) / 2
+  elseif one and not (a3 and desc:find("(%d+)", a2) == a3) then out.direct = num(one) end
+  if over then out.dot = num(over) end
+  return (out.direct or out.dot) and out or nil
+end
+
+function AI.Spells(profile)
+  local G = ns.GENERATED or {}
+  local A = profile.abilities or {}
+  local level = profile.identity and profile.identity.level or 1
+  local out = {}
+  for name, c in pairs(A.casts or {}) do
+    local d = G.spells and G.spells[c.spellID]
+    if d then
+      local amt = AI.SpellAmounts(c.desc, d.kind)
+      local sp = { name = name, spellID = c.spellID, kind = d.kind, school = d.school, gcd = d.gcd > 0 and d.gcd or 1.5,
+        source = amt and "description" or "game data" }
+      local lv = math.max(0, math.min(level, d.maxLevel > 0 and d.maxLevel or level) - (d.baseLevel or 0))
+      if d.direct then
+        sp.direct = { avg = amt and amt.direct or (d.direct.base + d.direct.perLevel * lv), coef = d.direct.coef }
+      end
+      if d.dot and d.dot.ticks > 0 then
+        sp.dot = { total = amt and amt.dot or d.dot.tick * d.dot.ticks, coef = d.dot.coef * d.dot.ticks, ticks = d.dot.ticks,
+          duration = d.dot.ticks * (d.dot.period or 3) }
+      end
+      local castT = c.castText and (c.castText:find("^Instant") and 0 or tonumber(c.castText:match("([%d%.]+) sec cast")))
+      sp.cast = castT or d.cast
+      sp.cooldown = AI.Cooldown(c.cooldownText) or d.cooldown
+      sp.mana = c.manaText and tonumber(c.manaText:match("^(%d+) Mana"))
+      if sp.direct or sp.dot then out[name] = sp end
+    end
+  end
+  return out
+end

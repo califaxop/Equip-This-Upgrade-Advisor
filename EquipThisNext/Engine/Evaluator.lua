@@ -13,6 +13,74 @@ local Ev = ns and ns.Module and ns.Module("Evaluator") or {}
 Ev.MELEE_TREES = { Enhancement = true, Arms = true, Fury = true, Protection = true, Retribution = true,
   Assassination = true, Combat = true, Subtlety = true, ["Feral Combat"] = true }
 Ev.MELEE_CLASSES = { WARRIOR = true, ROGUE = true }
+-- healing specs: their main metric is healing per second
+Ev.HEAL_TREES = { Restoration = true, Holy = true, Discipline = true }
+
+-- which rotation is yours: per class and main talent tree
+function Ev.RotationKey(profile)
+  return tostring(profile.identity and profile.identity.class) .. ":" .. tostring(profile.talents and profile.talents.primaryTree)
+end
+
+-- How often you use each ability and spell.
+--   measured (settings.rotation[key], from /eqn measure): casts per second of fighting
+--   else learned now from the last measurement, if there is one
+--   else assumed: casters and healers get SpellModel.DefaultRotation; a melee spec's spells aren't
+--   counted (no guess at how a hybrid mixes them) and weapon strikes are used on cooldown
+function Ev.Rotation(ctx, settings)
+  local key = Ev.RotationKey(ctx.profile)
+  local r = settings and settings.rotation and settings.rotation[key]
+  if r then return r end
+  local last = settings and settings.lastMeasurement
+  -- (records from 0.4.x have no key: taken when the level matches)
+  if last and (last.key == key or (last.key == nil and last.level == ctx.state.level)) then return Ev.LearnRotation(ctx, last) end
+  local out = { rates = {}, strikes = {}, source = "assumed" }
+  local S = ns.SpellModel
+  if ctx.healer then out.rates = S.DefaultRotation(ctx.state, ctx, ctx.spells, "heal")
+  elseif not ctx.melee then out.rates = S.DefaultRotation(ctx.state, ctx, ctx.spells, "damage")
+  else
+    out.source = next(ctx.spells or {}) and "none" or "assumed"
+  end
+  return out
+end
+
+-- A rotation from a measurement (rec: /eqn measure's record): each ability's and spell's casts
+-- per second of fighting = its damage (or healing) / the model's damage per cast / the time you
+-- were fighting. "Fighting" time = combat time x your auto-attack uptime (measured auto-attack
+-- damage / the model's), so it's on the same footing as the melee model (always attacking).
+function Ev.LearnRotation(ctx, rec)
+  local out = { rates = {}, strikes = {}, source = "measured", at = rec.time, fights = rec.fights }
+  local dur = rec.duration or 0
+  if dur <= 0 then return { rates = {}, strikes = {}, source = "assumed" } end
+  local parts = {}
+  for _, part in ipairs(ctx.base.dpsInfo and ctx.base.dpsInfo.parts or {}) do parts[part.name] = part end
+  local measured = {}
+  for _, p in ipairs(rec.parts or {}) do measured[p.name] = (measured[p.name] or 0) + (p.measured or 0) end
+  for _, o in ipairs(rec.other or {}) do measured[o.name] = (measured[o.name] or 0) + (o.amount or 0) end
+  local up = 1
+  local auto = parts["auto attack"]
+  if ctx.melee and auto and auto.dps > 0 and (measured["auto attack"] or 0) > 0 then
+    up = math.max(0.05, math.min(1, measured["auto attack"] / (auto.dps * dur)))
+  end
+  out.uptime = up
+  local active = dur * up
+  for _, st in ipairs(ctx.abilities and ctx.abilities.strikes or {}) do
+    local p = parts[st.name]
+    if p and p.rate and p.rate > 0 and p.dps > 0 and measured[st.name] then
+      -- (not capped at once per cooldown: in short fights it's used at each pull while auto
+      -- attacks are still starting, so per second of auto-attacking it can come out above that)
+      out.strikes[st.name] = measured[st.name] / (p.dps / p.rate) / active
+    end
+  end
+  local S = ns.SpellModel
+  for name, sp in pairs(ctx.spells or {}) do
+    local amt = sp.kind == "heal" and rec.healing and rec.healing[name] or (sp.kind ~= "heal" and measured[name])
+    if amt and amt > 0 then
+      local per = S.PerCast(sp, ctx.state, ctx)
+      if per > 0 then out.rates[name] = amt / per / active end
+    end
+  end
+  return out
+end
 
 Ev.SLOTS = {
   INVTYPE_HEAD = { 1 }, INVTYPE_NECK = { 2 }, INVTYPE_SHOULDER = { 3 }, INVTYPE_CLOAK = { 15 }, INVTYPE_CHEST = { 5 },
@@ -108,9 +176,12 @@ function Ev.Context(profile, settings)
   local abilities = ns.AbilityInterpreter and ns.AbilityInterpreter.Interpret(profile, talents, settings and settings.confirmed) or { strikes = {}, notes = {}, unchecked = 0 }
   local offset = Ev.Offset(profile, settings)
   local calc = profile.calc or {}
+  local tree = profile.talents and profile.talents.primaryTree
   local ctx = {
     profile = profile, state = state, gear = gear, talents = talents, abilities = abilities, offset = offset,
-    melee = Ev.IsMelee(profile),
+    melee = Ev.IsMelee(profile), healer = tree and Ev.HEAL_TREES[tree] and not Ev.IsMelee(profile) or false,
+    spells = ns.AbilityInterpreter and ns.AbilityInterpreter.Spells and ns.AbilityInterpreter.Spells(profile) or {},
+    rotation = { rates = {}, strikes = {}, source = "assumed" },
     glancing = calc.glancing and calc.glancing[offset], armorEffect = calc.armorEffect,
     glancingBySkill = calc.glancingBySkill and next(calc.glancingBySkill) and calc.glancingBySkill or nil,
     baselineArmor = state.armor, magicShare = settings and settings.magicShare,
@@ -132,6 +203,10 @@ function Ev.Context(profile, settings)
       ctx.skillNote = string.format("your current weapon's skill is %d (vs %d)", now, base)
     end
   end
+  ctx.base = Ev.Performance(state, ctx)
+  -- the rotation needs the model's per-cast numbers: worked out after a first baseline
+  ctx.rotation = Ev.Rotation(ctx, settings)
+  if ctx.todayBase then ctx.todayBase = Ev.Performance(ctx.rawState, ctx) end
   ctx.base = Ev.Performance(state, ctx)
   -- buffs and talents in the sheet beyond gear, per primary stat (stat.X.pos - gear)
   ctx.beyondGear = {}
@@ -156,13 +231,36 @@ function Ev.Performance(state, ctx)
     end
     out.dps, out.dpsInfo = d, info
     if not d then out.why.dps = info end
-  else
-    out.why.dps = "spell damage and healing are modelled in milestone 4"
   end
+  -- spells (milestone 4b): damage added to DPS, healing as HPS
+  local rates = ctx.rotation and ctx.rotation.rates
+  if rates and next(rates) then
+    local sd, sh, sparts, mana = ns.SpellModel.Output(state, ctx, ctx.spells, rates)
+    if sd > 0 then
+      out.dpsInfo = out.dpsInfo or { parts = {} }
+      out.dpsInfo.parts = out.dpsInfo.parts or {}
+      for _, p in ipairs(sparts) do if p.dps then out.dpsInfo.parts[#out.dpsInfo.parts + 1] = p end end
+      out.dps = (type(out.dps) == "number" and out.dps or 0) + sd
+      out.why.dps = nil
+    end
+    if sh > 0 then
+      out.hps = sh
+      out.hpsInfo = { parts = {}, manaPerSec = mana }
+      for _, p in ipairs(sparts) do if p.hps then out.hpsInfo.parts[#out.hpsInfo.parts + 1] = p end end
+    end
+  end
+  if not out.dps and not out.why.dps then out.why.dps = ctx.melee and "no main-hand weapon damage on the sheet" or "no damage spells counted yet" end
   local e, info = ns.SurvivalModel.EHP(state, ctx)
   out.ehp, out.ehpInfo = e, info
   if not e then out.why.ehp = info end
   return out
+end
+
+-- the metric a comparison picks its best slot by: healing for healers, else damage, else EHP
+function Ev.MainMetric(ctx)
+  if ctx.healer and ctx.base.hps then return "hps" end
+  if ctx.base.dps then return "dps" end
+  return "ehp"
 end
 
 local function pct(new, old)
@@ -179,7 +277,8 @@ function Ev.Weights(ctx, step)
   for _, k in ipairs(Ev.WEIGHT_STATS) do
     local s = ns.StatEngine.Apply(ctx.state, { [k] = step }, ctx.talents)
     local p = Ev.Performance(s, ctx)
-    out[k] = { dps = pct(p.dps, ctx.base.dps) and pct(p.dps, ctx.base.dps) / step, ehp = pct(p.ehp, ctx.base.ehp) and pct(p.ehp, ctx.base.ehp) / step }
+    local function per(m) local x = pct(p[m], ctx.base[m]); return x and x / step end
+    out[k] = { dps = per("dps"), ehp = per("ehp"), hps = per("hps") }
   end
   return out
 end
@@ -303,14 +402,14 @@ function Ev.Evaluate(ctx, changes, label, notes)
     end
   end
   local opt = { status = "ok", label = label, changes = changes, removed = removed, added = added, delta = delta, perf = p,
-    dps = pct(p.dps, ctx.base.dps), ehp = pct(p.ehp, ctx.base.ehp), notes = notes or {},
+    dps = pct(p.dps, ctx.base.dps), ehp = pct(p.ehp, ctx.base.ehp), hps = pct(p.hps, ctx.base.hps), notes = notes or {},
     setGained = gained, setLost = lost, setUnknown = setUnknown }
   -- each stat on its own
   opt.parts = {}
   for k, d in pairs(delta) do
     if d ~= 0 then
       local p1 = Ev.Performance(ns.StatEngine.Apply(ctx.state, { [k] = d }, ctx.talents), ctx)
-      opt.parts[#opt.parts + 1] = { stat = k, amount = d, dps = pct(p1.dps, ctx.base.dps), ehp = pct(p1.ehp, ctx.base.ehp) }
+      opt.parts[#opt.parts + 1] = { stat = k, amount = d, dps = pct(p1.dps, ctx.base.dps), ehp = pct(p1.ehp, ctx.base.ehp), hps = pct(p1.hps, ctx.base.hps) }
     end
   end
   table.sort(opt.parts, function(a, b) return math.abs(a.dps or a.ehp or 0) > math.abs(b.dps or b.ehp or 0) end)
@@ -319,7 +418,7 @@ function Ev.Evaluate(ctx, changes, label, notes)
     for k, x in pairs(ctx.state) do se[k] = x end
     se.effects = effects
     local e1 = Ev.Performance(se, ctx)
-    table.insert(opt.parts, 1, { stat = "EFFECTS", amount = 0, dps = pct(e1.dps, ctx.base.dps), ehp = pct(e1.ehp, ctx.base.ehp) })
+    table.insert(opt.parts, 1, { stat = "EFFECTS", amount = 0, dps = pct(e1.dps, ctx.base.dps), ehp = pct(e1.ehp, ctx.base.ehp), hps = pct(e1.hps, ctx.base.hps) })
   end
   opt.assumedRates = {}
   for _, e in ipairs(effects) do
@@ -329,7 +428,7 @@ function Ev.Evaluate(ctx, changes, label, notes)
     local ws = ns.StatEngine.Apply(ctx.state, {}, ctx.talents, weapons)
     ws = untrainedNote and trained(ws, ctx.state) or ws
     local w1 = Ev.Performance(ws, ctx)
-    table.insert(opt.parts, 1, { stat = "WEAPON", amount = 0, dps = pct(w1.dps, ctx.base.dps), ehp = pct(w1.ehp, ctx.base.ehp) })
+    table.insert(opt.parts, 1, { stat = "WEAPON", amount = 0, dps = pct(w1.dps, ctx.base.dps), ehp = pct(w1.ehp, ctx.base.ehp), hps = pct(w1.hps, ctx.base.hps) })
   end
   -- effects of the removed items that aren't counted; enchants that carry over
   opt.lost, opt.carry = {}, {}
@@ -347,7 +446,7 @@ local function bestPartner(ctx, list, makeChanges)
   local best
   for _, it in ipairs(list) do
     local o = Ev.Evaluate(ctx, makeChanges(it), nil)
-    local key = ctx.melee and "dps" or "ehp"
+    local key = Ev.MainMetric(ctx)
     if o.status == "ok" and (not best or (o[key] or -math.huge) > (best.opt[key] or -math.huge)) then best = { item = it, opt = o } end
   end
   return best and best.item
@@ -425,7 +524,7 @@ function Ev.Compare(ctx, candidate)
     opt.old = eq[first]
     res.options[#res.options + 1] = opt
   end
-  local key = ctx.melee and "dps" or "ehp"
+  local key = Ev.MainMetric(ctx)
   for _, o in ipairs(res.options) do
     if o.status == "ok" and (not res.best or (o[key] or -math.huge) > (res.best[key] or -math.huge)) then res.best = o end
   end
@@ -446,7 +545,10 @@ function Ev.Compare(ctx, candidate)
   if ctx.talents.unchecked > 0 then reasons[#reasons + 1] = "a talent's number isn't confirmed" end
   if ctx.state.missingRating and next(ctx.state.missingRating) then reasons[#reasons + 1] = "a rating conversion is unknown" end
   if ctx.profile.stats.stale then reasons[#reasons + 1] = "stats are from before combat" end
-  if ctx.melee then reasons[#reasons + 1] = "spells (shocks...) and mana or rage limits not in DPS yet" end
+  local rot = ctx.rotation or {}
+  if rot.source == "none" then reasons[#reasons + 1] = "your spells aren't counted until /eqn measure learns how you use them"
+  elseif rot.source == "assumed" and next(rot.rates or {}) then reasons[#reasons + 1] = "rotation assumed (/eqn measure learns yours)" end
+  if ctx.melee or next(rot.rates or {}) then reasons[#reasons + 1] = "mana, rage and talents that change spells aren't counted" end
   if ctx.abilities and ctx.abilities.unchecked > 0 then reasons[#reasons + 1] = "an ability or imbue number isn't confirmed" end
   if b and b.assumedRates and #b.assumedRates > 0 then reasons[#reasons + 1] = "proc rate assumed (once a minute): " .. table.concat(b.assumedRates, ", ") end
   if b and b.notes then for _, n in ipairs(b.notes) do if n:find("assumed") or n:find("isn't modelled") then reasons[#reasons + 1] = n end end end
