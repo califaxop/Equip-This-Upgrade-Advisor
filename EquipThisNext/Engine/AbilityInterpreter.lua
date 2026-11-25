@@ -155,6 +155,7 @@ function AI.Spells(profile)
       sp.cast = castT or d.cast
       sp.cooldown = AI.Cooldown(c.cooldownText) or d.cooldown
       sp.mana = c.manaText and tonumber(c.manaText:match("^(%d+) Mana"))
+      sp.category = d.category   -- (spells of a category share their cooldown: Forever's shocks)
       if sp.direct or sp.dot then out[name] = sp end
     end
   end

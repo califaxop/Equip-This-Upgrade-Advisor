@@ -259,6 +259,8 @@ function Diag.Model()
   local rot = ctx.rotation or {}
   f("rotation: %s", rot.source == "measured" and "learned from your fights (/eqn measure)"
     or rot.source == "none" and "your spells aren't counted until /eqn measure learns how you use them"
+    or rot.source == "logs" and string.format("from Warcraft Logs (%s players of %s, Classic Era raids): /eqn measure learns yours",
+      tostring(rot.players), rot.borrowed and (rot.borrowed .. ", your class's closest logged spec") or "your spec")
     or "assumed (/eqn measure learns yours)")
   if b.ehp then
     local e = b.ehpInfo

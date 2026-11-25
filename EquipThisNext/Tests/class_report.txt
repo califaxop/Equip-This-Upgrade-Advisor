@@ -1,0 +1,27 @@
+DRUID     Balance        caster  rotation assumed  Sunfire 64%, Starsurge 19%, Insect Swarm 12%, Entangling Roots 4%
+DRUID     Feral Combat   melee   rotation logs     auto attack 26%, Maul 43%, Claw 3%, Shred 19%, Ferocious Bite 9%
+DRUID     Restoration    healer  rotation logs     Rejuvenation 58%, Healing Touch 23%, Regrowth 18%
+HUNTER    Beast Mastery  ranged  rotation logs*    auto shot 97%, Serpent Sting 3%
+HUNTER    Marksmanship   ranged  rotation logs     auto shot 71%, Multi-Shot 27%, Serpent Sting 2%
+HUNTER    Survival       ranged  rotation logs*    auto shot 97%, Serpent Sting 3%
+MAGE      Arcane         caster  rotation logs*    Fireball 75%, Scorch 14%, Frostbolt 4%, Fire Blast 3%, Pyroblast 2%, Blast Wave 2%
+MAGE      Fire           caster  rotation logs     Fireball 75%, Scorch 14%, Frostbolt 4%, Fire Blast 3%, Pyroblast 2%, Blast Wave 2%
+MAGE      Frost          caster  rotation logs     Frostbolt 96%, Arcane Explosion 2%, Arcane Missiles 2%
+PALADIN   Holy           healer  rotation logs     Flash of Light 91%, Holy Light 9%
+PALADIN   Protection     melee   rotation none     auto attack 100%
+PALADIN   Retribution    melee   rotation none     auto attack 100%
+PRIEST    Discipline     healer  rotation logs*    Flash Heal 41%, Heal 18%, Prayer of Healing 17%, Renew 16%, Greater Heal 8%
+PRIEST    Holy           healer  rotation logs     Flash Heal 41%, Heal 18%, Prayer of Healing 17%, Renew 16%, Greater Heal 8%
+PRIEST    Shadow         caster  rotation assumed  Mind Flay 34%, Mind Blast 15%, Starshards 12%, Shadow Word: Pain 12%, Void Plague 11%, Shadow Word: Death 8%, Vampiric Touch 8%, Chastise 1%
+ROGUE     Assassination  melee   rotation logs     auto attack 62%, Eviscerate 5%, Sinister Strike 19%, Backstab 14%
+ROGUE     Combat         melee   rotation logs*    auto attack 100%
+ROGUE     Subtlety       melee   rotation logs*    auto attack 100%
+SHAMAN    Elemental      caster  rotation assumed  Flame Shock 48%, Chain Lightning 33%, Fire Nova 10%, Molten Blast 9%
+SHAMAN    Enhancement    melee   rotation none     auto attack 100%
+SHAMAN    Restoration    healer  rotation logs     Chain Heal 83%, Healing Wave 11%, Lesser Healing Wave 7%
+WARLOCK   Affliction     caster  rotation logs*    Shadow Bolt 82%, Corruption 7%, Immolate 4%, Searing Pain 4%, Shadowburn 3%
+WARLOCK   Demonology     caster  rotation logs*    Shadow Bolt 82%, Corruption 7%, Immolate 4%, Searing Pain 4%, Shadowburn 3%
+WARLOCK   Destruction    caster  rotation logs     Shadow Bolt 82%, Corruption 7%, Immolate 4%, Searing Pain 4%, Shadowburn 3%
+WARRIOR   Arms           melee   rotation logs*    auto attack 100%
+WARRIOR   Fury           melee   rotation logs     auto attack 38%, Bloodthirst 16%, Cleave 4%, Execute 13%, Whirlwind 5%, Heroic Strike 24%
+WARRIOR   Protection     melee   rotation logs     auto attack 40%, Bloodthirst 17%, Revenge 2%, Cleave 2%, Execute 1%, Heroic Strike 37%

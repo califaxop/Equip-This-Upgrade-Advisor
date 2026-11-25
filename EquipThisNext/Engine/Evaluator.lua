@@ -100,6 +100,12 @@ function Ev.Rotation(ctx, settings)
   local last = settings and settings.lastMeasurement
   -- (records from 0.4.x have no key: taken when the level matches)
   if last and (last.key == key or (last.key == nil and last.level == ctx.state.level)) then return Ev.LearnRotation(ctx, last) end
+  local logs, borrowed = Ev.LogsFor(ctx)
+  if logs then
+    local r2 = Ev.RotationFromLogs(ctx, logs)
+    r2.borrowed = borrowed
+    return r2
+  end
   local out = { rates = {}, strikes = {}, source = "assumed" }
   local S = ns.SpellModel
   if ctx.healer then out.rates = S.DefaultRotation(ctx.state, ctx, ctx.spells, "heal")
@@ -107,6 +113,86 @@ function Ev.Rotation(ctx, settings)
   else
     out.source = next(ctx.spells or {}) and "none" or "assumed"
   end
+  return out
+end
+
+-- How a physical ability's damage moves with your gear: its weapon's damage plus attack power at
+-- a normalized speed (TBC's normalization, which Forever's abilities use: 2H 3.3, dagger 1.7, else
+-- 2.4; ranged 2.8), times the special attack table (hit + 2 x crit). Abilities that scale with attack
+-- power alone (Bloodthirst...) or have a flat part are approximated by this.
+Ev.NORMALIZED = { twoHand = 3.3, dagger = 1.7, oneHand = 2.4, ranged = 2.8 }
+function Ev.PhysicalScale(state, ctx, ranged)
+  if ranged then
+    local w = state.ranged
+    local base = w and (w.dps + (state.RAP or 0) / 14) * Ev.NORMALIZED.ranged
+      or (state.rangedSwing and state.rangedSpeed and state.rangedSwing / state.rangedSpeed * Ev.NORMALIZED.ranged) or 0
+    local t = ns.RangedModel.Table(state, ctx)
+    return base * (t.hit + t.crit * 2) / 100
+  end
+  local w = state.mh
+  local norm = w and (w.twoHand and Ev.NORMALIZED.twoHand or (w.subclass == 15 and Ev.NORMALIZED.dagger) or Ev.NORMALIZED.oneHand) or Ev.NORMALIZED.oneHand
+  local base = w and (w.dps + (state.AP or 0) / 14) * norm or (state.swing and state.speed and state.swing / state.speed * norm) or 0
+  local y = ns.MeleeModel.Special(state, ctx)
+  return base * (y.hit + y.crit * 2) / 100
+end
+
+-- what kind of damage or healing a spec does: "ranged", "melee", "healer", "caster"
+function Ev.SpecKind(class, tree)
+  if class == "HUNTER" then return "ranged" end
+  if Ev.MELEE_CLASSES[class] or (tree and Ev.MELEE_TREES[tree]) then return "melee" end
+  if tree and Ev.HEAL_TREES[tree] then return "healer" end
+  return "caster"
+end
+
+-- the logged rotation for your class and spec; else your class's spec of the same kind with the
+-- most players (borrowed = its key), else none
+function Ev.LogsFor(ctx)
+  local R = ns.ROTATIONS or {}
+  local key = Ev.RotationKey(ctx.profile)
+  if R[key] then return R[key] end
+  local class = ctx.profile.identity and ctx.profile.identity.class
+  local kind = Ev.SpecKind(class, ctx.profile.talents and ctx.profile.talents.primaryTree)
+  local best, bestKey
+  for k, r in pairs(R) do
+    local c, t = k:match("^(.-):(.+)$")
+    if c == class and Ev.SpecKind(c, t) == kind and (not best or r.players > best.players) then best, bestKey = r, k end
+  end
+  return best, bestKey
+end
+
+-- A default rotation from Warcraft Logs (Data/Rotations.lua: each ability's share of a spec's
+-- damage and healing in Classic Era raids), turned into a measurement-like record and learned the
+-- same way. Anchored on your own auto attack / Auto Shot when there is one; casters' and healers'
+-- rates are scaled so they're casting all of the time.
+function Ev.RotationFromLogs(ctx, logs)
+  local anchor = ctx.ranged and "auto shot" or (ctx.melee and "auto attack" or nil)
+  local parts = {}
+  for _, p in ipairs(ctx.base.dpsInfo and ctx.base.dpsInfo.parts or {}) do parts[p.name] = p end
+  local shareA = 0
+  for _, a in ipairs(logs.damage or {}) do if anchor and a.name == anchor then shareA = a.share end end
+  local dur, unit = 100, 1000
+  if anchor and shareA > 0 and parts[anchor] then unit = parts[anchor].dps * dur / shareA end
+  local rec = { duration = dur, parts = {}, other = {}, healing = {}, schools = {}, fromLogs = true }
+  for _, a in ipairs(logs.damage or {}) do
+    if a.name == anchor then rec.parts[#rec.parts + 1] = { name = anchor, measured = a.share * unit }
+    else rec.other[#rec.other + 1] = { name = a.name, amount = a.share * unit } end
+    rec.schools[a.name] = a.school
+  end
+  for _, a in ipairs(logs.healing or {}) do rec.healing[a.name] = a.share * 1000 end
+  local out = Ev.LearnRotation(ctx, rec)
+  if not (anchor and shareA > 0) then
+    -- no anchor: cast all of the time (spells), physical parts scaled the same
+    local busy = 0
+    for name, r in pairs(out.rates) do
+      local sp = ctx.spells[name]
+      busy = busy + r * math.max(sp.gcd or 1.5, sp.cast or 0)
+    end
+    if busy > 0 then
+      for name, r in pairs(out.rates) do out.rates[name] = r / busy end
+      for _, ph in pairs(out.physical or {}) do ph.k = ph.k / busy end
+    end
+  end
+  out.source, out.players, out.fights = "logs", logs.players, logs.fights
   return out
 end
 
@@ -124,9 +210,10 @@ function Ev.LearnRotation(ctx, rec)
   for _, p in ipairs(rec.parts or {}) do measured[p.name] = (measured[p.name] or 0) + (p.measured or 0) end
   for _, o in ipairs(rec.other or {}) do measured[o.name] = (measured[o.name] or 0) + (o.amount or 0) end
   local up = 1
-  local auto = parts["auto attack"]
-  if ctx.melee and auto and auto.dps > 0 and (measured["auto attack"] or 0) > 0 then
-    up = math.max(0.05, math.min(1, measured["auto attack"] / (auto.dps * dur)))
+  local anchor = ctx.ranged and "auto shot" or "auto attack"
+  local auto = parts[anchor]
+  if (ctx.melee or ctx.ranged) and auto and auto.dps > 0 and (measured[anchor] or 0) > 0 then
+    up = math.max(0.05, math.min(1, measured[anchor] / (auto.dps * dur)))
   end
   out.uptime = up
   local active = dur * up
@@ -144,6 +231,29 @@ function Ev.LearnRotation(ctx, rec)
     if amt and amt > 0 then
       local per = S.PerCast(sp, ctx.state, ctx)
       if per > 0 then out.rates[name] = amt / per / active end
+    end
+  end
+  -- physical abilities the model has no per-cast numbers for (Mortal Strike, Sinister Strike,
+  -- Multi-Shot...): their damage share, scaling with the weapon and attack power (PhysicalScale)
+  out.physical = {}
+  local G = ns.GENERATED and ns.GENERATED.physical or {}
+  local class = ctx.profile.identity and ctx.profile.identity.class
+  local known = {}
+  for _, p in pairs(parts) do known[p.name] = true end
+  -- (from the logs, only abilities in your spellbook: a borrowed spec's may not be yours)
+  local book
+  if rec.fromLogs then
+    book = {}
+    for _, n in pairs(ctx.profile.spells and ctx.profile.spells.known or {}) do book[(tostring(n):gsub(" %(.*%)$", ""))] = true end
+  end
+  for name, amt in pairs(measured) do
+    local g = G[name]
+    local phys = (g and (not class or g.classes[class])) or (rec.schools and rec.schools[name] == 1)
+    if book and not book[name] then phys = false end
+    if phys and amt > 0 and not known[name] and not (ctx.spells and ctx.spells[name]) and name ~= anchor then
+      local ranged = g and g.ranged or false
+      local scale = Ev.PhysicalScale(ctx.state, ctx, ranged)
+      if scale > 0 then out.physical[name] = { k = amt / active / scale, ranged = ranged } end
     end
   end
   return out
@@ -247,6 +357,7 @@ function Ev.Context(profile, settings)
   local ctx = {
     profile = profile, state = state, gear = gear, talents = talents, abilities = abilities, offset = offset,
     melee = Ev.IsMelee(profile), healer = tree and Ev.HEAL_TREES[tree] and not Ev.IsMelee(profile) or false,
+    ranged = (profile.identity and profile.identity.class == "HUNTER") or false,
     spells = ns.AbilityInterpreter and ns.AbilityInterpreter.Spells and ns.AbilityInterpreter.Spells(profile) or {},
     rotation = { rates = {}, strikes = {}, source = "assumed" },
     threat = ns.ThreatModel and ns.ThreatModel.Sources(profile) or {},
@@ -302,6 +413,20 @@ function Ev.Performance(state, ctx)
     end
     out.dps, out.dpsInfo = d, info
     if not d then out.why.dps = info end
+  end
+  -- ranged (milestone 5: hunters): Auto Shot and ranged abilities
+  if ctx.ranged then
+    local d, info = ns.RangedModel.DPS(state, ctx)
+    if d then
+      local avg = Ev.AverageStats(state, info.landed, ctx.burst)
+      if next(avg) then
+        local d2, info2 = ns.RangedModel.DPS(ns.StatEngine.Apply(state, avg, ctx.talents), ctx)
+        if d2 then d, info = d2, info2; info.procStats = avg end
+      end
+      out.dps, out.dpsInfo = d, info
+    else
+      out.why.dps = info
+    end
   end
   -- spells (milestone 4b): damage added to DPS, healing as HPS
   local rates = ctx.rotation and ctx.rotation.rates
@@ -440,6 +565,10 @@ function Ev.Evaluate(ctx, changes, label, notes)
     local ohItem = changes[17] == nil and eq[17] or changes[17] or nil
     weapons = { mh = weaponOf(mhItem) or false, oh = weaponOf(ohItem) or false, shield = isShield(ohItem) and true or false }
     if not weapons.mh then weapons.mh = nil end
+  end
+  if changes[18] ~= nil and ctx.ranged then
+    weapons = weapons or {}
+    weapons.rangedW = weaponOf(changes[18] or nil) or false
   end
   local setDelta, gained, lost, setUnknown = setBonusDelta(ctx, removed, added)
   delta = ns.StatDefs.Add(delta, setDelta)
@@ -625,7 +754,8 @@ function Ev.Compare(ctx, candidate)
   if ctx.profile.stats.stale then reasons[#reasons + 1] = "stats are from before combat" end
   local rot = ctx.rotation or {}
   if rot.source == "none" then reasons[#reasons + 1] = "your spells aren't counted until /eqn measure learns how you use them"
-  elseif rot.source == "assumed" and next(rot.rates or {}) then reasons[#reasons + 1] = "rotation assumed (/eqn measure learns yours)" end
+  elseif rot.source == "assumed" and next(rot.rates or {}) then reasons[#reasons + 1] = "rotation assumed (/eqn measure learns yours)"
+  elseif rot.source == "logs" then reasons[#reasons + 1] = "rotation from Warcraft Logs (Classic Era raids at 60): /eqn measure learns yours" end
   if ctx.melee or next(rot.rates or {}) then reasons[#reasons + 1] = "mana, rage and talents that change spells aren't counted" end
   if ctx.abilities and ctx.abilities.unchecked > 0 then reasons[#reasons + 1] = "an ability or imbue number isn't confirmed" end
   if b and b.assumedRates and #b.assumedRates > 0 then reasons[#reasons + 1] = "proc rate assumed (once a minute): " .. table.concat(b.assumedRates, ", ") end

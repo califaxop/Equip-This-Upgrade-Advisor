@@ -56,8 +56,16 @@ end
 function S.DefaultRotation(state, ctx, spells, kind)
   local rates, busy = {}, 0
   local filler, fillerRate
+  -- spells that share a cooldown (a category: Earth / Flame / Frost Shock): only the best of them
+  local bestOf = {}
   for name, sp in pairs(spells or {}) do
-    if sp.kind == kind then
+    if sp.kind == kind and sp.category then
+      local b = bestOf[sp.category]
+      if not b or S.PerCast(sp, state, ctx) > S.PerCast(spells[b], state, ctx) then bestOf[sp.category] = name end
+    end
+  end
+  for name, sp in pairs(spells or {}) do
+    if sp.kind == kind and (not sp.category or bestOf[sp.category] == name) then
       local t = math.max(sp.gcd or 1.5, sp.cast or 0)
       if kind == "damage" and sp.dot and not sp.direct and sp.dot.ticks then
         local dur = sp.dot.duration or 0

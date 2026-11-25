@@ -130,6 +130,14 @@ function M.DPS(state, ctx)
       landed.mh = landed.mh + casts * (y.hit + y.crit) / 100
     end
   end
+  -- physical abilities learned from your fights or the logs (Mortal Strike, Sinister Strike...)
+  for name, ph in pairs(ctx.rotation and ctx.rotation.physical or {}) do
+    if not ph.ranged then
+      local d = ph.k * ns.Evaluator.PhysicalScale(state, ctx, false)
+      parts[#parts + 1] = { name = name, dps = d, school = "Physical" }
+      dps = dps + d
+    end
+  end
   -- Windfury Weapon: extra main-hand attacks (white attacks) with its attack power
   local imb = ab and ab.imbue
   if imb and imb.kind == "windfury" and imb.slot == 16 then

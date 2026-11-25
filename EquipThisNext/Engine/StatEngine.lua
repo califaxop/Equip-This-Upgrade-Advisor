@@ -85,6 +85,19 @@ function SE.Baseline(profile)
     end
   end
   s.mh, s.oh = weapon(eq[16]), weapon(eq[17])
+  -- ranged (milestone 5: hunters): the sheet's ranged attack power, average shot and speed; the
+  -- shot's flat part (ammo, scopes) is what's left beyond the ranged weapon and attack power
+  s.RAP = (v(profile, "rap.base") or 0) + (v(profile, "rap.pos") or 0) - (v(profile, "rap.neg") or 0)
+  s.rangedCrit = v(profile, "critRanged.ranged") or s.crit
+  s.rangedHit = (v(profile, "hitRanged.ranged") or 0) + (v(profile, "ratingBonus.CR_HIT_RANGED") or 0)
+  s.rangedHaste = v(profile, "hasteRanged.ranged") or 0
+  local rmn, rmx, rsp = v(profile, "ranged.min"), v(profile, "ranged.max"), v(profile, "speed.ranged")
+  if rmn and rmx and rsp and rsp > 0 and rmx > 0 then s.rangedSwing, s.rangedSpeed = (rmn + rmx) / 2, rsp end
+  s.ranged = weapon(eq[18])
+  if s.ranged and s.rangedSwing then
+    s.rangedFlat = s.rangedSwing - (s.ranged.dps + s.RAP / SE.AP_PER_DPS) * s.ranged.speed
+    s.rangedSpeed = s.ranged.speed
+  end
   local o = eq[17]
   s.hasShield = o and o.loaded and o.classID == ns.StatDefs.SHIELD.class and o.subclassID == ns.StatDefs.SHIELD.subclass or false
   if s.mh and s.swing then
@@ -98,6 +111,8 @@ function SE.Baseline(profile)
   end
   s.slope.apPerSTR = per("apFromStat.STR", "STR") or 0
   s.slope.apPerAGI = per("apFromStat.AGI", "AGI") or 0
+  s.slope.rapPerAGI = per("rapFromStat.AGI", "AGI") or 0
+  s.slope.rapPerSTR = per("rapFromStat.STR", "STR") or 0
   s.slope.critPerAGI = (per("critFromStat.AGI", "AGI") or 0) * 100       -- (the game gives a fraction)
   s.slope.spellCritPerINT = (per("spellCritFromStat.INT", "INT") or 0) * 100
   s.slope.dodgePerAGI = (per("dodgeFromAgi.chance", "AGI") or 0) * 100
@@ -145,6 +160,15 @@ function SE.Apply(state, delta, talents, weapons)
   local dAP = g("AP") + g("STR") * state.slope.apPerSTR + g("AGI") * state.slope.apPerAGI
   s.AP = state.AP + dAP
   s.crit = state.crit + g("AGI") * state.slope.critPerAGI + rate(s, "CR_CRIT_MELEE", g("CRIT_RATING") + g("CRIT_MELEE_RATING"))
+  -- ranged: "Attack Power" gear counts for ranged too (Classic: assumed for Forever); Agility's ranged
+  -- crit is the same per point as melee's (Classic: assumed)
+  local dRAP = g("RAP") + g("AP") + g("AGI") * (state.slope.rapPerAGI or 0) + g("STR") * (state.slope.rapPerSTR or 0)
+  s.RAP = (state.RAP or 0) + dRAP
+  s.rangedCrit = (state.rangedCrit or 0) + g("AGI") * state.slope.critPerAGI + rate(s, "CR_CRIT_RANGED", g("CRIT_RATING") + g("CRIT_RANGED_RATING")) + g("CRIT_PCT")
+  s.rangedHit = (state.rangedHit or 0) + rate(s, "CR_HIT_RANGED", g("HIT_RATING") + g("HIT_RANGED_RATING")) + g("HIT_PCT")
+  if state.rangedSwing and state.rangedSpeed then
+    s.rangedSwing = state.rangedSwing + dRAP / SE.AP_PER_DPS * state.rangedSpeed
+  end
   s.spellCrit = state.spellCrit + g("INT") * state.slope.spellCritPerINT + rate(s, "CR_CRIT_SPELL", g("CRIT_RATING") + g("CRIT_SPELL_RATING"))
   s.hit = state.hit + rate(s, "CR_HIT_MELEE", g("HIT_RATING") + g("HIT_MELEE_RATING"))
   s.spellHit = state.spellHit + rate(s, "CR_HIT_SPELL", g("HIT_RATING") + g("HIT_SPELL_RATING"))
@@ -190,6 +214,16 @@ function SE.Apply(state, delta, talents, weapons)
     end
   elseif state.swing and state.speed then
     s.swing = state.swing + dAP / SE.AP_PER_DPS * state.speed + g("WEAPON_DMG") + g("WEAPON_DPS") * state.speed
+  end
+  -- a ranged weapon change (weapons.rangedW: the new one, or false for none)
+  if weapons and weapons.rangedW ~= nil then
+    s.ranged = weapons.rangedW or nil
+    if s.ranged and state.rangedFlat then
+      s.rangedSpeed = s.ranged.speed
+      s.rangedSwing = (s.ranged.dps + s.RAP / SE.AP_PER_DPS) * s.ranged.speed + state.rangedFlat
+    elseif not s.ranged then
+      s.rangedSwing, s.rangedSpeed = nil, nil
+    end
   end
   return s
 end

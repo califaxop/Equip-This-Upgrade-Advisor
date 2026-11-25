@@ -16,7 +16,7 @@ runs alongside the released Equip This! without touching it, on the `next-founda
 | 2. Basic evaluation | **done: validated in game (0.2.1; the tooltip %s look right to the tester)** |
 | 3. Complete gear evaluation | **done: validated in game (0.3.0-0.3.3)** |
 | 4. Simulation (DPS, healing, tanking, PvP) | **4a: melee DPS with abilities, imbues, procs: 0.4.0 read right in game; 0.4.1 measured in game (Windfury agrees); 0.4.2 fixes the meter's "Attack" and untrained worn weapons**; **4b: spells, learned rotation, HPS: 0.5.0 matched new fights in game; 0.5.1 school spell damage, spell penetration**; **4c: threat and PvP: 0.6.0 checked in game (threat on a tank still to check)** |
-| 5. All classes and builds | not started |
+| 5. All classes and builds | **0.7.0: every class and spec offline (27 specs), default rotations from Warcraft Logs, hunters' ranged model: offline tests pass (106); no other-class characters to test in game** |
 | 6. Optimization and validation | not started |
 
 ## Layout
@@ -138,6 +138,57 @@ Sources:
 - **Spec index:** what `C_SpecializationInfo.GetSpecialization()` returns on Forever (3-tree
   talents) is unknown. It's recorded only.
 
+
+## Milestone 5: all classes (0.7.0)
+
+Without characters of the other classes to test with, milestone 5 is done offline, against real
+data, in three parts:
+
+**Physical abilities from their share of the damage** (Evaluator.PhysicalScale, LearnRotation).
+Forever's tables describe warrior, rogue, druid and hunter abilities many ways (weapon %, normalized
+weapon damage, weapon damage + a bonus, attack-power scripts kept on the server: Bloodthirst,
+Execute), so they aren't modelled one by one. An ability's damage share (from your `/eqn measure`,
+or the logs) is its value now, and it moves with gear like a special attack: (weapon DPS + attack
+power / 14) x the normalized speed (TBC's constants, which Forever's "normalized" abilities use:
+2H 3.3, dagger 1.7, else 2.4, ranged 2.8) x (hit + 2 x crit). Rage, energy and combo points are in
+the measured rates already (they come from real play). Abilities in Data/Generated.lua `physical`
+(by name and class) are recognised; physical-school spells are kept out of the spell model (their
+"coefficient 1" is the weapon / attack power, not spell power).
+
+**Hunters' ranged model** (Engine/Models/Ranged.lua): Auto Shot from the sheet's ranged damage and
+speed (UnitRangedDamage), ranged attack power and crit, moved by gear and a ranged weapon change;
+ranged abilities (Multi-Shot...) as physical parts scaling with the ranged weapon. Agility's ranged
+crit per point is taken as melee's, and "Attack Power" gear as counting for ranged (both assumed).
+
+**Default rotations from Warcraft Logs** (Data/Rotations.lua, tools/next/build_rotations.py): 84
+boss fights of Classic Era 40-player raids at 60 (2 per boss: Molten Core, Blackwing Lair, Temple of
+Ahn'Qiraj, Naxxramas), every player's damage and healing per ability, kept to their class's own
+abilities plus auto attacks / Auto Shot (item procs, Windfury Totem and others' buffs left out),
+shares averaged per spec. 12 specs have enough players (Fury 682 players, Holy Priest 241, Rogue 194,
+Fire Mage 139, ...). A spec without its own logs borrows its class's logged spec of the same kind
+(melee / ranged / caster / healer), taking only abilities in your spellbook; else the assumption.
+Your own `/eqn measure` always replaces it. Caveat: these are Classic Era raids, and Forever changes
+some abilities (Stormstrike 110% / 8 s); they're a starting point.
+
+Also: spells that share a cooldown (Forever's shocks, category 19, 6 s) are one slot in an assumed
+rotation (only the best of them).
+
+**Test characters for all 27 specs** (Tests/FixtureClass.lua, ClassTests): each spec's median
+primary stats from the logged players; the rest of the sheet made up with Classic's conversions and
+typical gear (test-only: the addon reads the real sheet). Checks per spec: it evaluates, DPS or HPS
+> 0, a ring compares, and the stat values point the right way (warriors and rogues: Strength and AP,
+no spell damage; hunters: Agility over Strength; casters: spell damage, no AP or Strength; healers:
+healing). The model's split per spec is written to Tests/class_report.txt, e.g.
+  WARRIOR Fury (logs): auto attack 38%, Heroic Strike 24%, Bloodthirst 16%, Execute 13%
+  MAGE Frost (logs): Frostbolt 96%
+  HUNTER Marksmanship (logs): Auto Shot 71%, Multi-Shot 27%, Serpent Sting 2%
+  PRIEST Holy (logs): Flash Heal 41%, Heal 18%, Prayer of Healing 17%, Renew 16%
+
+Known gaps: specs with no logged players and no same-kind sibling (Paladin Retribution and
+Protection, Shaman Enhancement and Elemental, Druid Balance, Priest Shadow) use the assumed rotation
+until measured; a borrowed rotation lacks the spec's own key ability (Arms borrows Fury's, without
+Mortal Strike); pets aren't counted; talents that change damage aren't counted (measurements absorb
+them).
 
 ## Milestone 4: performance models (in parts)
 

@@ -115,13 +115,16 @@ def main():
 
     # class spells that deal damage or heal: coefficients, ranks' base values, cast times, cooldowns
     misc = {r["SpellID"]: r for r in T("SpellMisc") if r.get("DifficultyID", "0") in ("0", "")}
+    category = {r["SpellID"]: r["Category"] for r in T("SpellCategories") if r.get("DifficultyID", "0") in ("0", "") and r["Category"] not in ("0", "")}
     casttimes = {r["ID"]: num(r["Base"]) for r in T("SpellCastTimes")}
     durations = {r["ID"]: num(r["Duration"]) for r in T("SpellDuration")}
     SCHOOL = {1: "Physical", 2: "Holy", 4: "Fire", 8: "Nature", 16: "Frost", 32: "Shadow", 64: "Arcane"}
     class_spells = set()
+    spell_mask = {}
     for r in T("SkillLineAbility"):
         if r["ClassMask"] not in ("0", ""):
             class_spells.add(r["Spell"])
+            spell_mask[r["Spell"]] = spell_mask.get(r["Spell"], 0) | int(num(r["ClassMask"]))
 
     def parts(sid):
         """the spell's own damage/heal effects: direct and periodic"""
@@ -151,6 +154,8 @@ def main():
                 linked = m.group(1)
         if not p_ or not any(x.get("coef", 0) > 0 for x in (p_.get("direct", {}), p_.get("dot", {}))):
             continue
+        if int(num(misc.get(linked or sid, {}).get("SchoolMask"))) == 1:
+            continue  # (physical: a coefficient of 1 there is the weapon / attack power, not spell power)
         m = misc.get(linked or sid, {}) if linked else misc.get(sid, {})
         mm = misc.get(sid, {})
         c = cds.get(sid, {})
@@ -160,7 +165,34 @@ def main():
                                 cooldown=max(num(c.get("RecoveryTime")), num(c.get("CategoryRecoveryTime"))) / 1000,
                                 gcd=num(c.get("StartRecoveryTime")) / 1000 if c else 1.5,
                                 level=num(lv.get("SpellLevel")), baseLevel=num(lv.get("BaseLevel")), maxLevel=num(lv.get("MaxLevel")),
-                                linked=int(linked) if linked else None)
+                                linked=int(linked) if linked else None, mask=spell_mask.get(sid, 0),
+                                category=int(category[sid]) if sid in category and num(c.get("CategoryRecoveryTime")) > 0 else None)
+
+    # physical abilities (weapon %, normalized weapon damage, weapon damage + bonus, physical school
+    # damage) by name, per class (ChrClasses ID -> mask bit 1 << (ID - 1)); ranged: a ranged attack
+    CLASSES = {1: "WARRIOR", 2: "PALADIN", 3: "HUNTER", 4: "ROGUE", 5: "PRIEST", 7: "SHAMAN", 8: "MAGE", 9: "WARLOCK", 11: "DRUID"}
+    sla_mask = {}
+    for r in T("SkillLineAbility"):
+        if r["ClassMask"] not in ("0", ""):
+            sla_mask[r["Spell"]] = sla_mask.get(r["Spell"], 0) | int(num(r["ClassMask"]))
+    physical = {}
+    for sid, mask in sla_mask.items():
+        kinds = set()
+        for e in effects.get(sid, []):
+            if e["Effect"] in ("17", "31", "58", "121"):
+                kinds.add(e["Effect"])
+            elif e["Effect"] == "2" and int(num(misc.get(sid, {}).get("SchoolMask"))) == 1:
+                kinds.add("2")
+        if not kinds:
+            continue
+        name = names.get(sid, "")
+        if not name:
+            continue
+        cls = [c for i, c in CLASSES.items() if mask & (1 << (i - 1))]
+        ranged = int(num(misc.get(sid, {}).get("RangeIndex"))) not in (0, 1, 2) and "58" in kinds and "Shot" in name or name in ("Auto Shot", "Shoot", "Multi-Shot", "Aimed Shot")
+        cur = physical.setdefault(name, {"classes": set(), "ranged": False})
+        cur["classes"].update(cls)
+        cur["ranged"] = cur["ranged"] or bool(ranged)
 
     # threat modifiers (aura 10, "mod threat": % per school mask)
     threat = {}
@@ -201,7 +233,15 @@ def main():
         cells += ["cast = %s" % fmt(x["cast"]), "cooldown = %s" % fmt(x["cooldown"]), "gcd = %s" % fmt(x["gcd"]),
                   "level = %s" % fmt(x["level"]), "baseLevel = %s" % fmt(x["baseLevel"]), "maxLevel = %s" % fmt(x["maxLevel"])]
         if x["linked"]: cells.append("linked = %d" % x["linked"])
+        if x["mask"]: cells.append("classMask = %d" % x["mask"])
+        if x["category"]: cells.append("category = %d" % x["category"])  # (spells of a category share their cooldown)
         L.append("    [%d] = { %s }," % (i, ", ".join(cells)))
+    L.append("  },")
+    L.append("  -- physical[name] = { classes = { CLASS = true }, ranged }: abilities that hit with the weapon or for physical damage")
+    L.append("  physical = {")
+    for n in sorted(physical):
+        x = physical[n]
+        L.append('    ["%s"] = { classes = { %s }, ranged = %s },' % (n.replace('"', '\\"'), ", ".join("%s = true" % c for c in sorted(x["classes"])), "true" if x["ranged"] else "false"))
     L.append("  },")
     L.append("  -- threat[spellID] = { name, mods = { { pct, schoolMask } } }: auras that change the threat you make")
     L.append("  threat = {")

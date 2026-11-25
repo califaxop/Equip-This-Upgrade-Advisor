@@ -116,7 +116,11 @@ T.Test("M4b: casters get a stated default rotation; healers get HPS", function()
   p.talents.primaryTree = "Elemental"
   local ctx = Ev.Context(p, { targetOffset = 0 })
   T.Eq(ctx.melee, false); T.Eq(ctx.rotation.source, "assumed")
-  T.Ok(ctx.rotation.rates["Lightning Bolt"] > 0 and ctx.rotation.rates["Earth Shock"] > 0, "shocks on cooldown, Lightning Bolt fills")
+  local r = ctx.rotation.rates
+  T.Ok((r["Lightning Bolt"] or 0) > 0, "Lightning Bolt fills")
+  -- Earth and Flame Shock share one cooldown (category 19 in Forever's tables): only the better one
+  T.Ok(((r["Earth Shock"] or 0) > 0) ~= ((r["Flame Shock"] or 0) > 0), "one shock on the shared cooldown")
+  T.Eq(ctx.spells["Earth Shock"].category, ctx.spells["Flame Shock"].category, "same category")
   local busy = 0
   for name, r in pairs(ctx.rotation.rates) do local sp = ctx.spells[name]; busy = busy + r * math.max(sp.gcd, sp.cast) end
   T.Ok(busy <= 1 + 1e-9, "never more than all of the time: " .. busy)
