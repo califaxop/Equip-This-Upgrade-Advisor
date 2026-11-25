@@ -41,6 +41,12 @@ function MakeClassProfile(ns, class, tree)
     ["spellCritFromStat.INT"] = INT / 60 / 100, ["dodgeFromAgi.chance"] = AGI / 20 / 100, ["hpPerStamina.value"] = 10,
   }
   for _, s in ipairs({ "HOLY", "FIRE", "NATURE", "FROST", "SHADOW", "ARCANE" }) do v["spellDamage." .. s] = sp end
+  if class ~= "WARRIOR" and class ~= "ROGUE" then
+    -- mana (test-only numbers): the pool from Intellect, regen from Spirit, a little kept while casting + 20 MP5 gear
+    v["manaMax.value"] = 1000 + INT * 15
+    v["regen.base"], v["manaFromSpirit.value"] = SPI / 5, SPI / 5
+    v["regen.casting"] = SPI / 5 * 0.15 + 4
+  end
   local slots = {}
   for _, id in ipairs({ 1, 2, 3, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18 }) do slots[id] = { slot = id, empty = true } end
   slots[16] = { slot = 16, loaded = true, name = "Test Weapon", itemID = 90016, link = "item:90016", classID = 2,

@@ -256,6 +256,12 @@ function Diag.Model()
       pv.burst and string.format("%d", pv.burst + 0.5) or "-", ns.Evaluator.BURST, n1(pv.sustained), pv.armorReduction * 100 + 0.5,
       pv.ehp and string.format("%d", pv.ehp + 0.5) or "-")
   end
+  local mi = b.manaInfo
+  if mi then
+    f("mana: the rotation costs %.1f a second; a %ds fight gives %.1f (pool / length + %.1f regen while casting)%s",
+      mi.cost, mi.fight, mi.available, ctx.state.regenCast or 0,
+      mi.limit < 1 and string.format(": spells cast %d%% as often", mi.limit * 100 + 0.5) or ": enough")
+  end
   local rot = ctx.rotation or {}
   f("rotation: %s", rot.source == "measured" and "learned from your fights (/eqn measure)"
     or rot.source == "none" and "your spells aren't counted until /eqn measure learns how you use them"
@@ -298,6 +304,34 @@ local function matches(partName, spellName)
   return false
 end
 -- /eqn measure [last|reset]: all fights since the meter's reset (default), or the last one
+-- Milestone 6: how long the model takes in the game, and the addon's memory
+function Diag.Bench()
+  local C = ns.Compat
+  local function now() local ok, t = C.Call("debugprofilestop"); return ok and type(t) == "number" and t or nil end
+  local t0 = now()
+  if not t0 then return P("no profiling timer here (debugprofilestop)") end
+  ns.evalContext = nil
+  local ctx = ns.Context()
+  local tc = now() - t0
+  if not ctx then return P("can't evaluate yet") end
+  local items = {}
+  for _, it in pairs(ctx.profile.equipment.slots) do if it.loaded and not it.empty then items[#items + 1] = it end end
+  for _, it in ipairs(ctx.profile.bags or {}) do items[#items + 1] = it end
+  local n, worst = 0, 0
+  local t1 = now()
+  for _, it in ipairs(items) do
+    local a = now()
+    ns.Evaluator.Compare(ctx, it)
+    worst = math.max(worst, now() - a)
+    n = n + 1
+  end
+  local total = now() - t1
+  f("baseline (your character, rotation, models): %.2f ms; %d comparisons: %.2f ms each, slowest %.2f ms", tc, n, n > 0 and total / n or 0, worst)
+  C.Call("UpdateAddOnMemoryUsage")
+  local ok, kb = C.Call("GetAddOnMemoryUsage", ns.name)
+  if ok and type(kb) == "number" then f("memory: %d KB", kb + 0.5) end
+end
+
 function Diag.Measure(arg)
   local Meter = ns.MeterAPI
   local ok, why = Meter.Available()
@@ -509,6 +543,8 @@ local HELP = {
   "/eqn target auto|0|1|2|3 - target level above yours",
   "/eqn abilities - your abilities, imbue and item effects as the model counts them",
   "/eqn pvp - PvP numbers on tooltips on/off (burst, sustained, survival vs players)",
+  "/eqn fight <seconds> - how long a fight lasts, for mana (default 180)",
+  "/eqn bench - how long comparisons take, and the addon's memory",
   "/eqn role auto|tank|notank - tank: threat on tooltips (auto: Protection, or a threat stance/form/aura)",
   "/eqn measure [last|reset] - the model's DPS parts vs the game's damage meter (all fights since reset, or the last)",
   "/eqn tooltip - comparison on item tooltips on/off",
@@ -530,6 +566,12 @@ SlashCmdList.EQUIPTHISNEXT = function(msg)
     api = function() local rows = Diag.Api(); if rest == "all" then for _, r in ipairs(rows) do P(r) end end end,
     scan = function() profile(true); P("scanned.") ; Diag.Char() end,
     model = Diag.Model, sheet = Diag.Sheet, weights = Diag.Weights, abilities = Diag.Abilities, measure = function() Diag.Measure(rest) end,
+    fight = function()
+      local n = tonumber(rest)
+      if n and n >= 10 and n <= 3600 then ns.db.fightLength = n; ns.evalContext = nil; ns.Cache.Invalidate("evaluation") end
+      P(string.format("fight length for mana: %ds", ns.db.fightLength or 180))
+    end,
+    bench = function() Diag.Bench() end,
     pvp = function()
       ns.db.pvp = not ns.db.pvp; ns.evalContext = nil; ns.Cache.Invalidate("evaluation")
       P("PvP on tooltips " .. (ns.db.pvp and "on (a player of your level, armored like you; no glancing blows; half physical, half magic damage)" or "off"))

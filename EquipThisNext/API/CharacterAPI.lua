@@ -19,6 +19,7 @@ Char.READS = {
   { "speed", "UnitAttackSpeed", { "player" }, { "mainHand", "offHand", "ranged" } },
   { "health", "UnitHealthMax", { "player" }, { "max" } },
   { "power", "UnitPowerType", { "player" }, { "type", "token" } },
+  { "manaMax", "UnitPowerMax", { "player", 0 }, { "value" } },   -- (Enum.PowerType.Mana = 0)
   { "defense", "UnitDefenseSkill", { "player" }, { "base", "modifier" } },
   { "crit", "GetCritChance", {}, { "melee" } },
   { "critRanged", "GetRangedCritChance", {}, { "ranged" } },

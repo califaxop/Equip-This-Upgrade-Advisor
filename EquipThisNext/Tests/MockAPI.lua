@@ -317,3 +317,9 @@ function MOCK.MakeTooltip(link)
   function tt:AddLine(t) self.lines[#self.lines + 1] = t end
   return tt
 end
+
+-- milestone 6: profiling and memory
+local profileClock = 0
+function debugprofilestop() profileClock = profileClock + 0.25; return profileClock end
+function UpdateAddOnMemoryUsage() end
+function GetAddOnMemoryUsage(name) return 512 end

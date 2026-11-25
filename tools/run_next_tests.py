@@ -9,5 +9,7 @@ root = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "EquipThis
 os.chdir(root)
 L = LuaRuntime()
 L.execute('ROOT = "./"; os.exit = function(code) EXIT = code end')
+if len(sys.argv) > 1 and sys.argv[1] == "bench":
+    L.execute('BENCH = true')
 L.execute(open("Tests/run.lua").read())
 sys.exit(1 if L.eval("EXIT") else 0)

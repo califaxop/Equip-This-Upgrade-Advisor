@@ -17,7 +17,7 @@ runs alongside the released Equip This! without touching it, on the `next-founda
 | 3. Complete gear evaluation | **done: validated in game (0.3.0-0.3.3)** |
 | 4. Simulation (DPS, healing, tanking, PvP) | **4a: melee DPS with abilities, imbues, procs: 0.4.0 read right in game; 0.4.1 measured in game (Windfury agrees); 0.4.2 fixes the meter's "Attack" and untrained worn weapons**; **4b: spells, learned rotation, HPS: 0.5.0 matched new fights in game; 0.5.1 school spell damage, spell penetration**; **4c: threat and PvP: 0.6.0 checked in game (threat on a tank still to check)** |
 | 5. All classes and builds | **0.7.0: every class and spec offline (27 specs), default rotations from Warcraft Logs, hunters' ranged model: offline tests pass (106); no other-class characters to test in game** |
-| 6. Optimization and validation | not started |
+| 6. Optimization and validation | **0.8.0: benchmark, memory, mana model: offline tests pass (111), waiting for the in-game check** |
 
 ## Layout
 
@@ -138,6 +138,39 @@ Sources:
 - **Spec index:** what `C_SpecializationInfo.GetSpecialization()` returns on Forever (3-tree
   talents) is unknown. It's recorded only.
 
+
+## Milestone 6: optimization and accuracy (0.8.0)
+
+**Benchmark** (Tests/Bench.lua: `python tools/run_next_tests.py bench`; in game `/eqn bench`):
+| | per spec (9 specs, level-60 test characters) |
+|---|---|
+| baseline (character, rotation, models) | 0.07-0.15 ms |
+| a ring compared (both ring slots, 12 model runs) | 0.31-0.58 ms |
+| a two-hander compared | 0.09-0.17 ms |
+| PvP numbers on top | under 0.1 ms |
+Tooltips are cached per item until your gear, stats or talents change, so this is per new item.
+Memory: 1.2 MB of Lua memory loaded, 727 KB of it Forever's tables (Data/Generated.lua: spells of
+every class 615 KB). Now pruned to your class at login: 512 KB freed (about 0.7 MB in use).
+
+**Mana** (accuracy: healers and casters valued Intellect, Spirit and MP5 at nothing): over a fight
+(180 s by default, assumed; `/eqn fight <seconds>`), you can spend your mana pool / its length plus
+your regen while casting; a rotation that costs more is cast that much less, so Intellect (15 mana
+a point: MANA_PER_INTELLECT in Forever's paper doll code), Spirit (GetManaRegenFromSpirit per point,
+times the share kept while casting) and MP5 (/5 a second) count when mana runs short, and a longer
+fight moves value from the pool (Intellect) to regen (MP5, Spirit). Mana costs from the spell's
+tooltip, else Forever's SpellPower table. Pool from UnitPowerMax (mana); regen from GetManaRegen
+(per second, as Forever's paper doll treats it). Not applied to a rotation measured in your own
+fights (you cast that much there, with regen and drinking between fights), nor to procs (Lightning
+Shield's orbs).
+
+Still not counted: talents that change spell or ability damage (measurements absorb them), Forever's
+spell miss and crit multiplier (Classic's assumed), pets.
+
+In-game check (0.8.0):
+1. `/eqn bench`: comparison times and memory.
+2. `/eqn model`: unchanged for your shaman (your measured rotation isn't mana-limited).
+3. A healer or caster, if you ever have one: `/eqn model` shows the mana line; Intellect and MP5 on
+   tooltips.
 
 ## Milestone 5: all classes (0.7.0)
 
@@ -636,5 +669,6 @@ In game (milestone 1 check):
 - Milestones 1-3: done. A second class's `/eqn dump` (e.g. a rogue or warrior) would widen the fixtures.
 - Milestone 4a: the in-game test and `/eqn measure` (Windfury's attack power, Elemental Weapons).
 - Milestone 4c: the in-game test; a tank character to check threat.
-- Milestone 5: all nine classes and their builds (fixtures from more characters' dumps).
+- Milestone 5-6: done offline; real players of other classes (an opt-in `/eqn report` beta) would
+  check them in game.
 - Released Equip This!: fix the `UnitDefense` call (see above).

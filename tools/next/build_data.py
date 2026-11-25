@@ -115,6 +115,10 @@ def main():
 
     # class spells that deal damage or heal: coefficients, ranks' base values, cast times, cooldowns
     misc = {r["SpellID"]: r for r in T("SpellMisc") if r.get("DifficultyID", "0") in ("0", "")}
+    manacost = {}
+    for r in T("SpellPower"):
+        if r["PowerType"] in ("0", "") and num(r["ManaCost"]) > 0:
+            manacost[r["SpellID"]] = num(r["ManaCost"])
     category = {r["SpellID"]: r["Category"] for r in T("SpellCategories") if r.get("DifficultyID", "0") in ("0", "") and r["Category"] not in ("0", "")}
     casttimes = {r["ID"]: num(r["Base"]) for r in T("SpellCastTimes")}
     durations = {r["ID"]: num(r["Duration"]) for r in T("SpellDuration")}
@@ -165,7 +169,7 @@ def main():
                                 cooldown=max(num(c.get("RecoveryTime")), num(c.get("CategoryRecoveryTime"))) / 1000,
                                 gcd=num(c.get("StartRecoveryTime")) / 1000 if c else 1.5,
                                 level=num(lv.get("SpellLevel")), baseLevel=num(lv.get("BaseLevel")), maxLevel=num(lv.get("MaxLevel")),
-                                linked=int(linked) if linked else None, mask=spell_mask.get(sid, 0),
+                                linked=int(linked) if linked else None, mask=spell_mask.get(sid, 0), manaCost=manacost.get(sid),
                                 category=int(category[sid]) if sid in category and num(c.get("CategoryRecoveryTime")) > 0 else None)
 
     # physical abilities (weapon %, normalized weapon damage, weapon damage + bonus, physical school
@@ -234,6 +238,7 @@ def main():
                   "level = %s" % fmt(x["level"]), "baseLevel = %s" % fmt(x["baseLevel"]), "maxLevel = %s" % fmt(x["maxLevel"])]
         if x["linked"]: cells.append("linked = %d" % x["linked"])
         if x["mask"]: cells.append("classMask = %d" % x["mask"])
+        if x["manaCost"]: cells.append("mana = %s" % fmt(x["manaCost"]))
         if x["category"]: cells.append("category = %d" % x["category"])  # (spells of a category share their cooldown)
         L.append("    [%d] = { %s }," % (i, ", ".join(cells)))
     L.append("  },")

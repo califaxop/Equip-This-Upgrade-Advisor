@@ -14,7 +14,7 @@ function ns.Context()
   if not p then return nil, "not scanned yet" end
   local ctx, why = ns.Evaluator.Context(p, { targetOffset = ns.db and ns.db.targetOffset, confirmed = ns.db and ns.db.confirmed,
     rotation = ns.db and ns.db.rotation, lastMeasurement = ns.db and ns.db.measurements and ns.db.measurements[1],
-    pvp = ns.db and ns.db.pvp, role = ns.db and ns.db.role })
+    pvp = ns.db and ns.db.pvp, role = ns.db and ns.db.role, fightLength = ns.db and ns.db.fightLength })
   ns.evalContext = ctx
   return ctx, why
 end

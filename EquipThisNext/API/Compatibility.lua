@@ -74,6 +74,8 @@ Compat.KNOWN = {
   ["C_DamageMeter.GetAvailableCombatSessions"] = "docs", ["C_DamageMeter.GetCombatSessionSourceFromID"] = "docs",
   ["C_DamageMeter.GetCombatSessionFromID"] = "docs", ["C_DamageMeter.GetCombatSessionSourceFromType"] = "docs",
   ["C_DamageMeter.GetSessionDurationSeconds"] = "docs", ["C_DamageMeter.ResetAllCombatSessions"] = "docs",
+  -- milestone 6: profiling and memory
+  ["debugprofilestop"] = "docs", ["UpdateAddOnMemoryUsage"] = "docs", ["GetAddOnMemoryUsage"] = "docs",
 }
 
 local function resolve(path)

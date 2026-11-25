@@ -37,6 +37,8 @@ end
 --          when ready), use effects at full strength, the rest at their sustained rate
 --   survival: EHP vs players: half physical, half magic (assumed), attacker your level, no crushing
 Ev.BURST = 6
+-- how long a fight lasts for mana (a boss fight, assumed; /eqn fight changes it)
+Ev.FIGHT_LENGTH = 180
 Ev.PVP_MAGIC_SHARE = 0.5
 function Ev.PvPContext(ctx)
   if ctx.pvpCtx then return ctx.pvpCtx end
@@ -361,6 +363,7 @@ function Ev.Context(profile, settings)
     spells = ns.AbilityInterpreter and ns.AbilityInterpreter.Spells and ns.AbilityInterpreter.Spells(profile) or {},
     rotation = { rates = {}, strikes = {}, source = "assumed" },
     threat = ns.ThreatModel and ns.ThreatModel.Sources(profile) or {},
+    fightLength = settings and tonumber(settings.fightLength),
     wantPvp = settings and settings.pvp,
     glancing = calc.glancing and calc.glancing[offset], armorEffect = calc.armorEffect,
     glancingBySkill = calc.glancingBySkill and next(calc.glancingBySkill) and calc.glancingBySkill or nil,
@@ -432,6 +435,24 @@ function Ev.Performance(state, ctx)
   local rates = ctx.rotation and ctx.rotation.rates
   if rates and next(rates) then
     local sd, sh, sparts, mana = ns.SpellModel.Output(state, ctx, ctx.spells, rates)
+    -- mana (milestone 6): over a fight of ctx.fightLength seconds you can spend your pool plus
+    -- what you regain while casting; a rotation that costs more is cast that much less. Not for a
+    -- rotation measured in your own fights: you cast that much there (regen and drinking between
+    -- fights included)
+    local measured = ctx.rotation and ctx.rotation.source == "measured"
+    if mana > 0 and state.manaMax and state.manaMax > 0 and not measured then
+      local T = ctx.fightLength or Ev.FIGHT_LENGTH
+      local avail = state.manaMax / T + (state.regenCast or 0)
+      local limit = math.min(1, avail / mana)
+      if limit < 1 then
+        sd, sh = sd * limit, sh * limit
+        for _, p in ipairs(sparts) do
+          if p.dps then p.dps = p.dps * limit end
+          if p.hps then p.hps = p.hps * limit end
+        end
+      end
+      out.manaInfo = { cost = mana, available = avail, limit = limit, fight = T }
+    end
     if sd > 0 then
       out.dpsInfo = out.dpsInfo or { parts = {} }
       out.dpsInfo.parts = out.dpsInfo.parts or {}
@@ -467,7 +488,7 @@ end
 
 -- One point (or `step`) of each stat: % change of each metric per point.
 Ev.WEIGHT_STATS = { "STR", "AGI", "STA", "INT", "SPI", "AP", "CRIT_RATING", "HIT_RATING", "HASTE_RATING", "WEAPON_DMG",
-  "ARMOR", "DEFENSE_RATING", "DODGE_RATING", "SP", "HEAL", "RES_NATURE" }
+  "ARMOR", "DEFENSE_RATING", "DODGE_RATING", "SP", "HEAL", "MP5", "RES_NATURE" }
 function Ev.Weights(ctx, step)
   step = step or 10
   local out = {}
@@ -756,7 +777,10 @@ function Ev.Compare(ctx, candidate)
   if rot.source == "none" then reasons[#reasons + 1] = "your spells aren't counted until /eqn measure learns how you use them"
   elseif rot.source == "assumed" and next(rot.rates or {}) then reasons[#reasons + 1] = "rotation assumed (/eqn measure learns yours)"
   elseif rot.source == "logs" then reasons[#reasons + 1] = "rotation from Warcraft Logs (Classic Era raids at 60): /eqn measure learns yours" end
-  if ctx.melee or next(rot.rates or {}) then reasons[#reasons + 1] = "mana, rage and talents that change spells aren't counted" end
+  if ctx.melee or next(rot.rates or {}) then reasons[#reasons + 1] = "rage, energy and talents that change spells aren't counted" end
+  if ctx.base.manaInfo and ctx.base.manaInfo.limit < 1 then
+    reasons[#reasons + 1] = string.format("mana runs short over a %ds fight (assumed length; /eqn fight)", ctx.base.manaInfo.fight)
+  end
   if ctx.abilities and ctx.abilities.unchecked > 0 then reasons[#reasons + 1] = "an ability or imbue number isn't confirmed" end
   if b and b.assumedRates and #b.assumedRates > 0 then reasons[#reasons + 1] = "proc rate assumed (once a minute): " .. table.concat(b.assumedRates, ", ") end
   if b and b.notes then for _, n in ipairs(b.notes) do if n:find("assumed") or n:find("isn't modelled") then reasons[#reasons + 1] = n end end end

@@ -1,0 +1,19 @@
+addon loaded: 1219 KB of Lua memory (Generated.lua's tables included)
+spec                       context      ring    weapon    calls     pvp+
+SHAMAN Enhancement          0.09ms    0.46ms    0.10ms       12  -0.00ms
+WARRIOR Fury                0.16ms    0.53ms    0.14ms       12   0.05ms
+ROGUE Assassination         0.12ms    0.48ms    0.11ms       12   0.10ms
+HUNTER Marksmanship         0.15ms    0.50ms    0.11ms       12   0.06ms
+MAGE Frost                  0.14ms    0.54ms    0.16ms       12   0.11ms
+WARLOCK Destruction         0.13ms    0.60ms    0.21ms       12   0.07ms
+PRIEST Holy                 0.09ms    0.44ms    0.13ms       12   0.05ms
+DRUID Restoration           0.09ms    0.38ms    0.11ms       12   0.09ms
+PALADIN Holy                0.09ms    0.39ms    0.09ms       12  -0.02ms
+slowest tooltip comparison: 0.60 ms
+Data/Generated.lua: 727 KB
+  .spells: 615 KB
+  .itemProcs: 51 KB
+  .physical: 22 KB
+  .threat: 21 KB
+  .imbues: 19 KB
+pruned to one class at login (shaman): 512 KB freed

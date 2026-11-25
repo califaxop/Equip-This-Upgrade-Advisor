@@ -14,7 +14,8 @@ local SE = ns and ns.Module and ns.Module("StatEngine") or {}
 SE.ARMOR_PER_AGILITY = 2
 SE.BLOCK_VALUE_PER_STRENGTH = 20
 SE.SCHOOLS = { "HOLY", "FIRE", "NATURE", "FROST", "SHADOW", "ARCANE" }
-SE.AP_PER_DPS = 14            -- ATTACK_POWER_MAGIC_NUMBER
+SE.AP_PER_DPS = 14
+SE.MANA_PER_INT = 15            -- MANA_PER_INTELLECT (Blizzard's Camelot paper doll constants)            -- ATTACK_POWER_MAGIC_NUMBER
 
 local function v(p, key) return p.stats and p.stats.values and p.stats.values[key] end
 
@@ -67,6 +68,14 @@ function SE.Baseline(profile)
   s.res = {}
   for _, sch in ipairs({ "HOLY", "FIRE", "NATURE", "FROST", "SHADOW", "ARCANE" }) do s.res["RES_" .. sch] = v(profile, "resist." .. sch .. ".effective") or 0 end
   s.mp5 = v(profile, "regen.casting") -- (mana per second while casting, as the sheet gives it)
+  -- mana (milestone 6): the pool, regen while casting (GetManaRegen: per second), and how Spirit
+  -- moves it: Spirit's regen per point (GetManaRegenFromSpirit / Spirit, taken as proportional) times
+  -- the share of regen kept while casting (casting / base)
+  s.manaMax = v(profile, "manaMax.value")
+  s.regenCast = v(profile, "regen.casting") or 0
+  local rb = v(profile, "regen.base") or 0
+  local fromSpi = v(profile, "manaFromSpirit.value")
+  s.slope.regenPerSPI = (fromSpi and s.SPI > 0 and rb > 0) and (fromSpi / s.SPI) * (s.regenCast / rb) or 0
   -- main hand: the sheet's average swing (weapon + attack power + flat bonuses) and speed
   local mn, mx, sp = v(profile, "melee.min"), v(profile, "melee.max"), v(profile, "speed.mainHand")
   if mn and mx and sp and sp > 0 then s.swing, s.speed = (mn + mx) / 2, sp end
@@ -195,7 +204,10 @@ function SE.Apply(state, delta, talents, weapons)
   s.dodge = s.dodge + g("DODGE_PCT")
   s.parry = s.parry + g("PARRY_PCT")
   s.block = s.block + g("BLOCK_PCT")
-  s.haste = s.haste + g("HASTE_PCT")    -- (attack speed % from a proc or use effect, averaged)      -- (the survival model counts block only with a shield)
+  s.haste = s.haste + g("HASTE_PCT")
+  -- mana: 15 per Intellect (MANA_PER_INTELLECT in Forever's paper doll code), MP5 gear / 5 a second
+  if state.manaMax then s.manaMax = state.manaMax + g("INT") * SE.MANA_PER_INT + g("MANA") end
+  s.regenCast = (state.regenCast or 0) + g("MP5") / 5 + g("SPI") * (state.slope.regenPerSPI or 0)    -- (attack speed % from a proc or use effect, averaged)      -- (the survival model counts block only with a shield)
   s.defense = s.defense + g("DEFENSE_SKILL")
   if g("DEFENSE_SKILL") ~= 0 then s.dodge = s.dodge + g("DEFENSE_SKILL") * 0.04 end
   if weapons then

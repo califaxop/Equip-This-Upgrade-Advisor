@@ -154,10 +154,29 @@ function AI.Spells(profile)
       local castT = c.castText and (c.castText:find("^Instant") and 0 or tonumber(c.castText:match("([%d%.]+) sec cast")))
       sp.cast = castT or d.cast
       sp.cooldown = AI.Cooldown(c.cooldownText) or d.cooldown
-      sp.mana = c.manaText and tonumber(c.manaText:match("^(%d+) Mana"))
+      sp.mana = c.manaText and tonumber(c.manaText:match("^(%d+) Mana")) or d.mana
+      if d.linked then sp.mana = nil end   -- (its damage comes as procs, not casts: Lightning Shield's orbs)
       sp.category = d.category   -- (spells of a category share their cooldown: Forever's shocks)
       if sp.direct or sp.dot then out[name] = sp end
     end
   end
   return out
+end
+
+-- Milestone 6: Data/Generated.lua holds every class's spells (about 600 KB of Lua tables); a
+-- character needs its own class's only. Called once the class is known; the rest is freed.
+AI.CLASS_BIT = { WARRIOR = 1, PALADIN = 2, HUNTER = 4, ROGUE = 8, PRIEST = 16, SHAMAN = 64, MAGE = 128, WARLOCK = 256, DRUID = 1024 }
+function AI.PruneToClass(class)
+  local G = ns.GENERATED
+  local bit = AI.CLASS_BIT[class]
+  if not (G and bit) or G.prunedTo then return 0 end
+  local n = 0
+  for id, d in pairs(G.spells or {}) do
+    if not (d.classMask and math.floor(d.classMask / bit) % 2 == 1) then G.spells[id] = nil; n = n + 1 end
+  end
+  for name, d in pairs(G.physical or {}) do
+    if not d.classes[class] then G.physical[name] = nil end
+  end
+  G.prunedTo = class
+  return n
 end

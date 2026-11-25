@@ -83,6 +83,11 @@ Events.On("ADDON_LOADED", "db", function(_, name)
   if name == ns.name then ns.Database.Load() end
 end)
 Events.On("PLAYER_ENTERING_WORLD", "scan", function() mark(unpack(PARTS)) end)
+-- other classes' spell data isn't needed (milestone 6: memory)
+Events.On("PLAYER_LOGIN", "prune", function()
+  local ok, _, class = Compat.Call("UnitClass", "player")
+  if ok and type(class) == "string" then ns.AbilityInterpreter.PruneToClass(class) end
+end)
 Events.On("PLAYER_EQUIPMENT_CHANGED", "scan", function() mark("equipment", "stats", "bags") end)
 Events.On("BAG_UPDATE_DELAYED", "bags", function() mark("bags") end)
 Events.On("PLAYER_LEVEL_UP", "scan", function() mark("identity", "stats", "spells") end)

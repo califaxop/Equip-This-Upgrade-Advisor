@@ -8,7 +8,8 @@ DB.DEFAULTS = {
   targetOffset = "auto",  -- target level above yours: "auto" (+3 at the level cap, +0 below) or 0-3
   tooltip = true,         -- the comparison line on item tooltips
   snapshots = {},
-  pvp = false,       -- PvP numbers on tooltips too (burst, sustained, survival vs players)
+  pvp = false,
+  fightLength = 180, -- seconds a fight lasts, for mana (/eqn fight)       -- PvP numbers on tooltips too (burst, sustained, survival vs players)
   role = "auto",     -- "auto" (Protection spec or a threat stance/form/aura: tank), "tank", "notank"
   confirmed = {},   -- [model part] = true: a measurement (/eqn measure) agreed with the model
   measurements = {},
