@@ -38,7 +38,7 @@ function S.EHP(state, ctx)
   local block = state.hasShield and math.max(0, (state.block or 0) - adj) or 0   -- (no shield: no block)
   local crit = math.max(0, 5 + adj)
   local crushGap = a * 5 - math.min(state.defense or 0, state.level * 5)
-  local crush = crushGap >= 15 and math.max(0, crushGap * 2 - 15) or 0
+  local crush = (not ctx.pvp and crushGap >= 15) and math.max(0, crushGap * 2 - 15) or 0   -- (players can't crush)
   -- fill the table in order; later rows get what's left
   local left = 100
   local function take(x) local t = math.min(x, left); left = left - t; return t end

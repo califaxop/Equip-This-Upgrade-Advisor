@@ -23,6 +23,9 @@ M.DUAL_WIELD_MISS = 19     -- (Classic: +19 % miss for both hands while dual wie
 M.OFFHAND_DAMAGE = 0.5     -- (Classic: an off-hand hit does half damage)
 M.DODGE = { [0] = 5.0, 5.5, 6.0, 6.5 }
 M.CRIT_MULT = 2.0
+-- vs a player (PvP, ctx.pvp): no glancing blows (they're a mob thing); the target's dodge 5% (assumed:
+-- a player's own dodge isn't known); parry not counted (hit from behind: assumed)
+M.PVP_DODGE = 5
 M.SPELL_MISS = { [0] = 4, 5, 6, 17 }   -- (a proc's spell vs 0-3 levels above: Classic's table, assumed for Forever)
 
 -- Special attacks (abilities): the same table without glancing blows or the dual-wield miss.
@@ -31,7 +34,7 @@ function M.Special(state, ctx, weaponSkill)
   weaponSkill = weaponSkill or state.weaponSkill or state.level * 5
   local skill = ((state.level + off) * 5 - weaponSkill) * 0.04
   local miss = math.max(0, M.MISS[off] + skill - (state.hit or 0))
-  local dodge = math.max(0, M.DODGE[off] + skill)
+  local dodge = math.max(0, (ctx.pvp and M.PVP_DODGE or M.DODGE[off]) + skill)
   local crit = math.min(math.max(0, (state.crit or 0) - skill), math.max(0, 100 - miss - dodge))
   return { miss = miss, dodge = dodge, crit = crit, hit = math.max(0, 100 - miss - dodge - crit) }
 end
@@ -61,12 +64,14 @@ function M.Table(state, ctx, weaponSkill, dualWield)
   local diff = (state.level + off) * 5 - weaponSkill   -- target defense - your skill
   local skill = diff * 0.04
   local miss = math.max(0, M.MISS[off] + (dualWield and M.DUAL_WIELD_MISS or 0) + skill - (state.hit or 0))
-  local dodge = math.max(0, M.DODGE[off] + skill)
+  local dodge = math.max(0, (ctx.pvp and M.PVP_DODGE or M.DODGE[off]) + skill)
   -- glancing: the game's numbers for this skill (or the main-hand's when that's all there is)
   local bySkill = ctx.glancingBySkill and ctx.glancingBySkill[weaponSkill]
   local g = (bySkill and bySkill[off]) or (weaponSkill == state.baseSkill and ctx.glancing) or (not ctx.glancingBySkill and ctx.glancing) or nil
   local glance, penalty, assumed
-  if g and g.chance then
+  if ctx.pvp then
+    glance, penalty = 0, 0
+  elseif g and g.chance then
     glance, penalty = g.chance * 100, g.penalty or 0
   else
     -- (Classic: 10% + 2% per point of defense above your skill; ~5% less damage) - assumed
@@ -93,7 +98,7 @@ function M.DPS(state, ctx)
     speedMult = speedMult * (1 + f.haste * flurryUp)
   end
   local dps = state.swing / state.speed * perSwing * speedMult
-  local parts = { { name = "auto attack", dps = dps } }
+  local parts = { { name = "auto attack", dps = dps, school = "Physical" } }
   local landed = { mh = speedMult / state.speed * (t.hit + t.glance + t.crit) / 100, oh = 0 }
   local ohDps
   if dw and state.oh.speed and state.oh.speed > 0 then
@@ -103,7 +108,7 @@ function M.DPS(state, ctx)
     local ohSwing = (state.oh.dps + (state.AP or 0) / 14) * state.oh.speed * M.OFFHAND_DAMAGE
     ohDps = ohSwing / state.oh.speed * (to.hit + to.glance * (1 - to.glancePenalty) + to.crit * M.CRIT_MULT) / 100 * speedMult
     dps = dps + ohDps
-    parts[#parts + 1] = { name = "off-hand", dps = ohDps }
+    parts[#parts + 1] = { name = "off-hand", dps = ohDps, school = "Physical" }
     landed.oh = speedMult / state.oh.speed * (to.hit + to.glance + to.crit) / 100
   end
   local assumed = {}
@@ -120,7 +125,7 @@ function M.DPS(state, ctx)
       -- how often: learned from your fights (/eqn measure: shocks share the global cooldown), else on cooldown
       local casts = learned[st.name] or 1 / st.cooldown
       local d = casts * state.swing * st.weaponPct / 100 * (1 + (abilityPct[st.name] or 0) / 100) * (y.hit + y.crit * M.CRIT_MULT) / 100
-      parts[#parts + 1] = { name = st.name, dps = d, rate = casts, perMin = casts * 60 }
+      parts[#parts + 1] = { name = st.name, dps = d, rate = casts, perMin = casts * 60, school = "Physical", cooldown = st.cooldown, perCast = d / casts }
       dps = dps + d
       landed.mh = landed.mh + casts * (y.hit + y.crit) / 100
     end
@@ -131,7 +136,7 @@ function M.DPS(state, ctx)
     local lambda = M.ProcRate({ chance = imb.chance, icd = imb.icd }, landed.mh, state.speed)
     local per = (state.swing + (imb.ap or 0) / SE_AP_PER_DPS() * state.speed) * perSwing
     local d = lambda * (imb.attacks or 1) * per
-    parts[#parts + 1] = { name = imb.name or "Windfury", dps = d, procsPerMin = lambda * 60 }
+    parts[#parts + 1] = { name = imb.name or "Windfury", dps = d, procsPerMin = lambda * 60, school = "Physical" }
     dps = dps + d
   end
   -- item procs: damage and extra attacks
@@ -147,7 +152,8 @@ function M.DPS(state, ctx)
       else
         d = lambda * (e.attacks or 1) * state.swing * perSwing
       end
-      parts[#parts + 1] = { name = e.item or "item proc", dps = d, procsPerMin = lambda * 60, rateSource = e.rate and e.rate.source }
+      parts[#parts + 1] = { name = e.item or "item proc", dps = d, procsPerMin = lambda * 60, rateSource = e.rate and e.rate.source,
+        school = e.kind == "procDamage" and e.school or "Physical" }
       if e.rate and e.rate.source == "assumed" then assumed[#assumed + 1] = (e.item or "an item") .. "'s proc rate" end
       dps = dps + d
     end

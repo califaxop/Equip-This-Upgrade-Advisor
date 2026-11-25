@@ -13,7 +13,8 @@ function ns.Context()
   local p = ns.profile
   if not p then return nil, "not scanned yet" end
   local ctx, why = ns.Evaluator.Context(p, { targetOffset = ns.db and ns.db.targetOffset, confirmed = ns.db and ns.db.confirmed,
-    rotation = ns.db and ns.db.rotation, lastMeasurement = ns.db and ns.db.measurements and ns.db.measurements[1] })
+    rotation = ns.db and ns.db.rotation, lastMeasurement = ns.db and ns.db.measurements and ns.db.measurements[1],
+    pvp = ns.db and ns.db.pvp, role = ns.db and ns.db.role })
   ns.evalContext = ctx
   return ctx, why
 end
@@ -47,8 +48,9 @@ function TT.Lines(res)
   local b = res.best
   if not b then L[1] = head .. DIM .. "can't compare yet|r"; return L end
   local parts = {}
-  if b.dps then parts[#parts + 1] = "DPS " .. fmt(b.dps) end
+  if b.dps and not b.tps then parts[#parts + 1] = "DPS " .. fmt(b.dps) end
   if b.hps then parts[#parts + 1] = "HPS " .. fmt(b.hps) end
+  if b.tps then parts[#parts + 1] = "Threat " .. fmt(b.tps) end
   if b.ehp then parts[#parts + 1] = "EHP " .. fmt(b.ehp) end
   if #parts == 0 then parts[1] = DIM .. "no change measured|r" end
   L[1] = head .. table.concat(parts, "  ")
@@ -56,6 +58,13 @@ function TT.Lines(res)
   for _, it in ipairs(b.removed or {}) do names[#names + 1] = it.name or "?" end
   local where = #names > 0 and ("vs " .. table.concat(names, " + ")) or ("into the empty " .. tostring(b.slotName) .. " slot")
   L[2] = DIM .. where .. " · confidence " .. res.confidence .. "|r"
+  if b.pvp then
+    local pv = {}
+    if b.pvp.burst then pv[#pv + 1] = "burst " .. fmt(b.pvp.burst) end
+    if b.pvp.sustained then pv[#pv + 1] = "sustained " .. fmt(b.pvp.sustained) end
+    if b.pvp.ehp then pv[#pv + 1] = "survival " .. fmt(b.pvp.ehp) end
+    if #pv > 0 then L[#L + 1] = "|cff33ff99PvP:|r " .. table.concat(pv, "  ") end
+  end
   for _, n in ipairs(b.notes or {}) do L[#L + 1] = DIM .. n .. "|r" end
   for _, n in ipairs(res.notes or {}) do L[#L + 1] = NOTE .. n .. "|r" end
   if b.carry and #b.carry > 0 then L[#L + 1] = DIM .. "with your enchant on it (" .. table.concat(b.carry, "; ") .. ")|r" end

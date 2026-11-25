@@ -245,6 +245,17 @@ function Diag.Model()
     f("HPS %s: %s%s", n1(b.hps), table.concat(rows, ", "),
       b.hpsInfo.manaPerSec > 0 and string.format("; %.2f healing per mana", b.hps / b.hpsInfo.manaPerSec) or "")
   end
+  if b.tps then
+    local src = {}
+    for _, x in ipairs(ctx.threat or {}) do src[#src + 1] = string.format("%s %+g%%%s", x.name, x.pct, x.mask == 127 and "" or " (some schools)") end
+    f("threat%s: %s a second%s", ctx.tank and " (you're tanking)" or "", n1(b.tps), #src > 0 and (" (" .. table.concat(src, ", ") .. ")") or " (no threat modifiers on you)")
+  end
+  local pv = ns.Evaluator.PvP(ctx.state, ctx)
+  if pv.sustained or pv.ehp then
+    f("PvP vs a player like you: burst %s in %ds, sustained %s DPS (armor cuts %d%%), survival %s EHP",
+      pv.burst and string.format("%d", pv.burst + 0.5) or "-", ns.Evaluator.BURST, n1(pv.sustained), pv.armorReduction * 100 + 0.5,
+      pv.ehp and string.format("%d", pv.ehp + 0.5) or "-")
+  end
   local rot = ctx.rotation or {}
   f("rotation: %s", rot.source == "measured" and "learned from your fights (/eqn measure)"
     or rot.source == "none" and "your spells aren't counted until /eqn measure learns how you use them"
@@ -436,11 +447,20 @@ function Diag.Compare(arg)
   local link = arg:match("|Hitem:[^|]+|h") and arg or (tonumber(arg) and ("item:" .. arg)) or nil
   if not link then return P("give an item link or ID") end
   ns.Cache.Invalidate("evaluation", link)
+  -- (with PvP, whatever the tooltip setting)
+  local ctx = ns.Context()
+  local had = ctx and ctx.wantPvp
+  if ctx and not had then ctx.wantPvp = true; ctx.pvpBase = ns.Evaluator.PvP(ctx.state, ctx) end
   local res = ns.Tooltip.Evaluate(link)
+  if ctx and not had then ctx.wantPvp = nil; ns.Cache.Invalidate("evaluation", link) end
   for _, l in ipairs(ns.Tooltip.Lines(res)) do P(l) end
   for _, o in ipairs(res.options or {}) do
     if o.status == "ok" then
-      f("%s%s|r: DPS %s, EHP %s", o == res.best and NOTE or DIM, o.slotName, ns.Tooltip.Pct(o.dps) or "-", ns.Tooltip.Pct(o.ehp) or "-")
+      f("%s%s|r: DPS %s, EHP %s%s%s", o == res.best and NOTE or DIM, o.slotName, ns.Tooltip.Pct(o.dps) or "-", ns.Tooltip.Pct(o.ehp) or "-",
+        o.hps and (", HPS " .. ns.Tooltip.Pct(o.hps)) or "", o.tps and (", threat " .. ns.Tooltip.Pct(o.tps)) or "")
+      if o.pvp then
+        f("   PvP: burst %s, sustained %s, survival %s", ns.Tooltip.Pct(o.pvp.burst) or "-", ns.Tooltip.Pct(o.pvp.sustained) or "-", ns.Tooltip.Pct(o.pvp.ehp) or "-")
+      end
       for _, n in ipairs(o.notes or {}) do f("   %s", n) end
       for i, part in ipairs(o.parts) do
         if i > 8 then break end
@@ -486,6 +506,8 @@ local HELP = {
   "/eqn compare <item link or ID> - full comparison: each slot, each stat's part, effects not counted",
   "/eqn target auto|0|1|2|3 - target level above yours",
   "/eqn abilities - your abilities, imbue and item effects as the model counts them",
+  "/eqn pvp - PvP numbers on tooltips on/off (burst, sustained, survival vs players)",
+  "/eqn role auto|tank|notank - tank: threat on tooltips (auto: Protection, or a threat stance/form/aura)",
   "/eqn measure [last|reset] - the model's DPS parts vs the game's damage meter (all fights since reset, or the last)",
   "/eqn tooltip - comparison on item tooltips on/off",
   "/eqn scan - read everything again now",
@@ -506,6 +528,16 @@ SlashCmdList.EQUIPTHISNEXT = function(msg)
     api = function() local rows = Diag.Api(); if rest == "all" then for _, r in ipairs(rows) do P(r) end end end,
     scan = function() profile(true); P("scanned.") ; Diag.Char() end,
     model = Diag.Model, sheet = Diag.Sheet, weights = Diag.Weights, abilities = Diag.Abilities, measure = function() Diag.Measure(rest) end,
+    pvp = function()
+      ns.db.pvp = not ns.db.pvp; ns.evalContext = nil; ns.Cache.Invalidate("evaluation")
+      P("PvP on tooltips " .. (ns.db.pvp and "on (a player of your level, armored like you; no glancing blows; half physical, half magic damage)" or "off"))
+    end,
+    role = function()
+      if rest == "auto" or rest == "tank" or rest == "notank" then ns.db.role = rest end
+      ns.evalContext = nil; ns.Cache.Invalidate("evaluation")
+      local ctx = ns.Context()
+      P("role: " .. tostring(ns.db.role) .. (ctx and (ctx.tank and " (tanking: threat on tooltips)" or " (not tanking)") or ""))
+    end,
     compare = function() Diag.Compare(rawRest) end, target = function() Diag.Target(rest) end,
     tooltip = function() ns.db.tooltip = not ns.db.tooltip; P("tooltip " .. (ns.db.tooltip and "on" or "off")) end,
     dump = Diag.Dump,

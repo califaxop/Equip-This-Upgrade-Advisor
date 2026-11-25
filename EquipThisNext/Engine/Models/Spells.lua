@@ -42,7 +42,7 @@ function S.Output(state, ctx, spells, rates)
       if sp.kind == "heal" then hps = hps + x else dps = dps + x end
       mana = mana + (sp.mana or 0) * r
       parts[#parts + 1] = { name = name, kind = sp.kind, dps = sp.kind ~= "heal" and x or nil, hps = sp.kind == "heal" and x or nil,
-        perCast = per, perMin = r * 60 }
+        perCast = per, perMin = r * 60, rate = r, school = sp.school, cooldown = sp.cooldown, cast = sp.cast }
     end
   end
   table.sort(parts, function(a, b) return (a.dps or a.hps) > (b.dps or b.hps) end)

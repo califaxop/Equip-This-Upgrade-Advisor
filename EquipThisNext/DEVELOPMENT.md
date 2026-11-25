@@ -15,7 +15,7 @@ runs alongside the released Equip This! without touching it, on the `next-founda
 | 1. Foundation: compatibility layer, scanners, diagnostics | **done: 0.1.3 validated in game (level 42 Shaman, build 71091)** |
 | 2. Basic evaluation | **done: validated in game (0.2.1; the tooltip %s look right to the tester)** |
 | 3. Complete gear evaluation | **done: validated in game (0.3.0-0.3.3)** |
-| 4. Simulation (DPS, healing, tanking, PvP) | **4a: melee DPS with abilities, imbues, procs: 0.4.0 read right in game; 0.4.1 measured in game (Windfury agrees); 0.4.2 fixes the meter's "Attack" and untrained worn weapons**; **4b: spells, learned rotation, HPS: 0.5.0 matched new fights in game; 0.5.1 school spell damage, spell penetration**; 4c tanking threat and PvP: not started |
+| 4. Simulation (DPS, healing, tanking, PvP) | **4a: melee DPS with abilities, imbues, procs: 0.4.0 read right in game; 0.4.1 measured in game (Windfury agrees); 0.4.2 fixes the meter's "Attack" and untrained worn weapons**; **4b: spells, learned rotation, HPS: 0.5.0 matched new fights in game; 0.5.1 school spell damage, spell penetration**; **4c (0.6.0): threat and PvP: built, offline tests pass (77), waiting for the in-game test** |
 | 5. All classes and builds | not started |
 | 6. Optimization and validation | not started |
 
@@ -148,6 +148,43 @@ parts, each on a character that can check it:
 - 4b: caster DPS and healing (spell coefficients, HPS, healing per mana, HoTs, overhealing).
 - 4c: tanking threat (separate from EHP) and PvP (its own assumptions: burst, sustained,
   survivability vs players).
+
+### 4c (0.6.0): threat (tanks) and PvP
+
+**Threat** (Engine/Models/Threat.lua), a separate number from EHP: threat per second = each DPS
+part x the threat modifiers on you for its school. The modifiers are Forever's own "mod threat"
+auras (Data/Generated.lua `threat`, 70+ spells), and they aren't Classic's:
+- Defensive Stance Passive +80%, Bear Form (Passive2) +115%, Righteous Fury +90% Holy and +33% all,
+  Battle Stance -20%, Rogue Passive -29%, Spirit Weapons (Enhancement talent) -30%, Natural Grace
+  -30% spells. Several multiply together (assumed).
+- Stances and forms are found through their passives by name ("Defensive Stance" -> "Defensive
+  Stance Passive"); talents with a threat aura count x their rank (unconfirmed).
+- Not counted: abilities' own extra threat (Sunder Armor, Heroic Strike, Rockbiter...: the server
+  keeps those, not the client's tables), healing threat, taunts.
+- You're a tank (threat on tooltips instead of DPS, next to EHP) with a Protection spec or a
+  threat-raising stance, form or aura on you; `/eqn role auto|tank|notank` overrides.
+- Not validated in game yet: needs a tank character (the threat values are secret in combat; a
+  check would compare the model with UnitDetailedThreatSituation out of combat).
+
+**PvP**: its own assumptions, never PvE's (`/eqn pvp` puts it on tooltips; `/eqn compare` always
+shows it):
+- target: a player of your level, armored like you (your armor's reduction vs your level, from the
+  game's calculator); no glancing blows (a mob mechanic); its dodge 5% (assumed), parry not counted
+  (attacked from behind, assumed); spells 4% miss, no resistances (assumed).
+- sustained: DPS with your learned rotation vs that player.
+- burst: damage in the first 6 seconds: abilities with a cooldown used at once (and again when
+  ready), use effects at full strength, the rest at their sustained rate.
+- survival: EHP vs players: half physical, half magic (assumed), attacker your level, no crushing.
+- Not counted: crowd control, trinkets that break it, healing during a fight, Resilience (Forever
+  has none).
+
+In-game test (0.6.0):
+1. `/eqn model`: the PvP line (burst, sustained, survival) and threat (with Spirit Weapons -30%).
+2. `/eqn pvp`, then hover a few items: a "PvP:" line. A Stamina item should help PvP survival
+   more than PvE EHP (half the damage is magic).
+3. `/eqn role tank`: tooltips show threat instead of DPS. `/eqn role auto` to go back.
+4. If you have a warrior, paladin or druid: Defensive Stance / Righteous Fury / Bear Form, then
+   `/eqn model` (threat modifiers listed).
 
 ### 4b (0.5.0): spells, the rotation learned from your fights, healing
 
@@ -539,5 +576,6 @@ In game (milestone 1 check):
 
 - Milestones 1-3: done. A second class's `/eqn dump` (e.g. a rogue or warrior) would widen the fixtures.
 - Milestone 4a: the in-game test and `/eqn measure` (Windfury's attack power, Elemental Weapons).
-- Milestone 4b: caster DPS and healing. 4c: tanking threat, PvP.
+- Milestone 4c: the in-game test; a tank character to check threat.
+- Milestone 5: all nine classes and their builds (fixtures from more characters' dumps).
 - Released Equip This!: fix the `UnitDefense` call (see above).

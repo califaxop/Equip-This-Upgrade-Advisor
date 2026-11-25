@@ -15,6 +15,73 @@ Ev.MELEE_TREES = { Enhancement = true, Arms = true, Fury = true, Protection = tr
 Ev.MELEE_CLASSES = { WARRIOR = true, ROGUE = true }
 -- healing specs: their main metric is healing per second
 Ev.HEAL_TREES = { Restoration = true, Holy = true, Discipline = true }
+Ev.TANK_TREES = { Protection = true }
+
+-- a tank: a Protection spec, or a threat-raising stance, form or aura on you (Defensive Stance,
+-- Bear Form, Righteous Fury), or the setting
+function Ev.IsTank(profile, sources, settings)
+  if settings and settings.role == "tank" then return true end
+  if settings and settings.role == "notank" then return false end
+  local tree = profile.talents and profile.talents.primaryTree
+  if tree and Ev.TANK_TREES[tree] then return true end
+  for _, src in ipairs(sources or {}) do if src.source == "aura" and src.pct > 0 then return true end end
+  return false
+end
+
+-- PvP (milestone 4c): its own assumptions, never PvE's.
+--   target: a player of your level, armored like you (your armor's reduction vs your level, from
+--   the game's calculator); no glancing blows; its dodge 5%, parry not counted; spells: 4% miss
+--   (same level), no resistances (assumed).
+--   sustained: DPS with your learned rotation vs that target
+--   burst: damage in the first Ev.BURST seconds: abilities with a cooldown used at once (and again
+--          when ready), use effects at full strength, the rest at their sustained rate
+--   survival: EHP vs players: half physical, half magic (assumed), attacker your level, no crushing
+Ev.BURST = 6
+Ev.PVP_MAGIC_SHARE = 0.5
+function Ev.PvPContext(ctx)
+  if ctx.pvpCtx then return ctx.pvpCtx end
+  local p = {}
+  for k, v in pairs(ctx) do p[k] = v end
+  p.pvp, p.offset, p.magicShare, p.glancing, p.glancingBySkill = true, 0, Ev.PVP_MAGIC_SHARE, nil, nil
+  p.swingRaw = ctx.state.swing
+  p.pvpCtx = nil
+  ctx.pvpCtx = p
+  return p
+end
+
+function Ev.PvP(state, ctx)
+  local pc = Ev.PvPContext(ctx)
+  local level = state.level or 1
+  local red = ctx.armorEffect and ctx.armorEffect[level]
+  if not red then
+    local K = ns.SurvivalModel.ArmorK(pc, level, state.armor)
+    red = (state.armor or 0) / ((state.armor or 0) + K)
+  end
+  local function after(part) return (part.school == "Physical" or not part.school) and (1 - red) or 1 end
+  local p = Ev.Performance(state, pc)
+  local out = { ehp = p.ehp, armorReduction = red }
+  if p.dps and p.dpsInfo and p.dpsInfo.parts then
+    local sus = 0
+    for _, part in ipairs(p.dpsInfo.parts) do sus = sus + part.dps * after(part) end
+    out.sustained = sus
+    -- burst: with use effects at full strength
+    pc.burst = true
+    local pb = Ev.Performance(state, pc)
+    pc.burst = nil
+    local b = 0
+    for _, part in ipairs(pb.dpsInfo.parts) do
+      local dmg
+      if part.cooldown and part.cooldown > 0 and part.perCast then
+        dmg = (1 + math.floor(Ev.BURST / part.cooldown)) * part.perCast
+      else
+        dmg = part.dps * Ev.BURST
+      end
+      b = b + dmg * after(part)
+    end
+    out.burst = b
+  end
+  return out
+end
 
 -- which rotation is yours: per class and main talent tree
 function Ev.RotationKey(profile)
@@ -146,7 +213,7 @@ end
 -- Stat procs and use effects as average stats: amount x the share of time they're up.
 --   proc: up 1 - e^(-procs a second x duration) of the time (a proc while it's up restarts it)
 --   use:  duration / cooldown (used on cooldown)
-function Ev.AverageStats(state, landed)
+function Ev.AverageStats(state, landed, burst)
   local avg = {}
   for _, e in ipairs(state.effects or {}) do
     local up
@@ -155,7 +222,7 @@ function Ev.AverageStats(state, landed)
       local lambda = ns.MeleeModel.ProcRate(e.rate, ns.MeleeModel.HitsFor(e.slot, landed), speed)
       up = 1 - math.exp(-lambda * e.duration)
     elseif e.kind == "useStat" and e.duration and e.cooldown then
-      up = math.min(1, e.duration / e.cooldown)
+      up = burst and 1 or math.min(1, e.duration / e.cooldown)   -- (a burst opens with it)
     end
     if up and up > 0 then
       e.uptime = up
@@ -182,6 +249,8 @@ function Ev.Context(profile, settings)
     melee = Ev.IsMelee(profile), healer = tree and Ev.HEAL_TREES[tree] and not Ev.IsMelee(profile) or false,
     spells = ns.AbilityInterpreter and ns.AbilityInterpreter.Spells and ns.AbilityInterpreter.Spells(profile) or {},
     rotation = { rates = {}, strikes = {}, source = "assumed" },
+    threat = ns.ThreatModel and ns.ThreatModel.Sources(profile) or {},
+    wantPvp = settings and settings.pvp,
     glancing = calc.glancing and calc.glancing[offset], armorEffect = calc.armorEffect,
     glancingBySkill = calc.glancingBySkill and next(calc.glancingBySkill) and calc.glancingBySkill or nil,
     baselineArmor = state.armor, magicShare = settings and settings.magicShare,
@@ -207,7 +276,9 @@ function Ev.Context(profile, settings)
   -- the rotation needs the model's per-cast numbers: worked out after a first baseline
   ctx.rotation = Ev.Rotation(ctx, settings)
   if ctx.todayBase then ctx.todayBase = Ev.Performance(ctx.rawState, ctx) end
+  ctx.tank = Ev.IsTank(profile, ctx.threat, settings)
   ctx.base = Ev.Performance(state, ctx)
+  if ctx.wantPvp then ctx.pvpBase = Ev.PvP(state, ctx) end
   -- buffs and talents in the sheet beyond gear, per primary stat (stat.X.pos - gear)
   ctx.beyondGear = {}
   for _, k in ipairs({ "STR", "AGI", "STA", "INT", "SPI" }) do
@@ -223,7 +294,7 @@ function Ev.Performance(state, ctx)
     local d, info = ns.MeleeModel.DPS(state, ctx)
     if d then
       -- stat procs and use effects, averaged in (their uptime from this state's hit rate)
-      local avg = Ev.AverageStats(state, info.landed)
+      local avg = Ev.AverageStats(state, info.landed, ctx.burst)
       if next(avg) then
         local d2, info2 = ns.MeleeModel.DPS(ns.StatEngine.Apply(state, avg, ctx.talents), ctx)
         if d2 then d, info = d2, info2; info.procStats = avg end
@@ -249,6 +320,7 @@ function Ev.Performance(state, ctx)
       for _, p in ipairs(sparts) do if p.hps then out.hpsInfo.parts[#out.hpsInfo.parts + 1] = p end end
     end
   end
+  if out.dps and out.dpsInfo and out.dpsInfo.parts and ns.ThreatModel then out.tps = ns.ThreatModel.TPS(out.dpsInfo.parts, ctx.threat) end
   if not out.dps and not out.why.dps then out.why.dps = ctx.melee and "no main-hand weapon damage on the sheet" or "no damage spells counted yet" end
   local e, info = ns.SurvivalModel.EHP(state, ctx)
   out.ehp, out.ehpInfo = e, info
@@ -278,7 +350,7 @@ function Ev.Weights(ctx, step)
     local s = ns.StatEngine.Apply(ctx.state, { [k] = step }, ctx.talents)
     local p = Ev.Performance(s, ctx)
     local function per(m) local x = pct(p[m], ctx.base[m]); return x and x / step end
-    out[k] = { dps = per("dps"), ehp = per("ehp"), hps = per("hps") }
+    out[k] = { dps = per("dps"), ehp = per("ehp"), hps = per("hps"), tps = per("tps") }
   end
   return out
 end
@@ -382,6 +454,7 @@ function Ev.Evaluate(ctx, changes, label, notes)
   local s = ns.StatEngine.Apply(ctx.state, delta, ctx.talents, weapons)
   s.effects = effects
   if weapons and weapons.mh == nil and changes[16] == false then s.swing, s.speed = nil, nil end
+  s.effects = effects
   local p = Ev.Performance(s, ctx)
   local untrainedNote
   if weapons and ctx.melee then
@@ -403,6 +476,7 @@ function Ev.Evaluate(ctx, changes, label, notes)
   end
   local opt = { status = "ok", label = label, changes = changes, removed = removed, added = added, delta = delta, perf = p,
     dps = pct(p.dps, ctx.base.dps), ehp = pct(p.ehp, ctx.base.ehp), hps = pct(p.hps, ctx.base.hps), notes = notes or {},
+    tps = ctx.tank and pct(p.tps, ctx.base.tps) or nil,
     setGained = gained, setLost = lost, setUnknown = setUnknown }
   -- each stat on its own
   opt.parts = {}
@@ -437,6 +511,10 @@ function Ev.Evaluate(ctx, changes, label, notes)
     if it.enchantText then opt.carry[#opt.carry + 1] = it.enchantText end
   end
   if untrainedNote then for _, n in ipairs(untrainedNote) do opt.notes[#opt.notes + 1] = n end end
+  if ctx.wantPvp and ctx.pvpBase then
+    local pv, b = Ev.PvP(s, ctx), ctx.pvpBase
+    opt.pvp = { sustained = pct(pv.sustained, b.sustained), burst = pct(pv.burst, b.burst), ehp = pct(pv.ehp, b.ehp) }
+  end
   if s.assumedSkill then opt.notes[#opt.notes + 1] = "weapon skill for this weapon type unknown: 5 x level assumed" end
   return opt
 end
