@@ -30,13 +30,16 @@ function CharacterScanner.Refresh(force)
   local profile = P.New()
   for _, part in ipairs(PARTS) do
     if force or dirty[part] or not old then
+      local before = #profile.issues
       scanPart(profile, part)
+      for i = before + 1, #profile.issues do profile.issues[i].part = part end   -- (which part raised it)
       dirty[part] = false
     else
       profile[part] = old[part]
-      if part == "equipment" then
-        profile.sets, profile.meta.pendingItems = old.sets, old.meta.pendingItems
-        for _, i in ipairs(old.issues) do if i.code == "items-loading" then P.AddIssue(profile, i.level, i.code, i.text) end end
+      if part == "equipment" then profile.sets, profile.meta.pendingItems = old.sets, old.meta.pendingItems end
+      -- a part not read again keeps its issues until it is
+      for _, i in ipairs(old.issues) do
+        if i.part == part then profile.issues[#profile.issues + 1] = i end
       end
     end
   end

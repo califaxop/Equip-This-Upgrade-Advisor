@@ -140,3 +140,17 @@ T.Test("an event the client doesn't know is recorded, the addon still works", fu
   MOCK.Fire("ADDON_LOADED", "EquipThisNext"); MOCK.Fire("PLAYER_ENTERING_WORLD"); MOCK.RunTimers()
   T.Ok(ns2.profile and ns2.profile.identity.class == "SHAMAN", "scanned anyway")
 end)
+
+T.Test("a part's issues survive rescans of other parts (regression: in game 0.1.1 showed 'issues: none')", function()
+  MOCK.Reset()
+  local ns3 = LoadAddon()
+  MOCK.noTalents = true
+  MOCK.Fire("ADDON_LOADED", "EquipThisNext"); MOCK.Fire("PLAYER_ENTERING_WORLD"); MOCK.RunTimers()
+  local function has(p, code) for _, i in ipairs(p.issues) do if i.code == code then return true end end end
+  T.Ok(has(ns3.profile, "talents-unreadable"), "raised on the first scan")
+  MOCK.Fire("UNIT_STATS", "player"); MOCK.RunTimers()   -- only stats are read again
+  T.Ok(has(ns3.profile, "talents-unreadable"), "still there after a stats-only rescan")
+  MOCK.noTalents = nil
+  MOCK.Fire("TRAIT_CONFIG_UPDATED", 77); MOCK.RunTimers()
+  T.Ok(not has(ns3.profile, "talents-unreadable"), "gone once talents read fine")
+end)

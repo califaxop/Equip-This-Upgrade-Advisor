@@ -12,7 +12,7 @@ runs alongside the released Equip This! without touching it, on the `next-founda
 
 | Milestone | State |
 |---|---|
-| 1. Foundation: compatibility layer, scanners, diagnostics | **0.1.0 tested in game (see below); 0.1.2 fixes waiting for a re-test** |
+| 1. Foundation: compatibility layer, scanners, diagnostics | **0.1.0 and 0.1.1 tested in game (see below); 0.1.3 waiting for the talent re-test** |
 | 2. Basic evaluation | not started (waits for milestone 1's in-game test) |
 | 3. Complete gear evaluation | not started |
 | 4. Simulation (DPS, healing, tanking, PvP) | not started |
@@ -163,6 +163,12 @@ Found and fixed in 0.1.1 and 0.1.2:
   gives Elemental 0, Enhancement 26, Restoration 7, the true split. Points per tree are also checked
   against the game's own count (`C_Traits.GetGroupCurrencyInfo`, as the released Equip This! uses).
 - `GetRealmName()` returned an empty string. The dump key no longer has a trailing dash.
+- **Combat (0.1.1 in game): confirmed.** In combat `C_Secrets.ShouldUnitStatsBeSecret()` and
+  `ShouldAurasBeSecret()` are true and the crit probe reads hidden; nothing is scanned, and the
+  rescan waits for combat to end. Out of combat everything reads.
+- **Issues of a part not re-read were dropped** (0.1.1 showed "issues: none" while talents were
+  misplaced). Fixed in 0.1.3: each issue remembers which part raised it and stays until that part is
+  read again (regression test added).
 - **`GetGlancingBlowChance([playerWeaponSkill], targetDefenseSkill)`** needs arguments. It's a
   calculator for the performance model, not a character-sheet value, so it's no longer scanned.
 - A missing optional return (no off-hand speed) was listed as "unavailable". It no longer is.
@@ -177,7 +183,7 @@ Still to check: `CR_WEAPON_SKILL` doesn't exist on Forever (reported, fine). Man
 Offline (no game): `python3 tools/run_next_tests.py` (needs `pip install lupa`), or
 `cd EquipThisNext && lua5.1 Tests/run.lua`. The runner loads the files in the .toc's order against
 `Tests/MockAPI.lua`, a stand-in client shaped like the documented API. Knobs can turn on hidden stats,
-hidden auras, items that load late, missing events and API errors. 27 tests cover the cache, the
+hidden auras, items that load late, missing events and API errors. 28 tests cover the cache, the
 compatibility layer, link parsing, sets, talent points, profile validation, fingerprints, the full
 scan, late-loading items, combat, gear and talent changes, and every `/eqn` command.
 

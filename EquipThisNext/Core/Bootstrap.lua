@@ -3,7 +3,7 @@
 local ADDON, ns = ...
 
 ns.name = ADDON
-ns.version = "0.1.2"
+ns.version = "0.1.3"
 ns.title = "Equip This! Next"
 
 -- Modules register themselves here so diagnostics can list what loaded.
