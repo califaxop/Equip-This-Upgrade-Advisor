@@ -8,6 +8,11 @@ function Spell.Name(spellID)
   return type(v) == "string" and v or nil
 end
 
+function Spell.Description(spellID)
+  local v = Compat.Value("C_Spell.GetSpellDescription", spellID)
+  return type(v) == "string" and v ~= "" and v or nil
+end
+
 -- Enum.SpellBookSpellBank.Player (0 when the enum isn't there)
 local function playerBank()
   return (Enum and Enum.SpellBookSpellBank and Enum.SpellBookSpellBank.Player) or 0

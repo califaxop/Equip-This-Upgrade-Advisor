@@ -65,6 +65,22 @@ function Char.RatingIndex(name)
   return type(v) == "number" and v or nil
 end
 
+-- The game's calculators (each documented, all hidden while stats are restricted)
+function Char.RatingBonusFor(ratingName, value)
+  local idx = Char.RatingIndex(ratingName)
+  if not idx then return nil end
+  return Compat.Value("GetCombatRatingBonusForCombatRatingValue", idx, value)
+end
+function Char.ArmorEffectiveness(armor, attackerLevel)
+  return Compat.Value("C_PaperDollInfo.GetArmorEffectiveness", armor, attackerLevel)
+end
+function Char.Glancing(weaponSkill, targetDefense)
+  local c = Compat.Value("GetGlancingBlowChance", weaponSkill, targetDefense)
+  local p = Compat.Value("GetGlancingBlowPenalty", weaponSkill, targetDefense)
+  if c == nil then return nil end
+  return { chance = c, penalty = p }
+end
+
 function Char.Identity()
   local _, className, classFile, classID = Compat.Call("UnitClass", "player")
   local _, raceName, raceFile, raceID = Compat.Call("UnitRace", "player")

@@ -39,6 +39,10 @@ Compat.KNOWN = {
   ["GetSpellPenetration"] = "docs", ["GetArmorPenetration"] = "docs", ["GetDodgeChance"] = "docs",
   ["GetParryChance"] = "docs", ["GetBlockChance"] = "docs", ["GetShieldBlock"] = "docs",
   ["CanDualWield"] = "docs",
+  -- calculators (milestone 2): the game's own numbers for any value
+  ["GetCombatRatingBonusForCombatRatingValue"] = "docs", ["C_PaperDollInfo.GetArmorEffectiveness"] = "docs",
+  ["GetGlancingBlowChance"] = "docs", ["GetGlancingBlowPenalty"] = "docs",
+  ["C_Spell.GetSpellDescription"] = "docs", ["C_TooltipInfo.GetHyperlink"] = "docs",
   -- (GetGlancingBlowChance([playerWeaponSkill], targetDefenseSkill) is a calculator for the
   --  performance model, milestone 4: not a character sheet value, so not scanned)
   -- the game's own stat conversions (the paper doll uses them)

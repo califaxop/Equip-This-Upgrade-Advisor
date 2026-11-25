@@ -34,6 +34,7 @@ function EquipmentScanner.ReadItem(link, slot, slotName)
     setID = (info.setID and info.setID > 0) and info.setID or nil, bindType = info.bindType,
     sellPrice = info.sellPrice, stats = stats, sockets = Item.NumSockets(link) or 0,
     useSpell = Item.UseSpell(link),
+    effects = ns.ItemEffects.Uncounted(Item.TooltipLines(link)),
   }
   Cache.Set("item", link, data)
   for k, v in pairs(data) do it[k] = v end

@@ -204,6 +204,110 @@ function Diag.Dump()
   f("saved a snapshot for %s. It's written to WTF/Account/<account>/SavedVariables/EquipThisNext.lua at /reload or logout.", key)
 end
 
+
+-- Milestone 2: the model, the sheet check, marginal values, comparisons
+local function ctxOrSay()
+  local ctx, why = ns.Context()
+  if not ctx then P(BAD .. "can't evaluate yet:|r " .. tostring(why)) end
+  return ctx
+end
+local function n1(x) return x and string.format("%.1f", x) or "-" end
+
+function Diag.Model()
+  local ctx = ctxOrSay(); if not ctx then return end
+  local b, s = ctx.base, ctx.state
+  f("target: %d level(s) above you (%s); spec: %s", ctx.offset, ns.db.targetOffset == "auto" and "auto" or "set",
+    ctx.melee and "melee (DPS = auto-attacks for now)" or "caster/healer (DPS and healing in milestone 4)")
+  if b.dps then
+    local t = b.dpsInfo.table
+    f("melee DPS %s: swing %s every %.2fs; miss %.1f%% dodge %.1f%% glancing %.1f%% (-%d%%) crit %.1f%% hit %.1f%%%s; speed x%.3f%s",
+      n1(b.dps), n1(s.swing), s.speed, t.miss, t.dodge, t.glance, t.glancePenalty * 100 + 0.5, t.crit, t.hit,
+      t.assumedGlancing and " (glancing assumed)" or "", b.dpsInfo.speedMult,
+      b.dpsInfo.flurryUptime > 0 and string.format(" (Flurry up %d%%)", b.dpsInfo.flurryUptime * 100 + 0.5) or "")
+  elseif b.why.dps then f("DPS: %s", b.why.dps) end
+  if b.ehp then
+    local e = b.ehpInfo
+    f("EHP %d: %d health, you take %.1f%% of the damage (melee %.1f%%: armor cuts %.1f%%%s; spells %.1f%%)",
+      b.ehp + 0.5, s.health, e.taken * 100, e.melee * 100, e.armorReduction * 100, e.assumedK and " (armor formula assumed)" or "",
+      e.spell * 100)
+  end
+  for _, note in ipairs(ctx.talents.notes) do P("talent: " .. note) end
+end
+
+function Diag.Sheet()
+  local ctx = ctxOrSay(); if not ctx then return end
+  P("gear vs the character sheet (what the sheet has beyond your gear is buffs, talents and base):")
+  local parts = {}
+  for _, k in ipairs({ "STR", "AGI", "STA", "INT", "SPI" }) do
+    local b = ctx.beyondGear[k]
+    parts[#parts + 1] = string.format("%s gear %d, sheet +%s", k, ctx.gear[k] or 0, b and tostring(b + (ctx.gear[k] or 0)) or "?")
+  end
+  P(table.concat(parts, "; "))
+  local v = ctx.profile.stats.values
+  f("attack power from gear %d, sheet bonus %s; armor from gear %d, sheet bonus %s", ctx.gear.AP or 0, tostring(v["ap.pos"]),
+    ctx.gear.ARMOR or 0, tostring(v["armor.bonus"]))
+  local buffs = {}
+  for _, a in ipairs(ctx.profile.buffs.helpful) do buffs[#buffs + 1] = tostring(a.name) end
+  f("buffs on you now: %s", #buffs > 0 and table.concat(buffs, ", ") or "none")
+  local calc = ctx.profile.calc or {}
+  local r = {}
+  for cr, x in pairs(calc.ratingPct or {}) do if cr:find("CRIT_MELEE") or cr:find("HIT_MELEE") or cr:find("HASTE_MELEE") or cr:find("DEFENSE") or cr:find("DODGE") then r[#r + 1] = string.format("%s %.3f%%/pt", cr:gsub("CR_", ""), x) end end
+  table.sort(r)
+  f("rating conversions (game): %s", #r > 0 and table.concat(r, ", ") or "none read")
+  local g = calc.glancing and calc.glancing[ctx.offset]
+  f("glancing vs this target (game): %s", g and string.format("%.1f%% chance, %.1f%% less damage", g.chance * 100, (g.penalty or 0) * 100) or "not read")
+  local e = calc.armorEffect and calc.armorEffect[ctx.state.level + ctx.offset]
+  f("armor reduction vs this target (game): %s", e and string.format("%.1f%%", e * 100) or "not read")
+end
+
+function Diag.Weights()
+  local ctx = ctxOrSay(); if not ctx then return end
+  local w = ns.Evaluator.Weights(ctx)
+  P("value of 10 points of each stat (% change):")
+  local rows = {}
+  for _, k in ipairs(ns.Evaluator.WEIGHT_STATS) do
+    local x = w[k]
+    local d = x.dps and string.format("DPS %+.2f%%", x.dps * 10) or nil
+    local e = x.ehp and string.format("EHP %+.2f%%", x.ehp * 10) or nil
+    if (x.dps and math.abs(x.dps) > 1e-6) or (x.ehp and math.abs(x.ehp) > 1e-6) then
+      rows[#rows + 1] = string.format("%s: %s", ns.StatDefs.NAMES[k] or k, table.concat({ d or "", e or "" }, " "))
+    end
+  end
+  for _, r in ipairs(rows) do P("  " .. r) end
+end
+
+function Diag.Compare(arg)
+  if not arg or arg == "" then return P("usage: /eqn compare <shift-click an item> (or an item ID)") end
+  local link = arg:match("|Hitem:[^|]+|h") and arg or (tonumber(arg) and ("item:" .. arg)) or nil
+  if not link then return P("give an item link or ID") end
+  ns.Cache.Invalidate("evaluation", link)
+  local res = ns.Tooltip.Evaluate(link)
+  for _, l in ipairs(ns.Tooltip.Lines(res)) do P(l) end
+  for _, o in ipairs(res.options or {}) do
+    if o.status == "ok" then
+      f("%s%s|r: DPS %s, EHP %s", o == res.best and NOTE or DIM, o.slotName, ns.Tooltip.Pct(o.dps) or "-", ns.Tooltip.Pct(o.ehp) or "-")
+      for i, part in ipairs(o.parts) do
+        if i > 8 then break end
+        f("   %+g %s: DPS %s, EHP %s", part.amount, ns.StatDefs.NAMES[part.stat] or part.stat, ns.Tooltip.Pct(part.dps) or "-", ns.Tooltip.Pct(part.ehp) or "-")
+      end
+      if o.lost and #o.lost > 0 then f("   %sthe replaced item's effects (not counted): %s|r", NOTE, table.concat(o.lost, " | ")) end
+    else
+      f("%s%s: %s|r", DIM, o.slotName, o.status)
+    end
+  end
+  local item = ns.EquipmentScanner.ReadItem(link)
+  if item.effects and #item.effects > 0 then f("%snot counted on this item:|r %s", NOTE, table.concat(item.effects, " | ")) end
+  if res.reasons and #res.reasons > 0 then f("%sconfidence %s:|r %s", DIM, tostring(res.confidence), table.concat(res.reasons, "; ")) end
+end
+
+function Diag.Target(arg)
+  if arg == "auto" then ns.db.targetOffset = "auto"
+  elseif tonumber(arg) and tonumber(arg) >= 0 and tonumber(arg) <= 3 then ns.db.targetOffset = tonumber(arg)
+  elseif arg then return P("usage: /eqn target auto|0|1|2|3 (levels above yours; auto: +3 at the level cap, +0 below)") end
+  ns.evalContext = nil; ns.Cache.Invalidate("evaluation")
+  f("target: %s", ns.db.targetOffset == "auto" and "auto" or ("+" .. ns.db.targetOffset .. " levels"))
+end
+
 local HELP = {
   "/eqn status - addon, client, scans, slot check, events, errors, issues",
   "/eqn char - who you are, talent points per tree, counts",
@@ -214,6 +318,12 @@ local HELP = {
   "/eqn buffs - your buffs and debuffs (out of combat)",
   "/eqn spells [text] - spells known (with text: list the matches)",
   "/eqn api [all] - which game functions exist and how calls went",
+  "/eqn model - current DPS and EHP with the attack table and talents used",
+  "/eqn sheet - your gear vs the character sheet (buffs), and the game's conversions",
+  "/eqn weights - what 10 points of each stat change, right now",
+  "/eqn compare <item link or ID> - full comparison: each slot, each stat's part, effects not counted",
+  "/eqn target auto|0|1|2|3 - target level above yours",
+  "/eqn tooltip - comparison on item tooltips on/off",
   "/eqn scan - read everything again now",
   "/eqn dump - save everything to the SavedVariables file (for bug reports and tests)",
   "/eqn debug - print caught errors as they happen",
@@ -223,6 +333,7 @@ SLASH_EQUIPTHISNEXT1 = "/eqn"
 SlashCmdList.EQUIPTHISNEXT = function(msg)
   local cmd, rest = (msg or ""):match("^%s*(%S*)%s*(.-)%s*$")
   cmd = (cmd or ""):lower()
+  local rawRest = rest
   rest = rest ~= "" and rest:lower() or nil
   local run = {
     status = Diag.Status, char = Diag.Char, stats = function() Diag.Stats(rest) end, gear = Diag.Gear,
@@ -230,6 +341,9 @@ SlashCmdList.EQUIPTHISNEXT = function(msg)
     spells = function() Diag.Spells(rest) end,
     api = function() local rows = Diag.Api(); if rest == "all" then for _, r in ipairs(rows) do P(r) end end end,
     scan = function() profile(true); P("scanned.") ; Diag.Char() end,
+    model = Diag.Model, sheet = Diag.Sheet, weights = Diag.Weights,
+    compare = function() Diag.Compare(rawRest) end, target = function() Diag.Target(rest) end,
+    tooltip = function() ns.db.tooltip = not ns.db.tooltip; P("tooltip " .. (ns.db.tooltip and "on" or "off")) end,
     dump = Diag.Dump,
     debug = function() ns.db.debug = not ns.db.debug; P("debug " .. (ns.db.debug and "on" or "off")) end,
   }
@@ -240,5 +354,5 @@ SlashCmdList.EQUIPTHISNEXT = function(msg)
 end
 
 ns.Events.On("PLAYER_LOGIN", "hello", function()
-  ns.Print("loaded (test build " .. ns.version .. ": reads your character, doesn't score items yet). Type /eqn for diagnostics.")
+  ns.Print("loaded (test build " .. ns.version .. ": compares gear by modelled melee DPS and EHP). /eqn for commands.")
 end)

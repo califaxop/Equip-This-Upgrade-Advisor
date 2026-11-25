@@ -34,6 +34,7 @@ function P.New()
     talents = { trees = {}, nodes = {} },
     buffs = { helpful = {}, harmful = {} },
     spells = { known = {}, count = 0 },
+    calc = {},
     issues = {},
   }
 end

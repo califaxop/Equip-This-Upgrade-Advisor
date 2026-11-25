@@ -71,6 +71,20 @@ function Item.Stats(link)
   return out
 end
 
+-- The item's tooltip text lines (left side), or nil
+function Item.TooltipLines(link)
+  local ok, data = Compat.Call("C_TooltipInfo.GetHyperlink", link)
+  if not ok or type(data) ~= "table" then return nil end
+  local lines = Compat.Field(data, "lines")
+  if type(lines) ~= "table" then return nil end
+  local out = {}
+  for _, l in ipairs(lines) do
+    local t = Compat.Field(l, "leftText")
+    if type(t) == "string" and t ~= "" then out[#out + 1] = t end
+  end
+  return out
+end
+
 function Item.NumSockets(linkOrID) return Compat.Value("C_Item.GetItemNumSockets", linkOrID) end
 function Item.SetName(setID) return Compat.Value("C_Item.GetItemSetInfo", setID) end
 function Item.CanUse(itemID) return Compat.Value("C_PlayerInfo.CanUseItem", itemID) end

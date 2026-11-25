@@ -6,7 +6,7 @@ local _, ns = ...
 local CharacterScanner = ns.Module("CharacterScanner")
 local Events, Cache, P, Compat = ns.Events, ns.Cache, ns.CharacterProfile, ns.Compat
 
-local PARTS = { "identity", "stats", "equipment", "talents", "buffs", "spells" }
+local PARTS = { "identity", "stats", "equipment", "talents", "buffs", "spells", "calc" }
 local dirty = {}
 for _, p in ipairs(PARTS) do dirty[p] = true end
 CharacterScanner.scans = 0
@@ -17,7 +17,8 @@ local function scanPart(profile, part)
   elseif part == "equipment" then ns.EquipmentScanner.Scan(profile)
   elseif part == "talents" then ns.TalentScanner.Scan(profile)
   elseif part == "buffs" then ns.BuffScanner.Scan(profile)
-  elseif part == "spells" then ns.SpellScanner.Scan(profile) end
+  elseif part == "spells" then ns.SpellScanner.Scan(profile)
+  elseif part == "calc" then ns.CalcScanner.Scan(profile) end
 end
 
 -- Rescan the parts marked dirty (or all, with force). Returns the profile.
@@ -46,6 +47,10 @@ function CharacterScanner.Refresh(force)
   -- parts the game hid this time are read again as soon as it allows (at the end of combat)
   if profile.stats.restricted then dirty.stats = true end
   if profile.buffs.restricted then dirty.buffs = true end
+  if profile.stats.restricted then dirty.calc = true end
+  -- evaluations were built on the old profile
+  Cache.Invalidate("evaluation")
+  ns.evalContext = nil
   profile.meta.addonVersion = ns.version
   profile.meta.time = time and time() or 0
   profile.meta.inCombat = Compat.InCombat()
@@ -60,7 +65,11 @@ function CharacterScanner.Refresh(force)
 end
 
 local function mark(...)
-  for i = 1, select("#", ...) do dirty[select(i, ...)] = true end
+  for i = 1, select("#", ...) do
+    local part = select(i, ...)
+    dirty[part] = true
+    if part == "stats" or part == "talents" or part == "equipment" then dirty.calc = true end
+  end
   Events.Debounce("rescan", 0.5, CharacterScanner.Refresh)
 end
 CharacterScanner.Mark = mark

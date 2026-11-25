@@ -241,3 +241,37 @@ C_UnitAuras = {
     return nil
   end,
 }
+
+-- milestone 2: the game's calculators, tooltip text, the tooltip pipeline
+MOCK.RATING_PER_PCT = { [CR_CRIT_MELEE] = 14, [CR_CRIT_RANGED] = 14, [CR_CRIT_SPELL] = 14, [CR_HIT_MELEE] = 10, [CR_HIT_SPELL] = 10,
+  [CR_HIT_RANGED] = 10, [CR_HASTE_MELEE] = 10, [CR_HASTE_SPELL] = 10, [CR_HASTE_RANGED] = 10, [CR_DODGE] = 12, [CR_PARRY] = 15,
+  [CR_BLOCK] = 5, [CR_EXPERTISE] = 10, [CR_DEFENSE_SKILL] = 1.5 }
+function GetCombatRatingBonusForCombatRatingValue(idx, value)
+  if MOCK.statsSecret then return SECRET_VALUE end
+  local per = MOCK.RATING_PER_PCT[idx]
+  return per and value / per or 0
+end
+C_PaperDollInfo = { GetArmorEffectiveness = function(armor, level) return s(armor / (armor + 400 + 85 * level)) end }
+function GetGlancingBlowChance(skill, def) if skill == nil then error("Usage: GetGlancingBlowChance([playerWeaponSkill], targetDefenseSkill)") end return s(0.10 + math.max(0, def - skill) * 0.02) end
+function GetGlancingBlowPenalty(skill, def) return s(0.05) end
+C_Spell.GetSpellDescription = function(id)
+  if id == 16253 then return "Increases your attack speed by 20% for your next 3 swing attacks after dealing a critical strike." end
+end
+MOCK.TOOLTIP_LINES = {
+  [1003] = { "Ring of Sets", "Equip: +6 Agility" },
+  [1008] = { "Ring of Procs", "Chance on hit: Wounds the target for 50 damage.", "Equip: Improves your chance to get a critical strike by 1%." },
+}
+C_TooltipInfo = { GetHyperlink = function(link)
+  local id = tonumber(tostring(link):match("item:(%d+)"))
+  local lines = {}
+  for _, t in ipairs(MOCK.TOOLTIP_LINES[id] or {}) do lines[#lines + 1] = { leftText = t } end
+  return { lines = lines }
+end }
+Enum.TooltipDataType = { Item = 0 }
+TooltipDataProcessor = { AddTooltipPostCall = function(_, fn) MOCK.tooltipHook = fn end }
+function MOCK.MakeTooltip(link)
+  local tt = { lines = {} }
+  function tt:GetItem() return "name", link end
+  function tt:AddLine(t) self.lines[#self.lines + 1] = t end
+  return tt
+end

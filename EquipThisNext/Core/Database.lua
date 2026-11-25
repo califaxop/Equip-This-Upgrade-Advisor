@@ -5,6 +5,8 @@ local DB = ns.Module("Database")
 
 DB.DEFAULTS = {
   debug = false,
+  targetOffset = "auto",  -- target level above yours: "auto" (+3 at the level cap, +0 below) or 0-3
+  tooltip = true,         -- the comparison line on item tooltips
   snapshots = {},   -- ["Name-Realm"] = { taken = time, profile = CharacterProfile }
 }
 

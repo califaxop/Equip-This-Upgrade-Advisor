@@ -13,7 +13,7 @@ runs alongside the released Equip This! without touching it, on the `next-founda
 | Milestone | State |
 |---|---|
 | 1. Foundation: compatibility layer, scanners, diagnostics | **done: 0.1.3 validated in game (level 42 Shaman, build 71091)** |
-| 2. Basic evaluation | next |
+| 2. Basic evaluation | **0.2.0 built, offline tests pass (40), waiting for the in-game test** |
 | 3. Complete gear evaluation | not started |
 | 4. Simulation (DPS, healing, tanking, PvP) | not started |
 | 5. All classes and builds | not started |
@@ -26,9 +26,10 @@ EquipThisNext/
   EquipThisNext.toc
   Core/        Bootstrap (namespace, safe calls), Events (one frame, debounce), Database (saved data), Cache (per-kind stores, fingerprints)
   API/         Compatibility (the only code that calls the game), Item, Equipment, Character, Talent, Aura, Spell
-  Engine/      CharacterProfile (pure Lua: the normalized profile, validation, fingerprints)
-  Scanner/     Stat, Equipment, Talent, Buff, Spell scanners; CharacterScanner (builds ns.profile, event-driven)
-  UI/          Diagnostics (/eqn)
+  Data/        StatDefinitions (item stat keys -> engine stats, ratings), Talents (what talents do to stats), ItemEffects (tooltip lines: stats vs effects)
+  Engine/      CharacterProfile, TalentInterpreter, StatEngine, Models/Melee, Models/Survival, Evaluator (all pure Lua)
+  Scanner/     Stat, Equipment, Talent, Buff, Spell, Calc scanners; CharacterScanner (builds ns.profile, event-driven)
+  UI/          Tooltip (comparison on item tooltips), Diagnostics (/eqn)
   Tests/       MockAPI (a stand-in client), run.lua (runner), Cache/Compat/Profile/Scanner tests
 ```
 
@@ -136,6 +137,85 @@ Sources:
   `Enum.SpellBookSpellBank.Player`.
 - **Spec index:** what `C_SpecializationInfo.GetSpecialization()` returns on Forever (3-tree
   talents) is unknown. It's recorded only.
+
+
+## Milestone 2: basic evaluation (0.2.0)
+
+How an item is evaluated:
+1. **Start from the character sheet.** The state is the game's own numbers, buffs included. Before it's
+   used for anything, the model rebuilds the sheet from the gear. On the real level-42 Shaman, the average
+   swing comes out as 35.56 weapon DPS x 3.6 + 502 AP / 14 x 3.6 + 2 flat weapon damage = 259.09,
+   exactly the sheet's 259.0857. Gear attack power, 73, is the sheet's AP bonus.
+2. **Apply the swap as a difference:** the new item's stats minus the replaced item's, through:
+   - the game's conversions measured on this character (AP per Strength and Agility, crit per Agility,
+     spell crit per Intellect, dodge per Agility, health per Stamina);
+   - rating to % from `GetCombatRatingBonusForCombatRatingValue`;
+   - talent conversions (`Data/Talents.lua`, `Engine/TalentInterpreter.lua`).
+3. **Model performance before and after.** Upgrade % = after / before - 1, separately per metric. DPS and
+   EHP are never combined.
+4. **Pick the best slot.** Rings and trinkets try both slots; the best is chosen on the spec's main metric
+   (DPS for melee specs, else EHP).
+
+Models:
+- **Melee DPS (auto-attacks).**
+  - Forever's attack table from Blizzard's Camelot UI code: miss 5.0 / 5.2 / 5.4 / 9.0 % vs a target
+    0-3 levels above you, minus your hit; target dodge 5.0 / 5.5 / 6.0 / 6.5 %; 0.04 % per point of weapon
+    skill vs the target's defense on hit, dodge and crit.
+  - Glancing chance and penalty from `GetGlancingBlowChance` / `GetGlancingBlowPenalty`.
+  - Crit is double damage. Haste is counted, and Flurry speeds up the swing after a crit (uptime
+    1 - (1 - crit)^3).
+  - Not yet counted (milestone 4): abilities, imbues, procs, off-hand.
+- **EHP.**
+  - Health / share of raw damage taken.
+  - The attacker table from Blizzard's formulas: miss 5 % and crit 5 %, each moving 0.04 % per point of
+    defense gap; crushing at 15+ points; your dodge, parry and block.
+  - Armor from the game's `C_PaperDollInfo.GetArmorEffectiveness` (its K, measured at your armor) and
+    block value.
+  - 20 % magic damage split over five schools, cut by resistance. The raid mixes come later.
+- **Spell damage and healing:** not modelled yet (milestone 4). Casters and healers get EHP only, and the
+  tooltip says so.
+
+Talents (`Data/Talents.lua`): only talents that change how stats turn into performance; flat bonuses are
+already in the sheet.
+- **Mental Dexterity 3/3 = all Intellect as attack power.** Confirmed on the sheet: base AP 429 =
+  2 x 139 Str + (2 x 42 - 20) + 87 Int.
+- **Mental Quickness: measured at run time.** (Sheet spell damage - gear) / Intellect; on the dump,
+  (37 - 7) / 87 for both damage and healing.
+- **Flurry: % from its description in game** (`C_Spell.GetSpellDescription`). If the description shows
+  rank 1's number at a higher rank, the Classic table (10/15/20/25/30) gives that rank's value. This is
+  marked unconfirmed.
+
+Every result carries a confidence:
+- **low:** the new or the replaced item has effects the models don't count (procs, use effects: listed
+  by name, never silently zero).
+- **medium:** assumptions (a Classic constant where the game gave nothing, an unconfirmed talent number,
+  an unknown rating conversion, stats from before combat), and for melee, abilities not in DPS yet.
+- **high:** none of the above.
+
+Not in milestone 2:
+- Weapons, shields, off-hands and relics (milestone 3).
+- Set bonuses (counted, not valued: milestone 3).
+- Enchants on the compared item vs yours (milestone 3).
+- Separating buffs from gear: buffs stay in the baseline. `/eqn sheet` shows what's beyond gear.
+- Hit rating is assumed to raise melee, ranged and spell hit like crit rating does. Not confirmed: no
+  hit-rating item seen in game yet.
+
+Real numbers from the fixture (level 42 Enhancement Shaman, glancing and armor assumed since the
+0.1.0 dump has no calculators):
+- vs same level: 78.5 white DPS (miss 0.04 %, dodge 5.04 %, glancing 12 %, crit 10.35 %, Flurry up
+  28 %), EHP 3163.
+- Per point: Strength 0.199 % DPS (= 2 AP), Intellect 0.099 % (= 1 AP, Mental Dexterity), crit rating
+  0.093 %, hit 0 (the 5 % miss is already covered by +5 % hit). Stamina 0.438 % EHP.
+
+In-game test (0.2.0):
+1. `/eqn sheet`: rating conversions, glancing and armor reduction read from the game.
+2. `/eqn model`: DPS and EHP with the attack table; talent lines (Flurry's % from its description).
+3. `/eqn weights`: does the order look right for your character?
+4. Hover items (bags, vendors, quest rewards): an "EqT Next: DPS +x% EHP +y%" line, the slot it
+   replaces, and confidence. Check a few against your expectations; `/eqn compare <shift-click item>`
+   for each slot and each stat's part.
+5. `/eqn target 3` and `/eqn model`: vs a boss, hit should start to matter.
+6. `/eqn dump` and `/reload`: the calculators' values become test data.
 
 ## In-game test 1 (0.1.0, level 42 Orc Shaman, Enhancement, build 71091)
 
