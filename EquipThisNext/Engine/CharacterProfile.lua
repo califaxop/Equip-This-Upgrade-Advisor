@@ -57,6 +57,41 @@ function P.CountSets(equipment)
   return sets
 end
 
+-- Which tree each talent node is in. On Forever a node's groups are mostly its row in a tree (the
+-- groups that unlock rows), and only some nodes list their tree's group. So: a node that lists a tree
+-- group is in that tree; any other node goes to the tree whose column it sits in (the trees are laid
+-- out side by side: x positions of the nodes known to be in each tree). Sets node.groupID (the tree's
+-- group) and node.treeBy ("group" or "position"). Pure: tested with a real Forever layout.
+function P.AssignTrees(talents)
+  local isTree, byGroup = {}, {}
+  for _, t in ipairs(talents.trees or {}) do
+    if t.groupID then isTree[t.groupID] = true end
+  end
+  local span = {}   -- tree group -> { min x, max x } of its known nodes
+  for _, n in ipairs(talents.nodes or {}) do
+    n.groupID, n.treeBy = nil, nil
+    for _, g in ipairs(n.groupIDs or {}) do
+      if isTree[g] then n.groupID, n.treeBy = g, "group"; break end
+    end
+    if n.groupID and n.posX then
+      local s = span[n.groupID] or { n.posX, n.posX }
+      s[1], s[2] = math.min(s[1], n.posX), math.max(s[2], n.posX)
+      span[n.groupID] = s
+    end
+  end
+  for _, n in ipairs(talents.nodes or {}) do
+    if not n.groupID and n.posX then
+      local best, bestD
+      for g, s in pairs(span) do
+        local d = (n.posX < s[1] and s[1] - n.posX) or (n.posX > s[2] and n.posX - s[2]) or 0
+        if not bestD or d < bestD then best, bestD = g, d end
+      end
+      if best then n.groupID, n.treeBy = best, "position" end
+    end
+  end
+  return talents
+end
+
 -- Talent points per tree from the nodes' ranks (nodes carry the group = tree they belong to).
 function P.SumTreePoints(talents)
   local byGroup, total = {}, 0

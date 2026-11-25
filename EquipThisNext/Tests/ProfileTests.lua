@@ -72,3 +72,16 @@ T.Test("Fingerprint changes with gear, enchants, talents, level; not with stats"
   p.identity.level = 43
   T.Ok(P.Fingerprint(p) ~= f2, "level")
 end)
+
+T.Test("AssignTrees on a real Forever talent layout: Elemental 0, Enhancement 26, Restoration 7", function()
+  local t = ns.Database.Copy(FIXTURE_SHAMAN_TALENTS)
+  P.AssignTrees(t); P.SumTreePoints(t)
+  T.Eq(t.trees[1].points, 0, "Elemental Combat"); T.Eq(t.trees[2].points, 26, "Enhancement"); T.Eq(t.trees[3].points, 7, "Restoration")
+  T.Eq(t.totalPoints, 33, "total")
+  local byName = {}
+  for _, n in ipairs(t.nodes) do byName[n.name] = n end
+  T.Eq(byName["Flurry"].groupID, 11363, "Flurry is Enhancement (by position)")
+  T.Eq(byName["Tidal Focus"].groupID, 11362, "Tidal Focus is Restoration")
+  T.Eq(byName["Mental Dexterity"].treeBy, "group", "listed its tree")
+  for _, n in ipairs(t.nodes) do T.Ok(n.groupID, n.name .. " has a tree") end
+end)

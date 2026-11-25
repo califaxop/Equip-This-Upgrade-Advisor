@@ -47,7 +47,7 @@ end
 function Diag.Char()
   local p = profile()
   local id, t = p.identity, p.talents
-  f("%s-%s: level %s %s %s (race %s, class %s/%s), spec index %s", tostring(id.name), tostring(id.realm), tostring(id.level),
+  f("%s%s: level %s %s %s (race %s, class %s/%s), spec index %s", tostring(id.name), (id.realm and id.realm ~= "") and ("-" .. id.realm) or "", tostring(id.level),
     tostring(id.raceName), tostring(id.className), tostring(id.race), tostring(id.class), tostring(id.classID), tostring(id.specIndex))
   local trees = {}
   for _, tr in ipairs(t.trees) do trees[#trees + 1] = string.format("%s %d", tostring(tr.name), tr.points or 0) end
@@ -190,7 +190,8 @@ end
 
 function Diag.Dump()
   local p = profile(true)
-  local key = string.format("%s-%s", tostring(p.identity.name), tostring(p.identity.realm))
+  local realm = p.identity.realm
+  local key = tostring(p.identity.name) .. ((realm and realm ~= "") and ("-" .. realm) or "")
   local api = {}
   for path, src in pairs(Compat.KNOWN) do
     local s = Compat.status[path]

@@ -12,7 +12,7 @@ runs alongside the released Equip This! without touching it, on the `next-founda
 
 | Milestone | State |
 |---|---|
-| 1. Foundation: compatibility layer, scanners, diagnostics | **0.1.0 tested in game (see below); 0.1.1 fixes waiting for a re-test** |
+| 1. Foundation: compatibility layer, scanners, diagnostics | **0.1.0 tested in game (see below); 0.1.2 fixes waiting for a re-test** |
 | 2. Basic evaluation | not started (waits for milestone 1's in-game test) |
 | 3. Complete gear evaluation | not started |
 | 4. Simulation (DPS, healing, tanking, PvP) | not started |
@@ -151,11 +151,18 @@ Worked:
 - `C_SpecializationInfo.GetSpecialization()` returned 1 for an Enhancement build, so it's not the
   talent tree. Recorded only.
 
-Found and fixed in 0.1.1:
-- **Talents:** 33 points read, but only 6 placed in a tree. A Forever talent node belongs to several
-  groups, and the tree isn't always the first. The node's tree is now whichever of its groups is a
-  tree group. Points per tree are also checked against the game's own count
-  (`C_Traits.GetGroupCurrencyInfo`, as the released Equip This! uses), and any mismatch is an issue.
+Found and fixed in 0.1.1 and 0.1.2:
+- **Talents:** 33 points read, but only 6 placed in a tree. The dump showed why: a Forever talent
+  node's groups are mostly its **row** in the tree (groups 11350-11369, 12795, 12800 for the Shaman:
+  the groups that unlock rows), and only some nodes list their tree's group (here Concussion and
+  Convection → Elemental Combat 11326, Mental Dexterity, Ancestral Knowledge and Earth's Grasp →
+  Enhancement 11363, Improved Healing Wave and Tidal Mastery → Restoration 11362). The trees are laid
+  out side by side: Elemental x 1020-2820, Enhancement 5020-6820, Restoration 9080-10880.
+  `CharacterProfile.AssignTrees` puts a node in the tree it lists, else in the tree whose column it
+  sits in. With the real layout as a test fixture (`Tests/FixtureTalents.lua`, no character data) it
+  gives Elemental 0, Enhancement 26, Restoration 7, the true split. Points per tree are also checked
+  against the game's own count (`C_Traits.GetGroupCurrencyInfo`, as the released Equip This! uses).
+- `GetRealmName()` returned an empty string. The dump key no longer has a trailing dash.
 - **`GetGlancingBlowChance([playerWeaponSkill], targetDefenseSkill)`** needs arguments. It's a
   calculator for the performance model, not a character-sheet value, so it's no longer scanned.
 - A missing optional return (no off-hand speed) was listed as "unavailable". It no longer is.
@@ -170,7 +177,7 @@ Still to check: `CR_WEAPON_SKILL` doesn't exist on Forever (reported, fine). Man
 Offline (no game): `python3 tools/run_next_tests.py` (needs `pip install lupa`), or
 `cd EquipThisNext && lua5.1 Tests/run.lua`. The runner loads the files in the .toc's order against
 `Tests/MockAPI.lua`, a stand-in client shaped like the documented API. Knobs can turn on hidden stats,
-hidden auras, items that load late, missing events and API errors. 26 tests cover the cache, the
+hidden auras, items that load late, missing events and API errors. 27 tests cover the cache, the
 compatibility layer, link parsing, sets, talent points, profile validation, fingerprints, the full
 scan, late-loading items, combat, gear and talent changes, and every `/eqn` command.
 

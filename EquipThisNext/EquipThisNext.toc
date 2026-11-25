@@ -2,7 +2,7 @@
 ## Title: Equip This! Next (test)
 ## Notes: Milestone 1 test build of the new Equip This! engine: reads your gear, stats, talents, buffs and spells and reports them (/eqn). It does not score items yet.
 ## Author: califaxop
-## Version: 0.1.1
+## Version: 0.1.2
 ## SavedVariables: EquipThisNextDB
 
 # Core: namespace, events, saved data, caches

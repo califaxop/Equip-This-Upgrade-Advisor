@@ -23,13 +23,11 @@ function TalentScanner.Scan(profile)
     profile.talents = t
     return t
   end
-  local treeGroups = {}   -- groupIDs that are talent trees (a node can be in other groups too)
   for _, treeID in ipairs(treeIDs) do
     for _, g in ipairs(Talent.Groups(treeID)) do
       local gid = num(Compat.Field(g, "groupID"))
       t.trees[#t.trees + 1] = { treeID = treeID, groupID = gid,
         name = Compat.Field(g, "displayName"), order = num(Compat.Field(g, "orderIndex")) }
-      if gid then treeGroups[gid] = true end
     end
     for _, nodeID in ipairs(Talent.TreeNodes(treeID)) do
       local node = Talent.NodeInfo(configID, nodeID)
@@ -44,14 +42,11 @@ function TalentScanner.Scan(profile)
         local name = def and Compat.Field(def, "overrideName")
         if (not name or name == "") and spellID then name = Spell.Name(spellID) end
         local groups = Compat.Field(node, "groupIDs")
-        local groupList, treeGroup = {}, nil
+        local groupList = {}
         if type(groups) == "table" then
           for _, gid in ipairs(groups) do
             gid = num(gid)
-            if gid then
-              groupList[#groupList + 1] = gid
-              if not treeGroup and treeGroups[gid] then treeGroup = gid end
-            end
+            if gid then groupList[#groupList + 1] = gid end
           end
         end
         if name and name ~= "" then
@@ -59,7 +54,7 @@ function TalentScanner.Scan(profile)
             nodeID = nodeID, treeID = treeID, entryID = entryID, definitionID = defID, spellID = spellID, name = name,
             rank = num(Compat.Field(node, "currentRank")) or num(Compat.Field(node, "ranksPurchased")) or 0,
             maxRank = num(Compat.Field(node, "maxRanks")) or num(entry and Compat.Field(entry, "maxRanks")),
-            groupID = treeGroup, groupIDs = groupList,
+            groupIDs = groupList,
             posX = num(Compat.Field(node, "posX")), posY = num(Compat.Field(node, "posY")),
           }
         end
@@ -71,6 +66,7 @@ function TalentScanner.Scan(profile)
   if not t.readable then
     ns.CharacterProfile.AddIssue(profile, "warn", "talents-empty", "the talent configuration has no readable nodes")
   end
+  ns.CharacterProfile.AssignTrees(t)
   ns.CharacterProfile.SumTreePoints(t)
   -- cross-check: the points the game itself counts per tree
   local ids = {}

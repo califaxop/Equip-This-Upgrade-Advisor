@@ -43,6 +43,7 @@ end
 
 -- (the mock replaces print: what the addon prints lands in PRINTS, test output goes through OUT)
 dofile(ROOT .. "Tests/MockAPI.lua")
+dofile(ROOT .. "Tests/FixtureTalents.lua")
 for _, file in ipairs({ "CacheTests", "CompatTests", "ProfileTests", "ScannerTests" }) do
   OUT("== " .. file)
   assert(loadfile(ROOT .. "Tests/" .. file .. ".lua"))()

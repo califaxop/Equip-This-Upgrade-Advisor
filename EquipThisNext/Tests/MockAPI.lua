@@ -185,10 +185,11 @@ C_PlayerInfo = { CanUseItem = function() return true end }
 
 -- talents: one config, one tree, three groups (Elemental, Enhancement, Restoration)
 MOCK.TALENTS = {
-  { node = 501, group = 11650, def = 9001, spell = 16039, name = "Convection", rank = 0, max = 5 },
-  { node = 502, group = 11657, def = 9002, spell = 16262, name = "Ancestral Knowledge", rank = 5, max = 5 },
-  { node = 503, group = 11657, groups = { 40001, 11657 }, def = 9003, spell = 16253, name = "Flurry", rank = 3, max = 5 }, -- (tree group not first, as in game)
-  { node = 504, group = 11670, def = 9004, spell = 16173, name = "Tidal Focus", rank = 1, max = 5 },
+  -- (as in game: some nodes list their tree's group, others only a row group; trees side by side in x)
+  { node = 501, group = 11650, x = 1600, def = 9001, spell = 16039, name = "Convection", rank = 0, max = 5 },
+  { node = 502, group = 11657, x = 6200, def = 9002, spell = 16262, name = "Ancestral Knowledge", rank = 5, max = 5 },
+  { node = 503, group = 11657, groups = { 40001 }, x = 5600, def = 9003, spell = 16253, name = "Flurry", rank = 3, max = 5 },
+  { node = 504, group = 11670, x = 10200, def = 9004, spell = 16173, name = "Tidal Focus", rank = 1, max = 5 },
 }
 C_ClassTalents = { GetActiveConfigID = function() if MOCK.noTalents then return nil end return 77 end }
 C_Traits = {
@@ -197,7 +198,7 @@ C_Traits = {
   GetNodeInfo = function(_, nodeID)
     for _, n in ipairs(MOCK.TALENTS) do
       if n.node == nodeID then
-        return { ID = nodeID, posX = 0, posY = 0, entryIDs = { nodeID * 10 }, activeEntry = n.rank > 0 and { entryID = nodeID * 10, rank = n.rank } or nil,
+        return { ID = nodeID, posX = n.x or 0, posY = 0, entryIDs = { nodeID * 10 }, activeEntry = n.rank > 0 and { entryID = nodeID * 10, rank = n.rank } or nil,
           currentRank = n.rank, ranksPurchased = n.rank, maxRanks = n.max, groupIDs = n.groups or { n.group } }
       end
     end
