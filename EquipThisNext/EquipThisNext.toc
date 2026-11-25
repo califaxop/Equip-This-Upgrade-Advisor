@@ -2,7 +2,7 @@
 ## Title: Equip This! Next (test)
 ## Notes: Test build of the new Equip This! engine (milestone 4): compares gear (armor, weapons, sets, enchants, procs) by modelled melee DPS (abilities, imbues, procs) and effective health from your own character sheet. /eqn
 ## Author: califaxop
-## Version: 0.4.1
+## Version: 0.4.2
 ## SavedVariables: EquipThisNextDB
 
 # Core: namespace, events, saved data, caches

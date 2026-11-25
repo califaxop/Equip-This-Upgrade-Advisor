@@ -34,6 +34,31 @@ function Ev.Offset(profile, settings)
   return (profile.identity.level or 1) >= (settings and settings.maxLevel or 60) and 3 or 0
 end
 
+-- A weapon type whose skill is below your best weapon skill trains up with use: weapons are valued
+-- at that skill (state.trainedSkill; today's % is given as a note). Also your worn weapon's, so a
+-- comparison is the same seen from either item (regression: 0.4.1, wearing a 180-skill axe made a
+-- 209-skill mace +133%).
+Ev.UNTRAINED_GAP = 5   -- (a level's worth of skill or less: as it is)
+local function trained(s, state)
+  local base = state.trainedSkill or state.baseSkill
+  if not (base and s.mh) then return nil end
+  local function lineOf(w) return w and w.subclass and ns.StatDefs.WEAPON_SKILL[w.subclass] end
+  local low = {}
+  local mhLine = lineOf(s.mh)
+  if s.weaponSkill and s.weaponSkill < base - Ev.UNTRAINED_GAP then low[#low + 1] = { line = mhLine, skill = s.weaponSkill } end
+  local ohLine = lineOf(s.oh)
+  local ohSkill = ohLine and s.skills and s.skills[ohLine]
+  if ohSkill and ohSkill < base - Ev.UNTRAINED_GAP and ohLine ~= mhLine then low[#low + 1] = { line = ohLine, skill = ohSkill } end
+  if #low == 0 then return nil end
+  local t = {}
+  for k, x in pairs(s) do t[k] = x end
+  t.skills = {}
+  for k, x in pairs(s.skills or {}) do t.skills[k] = x end
+  for _, l in ipairs(low) do if l.line then t.skills[l.line] = base end end
+  if s.weaponSkill < base - Ev.UNTRAINED_GAP then t.weaponSkill = base end
+  return t, low[1].skill, base
+end
+
 -- the modelled effects of worn items ({ kind, ..., slot, item }), from ItemEffects.Model
 function Ev.EffectsOf(items)
   local out = {}
@@ -91,6 +116,22 @@ function Ev.Context(profile, settings)
     baselineArmor = state.armor, magicShare = settings and settings.magicShare,
     canDualWield = settings and settings.canDualWield,
   }
+  -- your best weapon skill (not above 5 x level): what weapons are valued at
+  local best = state.weaponSkill or 0
+  for _, line in pairs(ns.StatDefs.WEAPON_SKILL) do
+    local v = state.skills and state.skills[line]
+    if v and v > best then best = v end
+  end
+  state.trainedSkill = math.min(best, (state.level or 1) * 5)
+  if ctx.melee then
+    local t, now, base = trained(state, state)
+    if t then
+      -- your worn weapon isn't trained up: the baseline is at the trained skill, today's kept
+      ctx.rawState, ctx.todayBase = state, Ev.Performance(state, ctx)
+      ctx.state, state = t, t
+      ctx.skillNote = string.format("your current weapon's skill is %d (vs %d)", now, base)
+    end
+  end
   ctx.base = Ev.Performance(state, ctx)
   -- buffs and talents in the sheet beyond gear, per primary stat (stat.X.pos - gear)
   ctx.beyondGear = {}
@@ -200,28 +241,6 @@ local function isShield(it) return it and it.classID == ns.StatDefs.SHIELD.class
 local function isTwoHand(it) return it and it.equipLoc == "INVTYPE_2HWEAPON" end
 local ONE_HAND = { INVTYPE_WEAPON = true, INVTYPE_WEAPONMAINHAND = true }
 local OFF_HAND = { INVTYPE_SHIELD = true, INVTYPE_HOLDABLE = true, INVTYPE_WEAPONOFFHAND = true }
--- A weapon whose skill is below your current main-hand's trains up with use: its main % is at that
--- skill (the % at today's skill is given as a note).
-local function trained(s, state)
-  local base = state.baseSkill
-  if not (base and s.mh) then return nil end
-  local function lineOf(w) return w and w.subclass and ns.StatDefs.WEAPON_SKILL[w.subclass] end
-  local low = {}
-  local mhLine = lineOf(s.mh)
-  if s.weaponSkill and s.weaponSkill < base then low[#low + 1] = { line = mhLine, skill = s.weaponSkill } end
-  local ohLine = lineOf(s.oh)
-  local ohSkill = ohLine and s.skills and s.skills[ohLine]
-  if ohSkill and ohSkill < base and ohLine ~= mhLine then low[#low + 1] = { line = ohLine, skill = ohSkill } end
-  if #low == 0 then return nil end
-  local t = {}
-  for k, x in pairs(s) do t[k] = x end
-  t.skills = {}
-  for k, x in pairs(s.skills or {}) do t.skills[k] = x end
-  for _, l in ipairs(low) do if l.line then t.skills[l.line] = base end end
-  if s.weaponSkill < base then t.weaponSkill = base end
-  return t, low[1].skill, base
-end
-
 local RANGED = { INVTYPE_RANGED = true, INVTYPE_RANGEDRIGHT = true, INVTYPE_THROWN = true, INVTYPE_RELIC = true }
 
 -- One resulting setup: { [slot] = item or false (emptied) } -> option with performance and %.
@@ -267,12 +286,20 @@ function Ev.Evaluate(ctx, changes, label, notes)
   local p = Ev.Performance(s, ctx)
   local untrainedNote
   if weapons and ctx.melee then
+    -- today's numbers: this setup with your skills as they are, vs your gear as it is today
+    local pNow, baseNow = p, ctx.base
+    if ctx.rawState then
+      local sNow = ns.StatEngine.Apply(ctx.rawState, delta, ctx.talents, weapons)
+      sNow.effects = effects
+      pNow, baseNow = Ev.Performance(sNow, ctx), ctx.todayBase
+    end
     local t, now, base = trained(s, ctx.state)
-    if t then
+    if t then s, p = t, Ev.Performance(t, ctx) end
+    local today, main = pct(pNow.dps, baseNow.dps), pct(p.dps, ctx.base.dps)
+    if (t or ctx.rawState) and today and main and math.abs(today - main) >= 0.5 then
       -- (two short lines: one long one widens the tooltip)
-      untrainedNote = { string.format("your skill with this weapon type is %d (vs %d)", now, base),
-        string.format("until it's trained up: DPS %+.1f%%", pct(p.dps, ctx.base.dps) or 0) }
-      s, p = t, Ev.Performance(t, ctx)
+      untrainedNote = { t and string.format("your skill with this weapon type is %d (vs %d)", now, base) or ctx.skillNote,
+        string.format("until it's trained up: DPS %+.1f%%", today) }
     end
   end
   local opt = { status = "ok", label = label, changes = changes, removed = removed, added = added, delta = delta, perf = p,

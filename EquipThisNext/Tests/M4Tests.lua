@@ -195,3 +195,30 @@ T.Test("M4 in game (mock): Stormstrike and Windfury scanned; /eqn measure agains
   T.Eq(MOCK.meter, nil, "reset")
   T.Eq(ns4.errors.count, 0, "no errors")
 end)
+
+T.Test("0.4.2: wearing an untrained weapon: the baseline is at your trained skill, today's % as a note (regression: Rage +133% vs the 180-skill Flayer)", function()
+  local p = fixture()
+  p.stats.weaponSkills = p.stats.weaponSkills or {}
+  p.stats.weaponSkills[16] = { rank = 180, modifier = 0 }      -- the worn weapon at 180 today
+  p.stats.skillByLine = { [160] = 209, [44] = 180 }
+  local ctx = Ev.Context(p, { targetOffset = 0 })
+  T.Ok(ctx.rawState, "today's state kept"); T.Eq(ctx.state.weaponSkill, 209, "valued at your best weapon skill")
+  T.Ok(ctx.base.dps > ctx.todayBase.dps, "trained beats today")
+  -- a two-hander at 209 vs it: today's % is far bigger than the trained one, and the note says so
+  local mace = { link = "item:2", itemID = 2, name = "Other Mace", loaded = true, equipLoc = "INVTYPE_2HWEAPON", classID = 2, subclassID = 5,
+    canUse = true, effects = {}, modeled = {}, stats = { ITEM_MOD_STRENGTH_SHORT = 16, ITEM_MOD_DAMAGE_PER_SECOND_SHORT = 35.6 },
+    weapon = { dps = 35.6, speed = 3.6 } }
+  local o = Ev.Compare(ctx, mace).best
+  local note
+  for _, n in ipairs(o.notes) do if n:find("trained up") then note = n end end
+  local today = note and tonumber(note:match("DPS ([%+%-]%d+%.%d)%%"))
+  T.Ok(today and today > o.dps + 3, string.format("main %+.1f%%, today %s", o.dps, tostring(today)))
+  T.Ok(math.abs(o.dps) < 15, "the main % is a trained comparison: " .. o.dps)
+  local found
+  for _, n in ipairs(o.notes) do if n:find("current weapon's skill is 180") then found = true end end
+  T.Ok(found, "says the worn weapon's skill")
+  -- armor: no note
+  local ring = { link = "item:3", itemID = 3, name = "Ring", loaded = true, equipLoc = "INVTYPE_FINGER", classID = 4, subclassID = 0,
+    canUse = true, effects = {}, modeled = {}, stats = { ITEM_MOD_STRENGTH_SHORT = 5 } }
+  for _, n in ipairs(Ev.Compare(ctx, ring).best.notes) do T.Ok(not n:find("trained"), "no skill note on a ring") end
+end)

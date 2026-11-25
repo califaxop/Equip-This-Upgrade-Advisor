@@ -266,7 +266,8 @@ end
 
 -- Milestone 4: the model against the game's own damage meter, for your last fight. Compared as
 -- shares of the damage the model covers (so downtime and spells it doesn't model don't skew it).
-local MATCH = { ["auto attack"] = { "auto attack", "melee" }, ["off-hand"] = { "off%-hand", "offhand" } }
+-- (Forever's damage meter calls auto attacks "Attack", spell 6603: seen in game 0.4.1)
+local MATCH = { ["auto attack"] = { "^attack$", "auto attack", "^melee$" }, ["off-hand"] = { "off%-hand", "offhand" } }
 local function matches(partName, spellName)
   local s, key = spellName:lower(), partName:lower()
   for _, w in ipairs(MATCH[key] or { (key:gsub(" %d+$", "")) }) do if s:find(w) then return true end end

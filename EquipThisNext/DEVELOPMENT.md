@@ -15,7 +15,7 @@ runs alongside the released Equip This! without touching it, on the `next-founda
 | 1. Foundation: compatibility layer, scanners, diagnostics | **done: 0.1.3 validated in game (level 42 Shaman, build 71091)** |
 | 2. Basic evaluation | **done: validated in game (0.2.1; the tooltip %s look right to the tester)** |
 | 3. Complete gear evaluation | **done: validated in game (0.3.0-0.3.3)** |
-| 4. Simulation (DPS, healing, tanking, PvP) | **4a: melee DPS with abilities, imbues, procs: 0.4.0 read right in game; 0.4.1 fixes Windfury's double-counted talent; waiting for `/eqn measure`**; 4b casters and healing, 4c tanking threat and PvP: not started |
+| 4. Simulation (DPS, healing, tanking, PvP) | **4a: melee DPS with abilities, imbues, procs: 0.4.0 read right in game; 0.4.1 measured in game (Windfury agrees); 0.4.2 fixes the meter's "Attack" and untrained worn weapons**; 4b casters and healing, 4c tanking threat and PvP: not started |
 | 5. All classes and builds | not started |
 | 6. Optimization and validation | not started |
 
@@ -214,6 +214,21 @@ In-game results (0.4.0, level 42 Enhancement Shaman):
   shared spell 439431's 103.6 (x 1.4) is what `/eqn measure` will show.
 - Model: 163 DPS = auto attack 46%, Stormstrike 25%, Windfury 29% (4.2 procs a minute).
 - No target dummies in Forever: `/eqn measure` now reads all fights since a reset (0.4.1).
+
+In-game results (0.4.1): 30 mob fights, 305 s in combat, 66,610 damage (218 DPS). By spell:
+Attack 31%, Stormstrike 17%, Windfury 15%, Flame Shock 14%, Earth Shock 13%, Lightning Shield 6%,
+Lightning Bolt 4%. Forever's damage meter calls auto attacks **"Attack"** (6603): 0.4.1 didn't
+match it (fixed in 0.4.2). Recomputed as shares of what the model covers (63% of the damage):
+- auto attack: model 42%, measured 49%
+- Stormstrike: model 33%, measured 27% (casting shocks shares the global cooldown with it; fights
+  of 10 s on average make the per-pull adjustment large)
+- Windfury: model 25%, measured 23%: agrees. Its two attack-power readings (202 or 145) differ by
+  ~5% per extra attack, too little to tell apart this way.
+- The covered parts did 138 DPS over time in combat vs the model's 160 always attacking.
+
+Also seen: wearing the 180-skill Flayer made Rage of the Storm +133% (the baseline was today's
+untrained axe). 0.4.2 values weapons, worn or not, at your best weapon skill when theirs is more
+than 5 below it, with today's % as a note; the comparison is now the same from either item.
 
 ## Milestone 3: complete gear evaluation (0.3.0)
 

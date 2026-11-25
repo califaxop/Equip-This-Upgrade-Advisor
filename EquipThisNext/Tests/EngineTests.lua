@@ -331,12 +331,12 @@ T.Test("0.3.1: a weapon type you haven't trained: % at your current skill, today
     if n:find("weapon type is") then skillNote = n end
     T.Ok(#n <= 60, "short enough not to widen the tooltip: " .. n)
   end
-  T.Ok(skillNote and skillNote:find("is 180") and skillNote:find("vs 209"), "says the skill: " .. tostring(skillNote))
+  T.Ok(skillNote and skillNote:find("is 180") and skillNote:find("vs 210"), "says the skill: " .. tostring(skillNote))
   local today = tonumber(note:match("DPS ([%+%-]%d+%.%d)%%"))
   T.Ok(today and o.dps > today, "the main % is at the trained skill (" .. o.dps .. ") above today's (" .. tostring(today) .. ")")
-  p.stats.skillByLine[44] = 209
+  p.stats.skillByLine[44] = 210
   local trained = Ev.Compare(Ev.Context(p, { targetOffset = 0 }), FLAYER).best
-  T.Near(o.dps, trained.dps, 1e-6, "same as an axe already at 209")
+  T.Near(o.dps, trained.dps, 1e-6, "same as an axe already at your best weapon skill (maces 210 here)")
   T.Ok(res.confidence ~= "low", "a skill to train isn't a reason for low confidence: " .. res.confidence)
 end)
 
