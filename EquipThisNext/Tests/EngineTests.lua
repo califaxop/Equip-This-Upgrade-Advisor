@@ -138,7 +138,7 @@ T.Test("in game (mock): the tooltip line, /eqn model, sheet, weights, compare, t
   T.Ok(ns2.profile.calc.glancing[0].chance, "glancing from the game")
   T.Ok(ns2.profile.calc.talentText[16253], "Flurry's description read")
   local ctx = ns2.Context()
-  T.Near(ctx.talents.flurry.haste, 0.20, 1e-9, "Flurry % from its description")
+  T.Near(ctx.talents.flurry.haste, ({ 10, 15, 20, 25, 30 })[MOCK.TALENTS[3].rank] / 100, 1e-9, "Flurry at the mock's rank: Classic table, the description is not used")
   local tt = MOCK.MakeTooltip("|cff0070dd|Hitem:1008::::::::42|h[Ring of Procs]|h|r")
   MOCK.tooltipHook(tt)
   T.Ok(tt.lines[1] and tt.lines[1]:find("DPS") and tt.lines[1]:find("EHP"), "tooltip line: " .. tostring(tt.lines[1]))
@@ -156,4 +156,20 @@ T.Test("in game (mock): the tooltip line, /eqn model, sheet, weights, compare, t
     for _, line in ipairs(PRINTS) do T.Ok(not line:find("error"), "/eqn " .. c .. ": " .. line) end
   end
   T.Eq(ns2.errors.count, 0, "no errors caught")
+end)
+
+T.Test("Flurry: never from its description (Forever's says 1%); the buff's value when seen, else Classic per rank", function()
+  local p = fixture()
+  p.calc.talentText = { [16256] = "Increases your attack speed by 1% for your next 3 swings after dealing a melee critical strike." }
+  local ctx = Ev.Context(p, { targetOffset = 0 })
+  T.Near(ctx.talents.flurry.haste, 0.15, 1e-9, "2/5 from the Classic table, not 1% (regression: 0.2.0 in game)")
+  T.Ok(ctx.talents.unchecked > 0, "marked unconfirmed")
+  p.buffs.helpful = { { name = "Flurry", points = { 20 } } }
+  local ctx2 = Ev.Context(p, { targetOffset = 0 })
+  T.Near(ctx2.talents.flurry.haste, 0.20, 1e-9, "the live buff's value wins")
+end)
+
+T.Test("stat lines with decimals are stats, not effects (regression: the cloak's 0.5% crit line in 0.2.0)", function()
+  T.Eq(#ns.ItemEffects.Uncounted({ "Equip: Improves your chance to get a critical strike by 0.5%." }), 0, "0.5%")
+  T.Eq(#ns.ItemEffects.Uncounted({ "Equip: Reduces the mana cost of Flame Shock and Lightning Bolt by 5 Mana." }), 1, "a real effect stays")
 end)

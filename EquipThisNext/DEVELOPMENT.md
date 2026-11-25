@@ -13,7 +13,7 @@ runs alongside the released Equip This! without touching it, on the `next-founda
 | Milestone | State |
 |---|---|
 | 1. Foundation: compatibility layer, scanners, diagnostics | **done: 0.1.3 validated in game (level 42 Shaman, build 71091)** |
-| 2. Basic evaluation | **0.2.0 built, offline tests pass (40), waiting for the in-game test** |
+| 2. Basic evaluation | **0.2.0 tested in game; 0.2.1 fixes (42 tests) waiting for a re-test** |
 | 3. Complete gear evaluation | not started |
 | 4. Simulation (DPS, healing, tanking, PvP) | not started |
 | 5. All classes and builds | not started |
@@ -216,6 +216,28 @@ In-game test (0.2.0):
    for each slot and each stat's part.
 5. `/eqn target 3` and `/eqn model`: vs a boss, hit should start to matter.
 6. `/eqn dump` and `/reload`: the calculators' values become test data.
+
+In-game test of 0.2.0 (level 42 Shaman, build 71091):
+- **The calculators read correctly:**
+  - Rating per point: crit 0.0714 % (14 per 1 %); hit, haste and expertise 0.1 %; dodge 0.0833 %;
+    parry 0.0667 %; block 0.2 %.
+  - Defense: 1 skill per rating point.
+  - Glancing at the same level 12 % / -5 %; +1: 22 % / -5 %; +2: 32 % / -19 %; +3: 42 % / -39 %.
+  - Armor reduction 24.0 % vs your level (1256 armor).
+- **Talent descriptions show rank 1's numbers, whatever your rank.** Elemental Weapons 3/3 reads
+  "Windfury 13 %", and Thundering Strikes 5/5 reads "1 %".
+- **Flurry's description says "1 %", and is unusable.** In Forever's data its talent spell 16256 is a
+  marker (aura 4, value 1); the haste is on the buff spell 16257 (aura 319 = attack speed, 10 at rank 1).
+  0.2.0 took the 1 %. 0.2.1 uses the Flurry buff's own value when it's seen on you (aura `points`), else
+  Classic 10/15/20/25/30 %, marked unconfirmed (regression test added).
+- **The cloak's "Improves your chance to get a critical strike by 0.5 %" was listed as an uncounted
+  effect.** It's its crit rating. Decimals are now matched (regression test).
+- **Gear vs sheet:** Strength and attack power match exactly. Stamina: gear 105, sheet +108. Armor:
+  gear 1132, sheet bonus 1118. Enchants (chest 8484, boots 8485) aren't in `GetItemStats`; they come in
+  milestone 3.
+- **With the fix, on the 0.2.0 dump** (glancing and armor from the game):
+  - Same level: 76.1 white DPS; 10 crit rating ≈ 9.2 AP; hit ≈ 0.
+  - +3: 59.1 DPS; 10 crit rating ≈ 11.2 AP; 10 hit rating ≈ 12.1 AP.
 
 ## In-game test 1 (0.1.0, level 42 Orc Shaman, Enhancement, build 71091)
 

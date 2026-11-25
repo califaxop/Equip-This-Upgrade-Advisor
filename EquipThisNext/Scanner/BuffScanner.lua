@@ -25,6 +25,11 @@ function BuffScanner.Scan(profile)
   else
     b.helpful = list("HELPFUL")
     b.harmful = list("HARMFUL")
+    -- buffs whose value matters to a talent's model, kept once seen (Flurry: its haste %)
+    ns.db.seenBuffs = ns.db.seenBuffs or {}
+    for _, a in ipairs(b.helpful) do
+      if a.name == "Flurry" and a.points and a.points[1] and a.points[1] > 0 then ns.db.seenBuffs.Flurry = a.points[1] end
+    end
   end
   profile.buffs = b
   return b

@@ -39,6 +39,7 @@ function CalcScanner.Scan(profile)
   for _, n in ipairs(profile.talents and profile.talents.nodes or {}) do
     if (n.rank or 0) > 0 and n.spellID then c.talentText[n.spellID] = Spell.Description(n.spellID) end
   end
+  c.seenBuffs = ns.db and ns.db.seenBuffs and ns.Database.Copy(ns.db.seenBuffs) or nil
   profile.calc = c
   last = ns.Database.Copy(c)
   return c

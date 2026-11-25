@@ -21,5 +21,10 @@ function Aura.Get(index, filter)
   if a == Compat.SECRET then return { hidden = true } end
   local out = {}
   for _, f in ipairs(FIELDS) do out[f] = Compat.Field(a, f) end
+  local pts = Compat.Field(a, "points")
+  if type(pts) == "table" then
+    out.points = {}
+    for i, x in ipairs(pts) do if type(x) == "number" then out.points[i] = x end end
+  end
   return out
 end

@@ -20,8 +20,11 @@ TD.BY_SPELL = {
     measure = true, check = "sheet",
     note = "Intellect as spell damage and healing. Its share is measured from the sheet (sheet value minus gear) at run time." },
   [16256] = { name = "Flurry", class = "SHAMAN", kind = "flurry", hastePerRankDefault = { 10, 15, 20, 25, 30 }, swings = 3,
-    textPattern = "(%d+)%%", check = "text",
-    note = "Attack speed after a critical strike, for the next 3 swings. The % comes from the talent's description in game." },
+    buffName = "Flurry",
+    note = "Attack speed after a critical strike, for the next 3 swings. The talent's description can't be used: on " ..
+      "Forever its spell (16256) is a marker whose value is 1 (the in-game text says 1%), and the haste is on the buff " ..
+      "spell (16257: 10% at rank 1 in Forever's data). So: the Flurry buff's own value when it's seen on you, else " ..
+      "the Classic table (10/15/20/25/30%), marked unconfirmed." },
 }
 -- (spell IDs above are the ones Forever's talent nodes gave in the level-42 Shaman dump)
 
@@ -29,6 +32,6 @@ TD.BY_SPELL = {
 -- (never guess an ID: these match by name until a dump shows the ID)
 TD.BY_NAME = {
   ["WARRIOR:Flurry"] = { name = "Flurry", class = "WARRIOR", kind = "flurry", hastePerRankDefault = { 10, 15, 20, 25, 30 },
-    swings = 3, textPattern = "(%d+)%%", check = "text" },
+    swings = 3, buffName = "Flurry" },
 }
 for _, e in pairs(TD.BY_SPELL) do TD.BY_NAME[e.class .. ":" .. e.name] = e end

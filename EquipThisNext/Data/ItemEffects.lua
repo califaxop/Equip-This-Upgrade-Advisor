@@ -12,8 +12,8 @@ IE.STAT_LINES = {
   "^Equip: %+?%d+ [%a ]+$",                                  -- "Equip: +32 Attack Power"
   "^Equip: Increases attack power by %d+%.?$",
   "^Equip: %+%d+ Attack Power",
-  "^Equip: Improves your chance to hit by %d+%%%.?$",
-  "^Equip: Improves your chance to get a critical strike by %d+%%%.?$",
+  "^Equip: Improves your chance to hit by %d+%.?%d*%%%.?$",
+  "^Equip: Improves your chance to get a critical strike by %d+%.?%d*%%%.?$",
   "^Equip: Improves your critical strike rating by %d+%.?$",
   "^Equip: Improves your hit rating by %d+%.?$",
   "^Equip: Increases damage and healing done by magical spells and effects by up to %d+%.?$",
@@ -23,9 +23,9 @@ IE.STAT_LINES = {
   "^Equip: Restores %d+ mana per 5 sec%.?$",
   "^Equip: Restores %d+ health per 5 sec%.?$",
   "^Equip: Increased Defense %+%d+%.?$",
-  "^Equip: Increases your chance to dodge an attack by %d+%%%.?$",
-  "^Equip: Increases your chance to parry an attack by %d+%%%.?$",
-  "^Equip: Increases your chance to block attacks with a shield by %d+%%%.?$",
+  "^Equip: Increases your chance to dodge an attack by %d+%.?%d*%%%.?$",
+  "^Equip: Increases your chance to parry an attack by %d+%.?%d*%%%.?$",
+  "^Equip: Increases your chance to block attacks with a shield by %d+%.?%d*%%%.?$",
   "^Equip: Increases the block value of your shield by %d+%.?$",
   "^Equip: %+%d+ Weapon Damage%.?$",
 }

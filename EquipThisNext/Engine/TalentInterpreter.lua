@@ -43,20 +43,23 @@ function TI.Interpret(profile, sheetMinusGear)
         if check ~= "sheet" then out.unchecked = out.unchecked + 1 end
       end
     elseif e and e.kind == "flurry" then
-      local v = fromText(profile.calc, n, e.textPattern)
-      local check = "text"
-      local defaults = e.hastePerRankDefault or {}
-      -- (a trait's spell may describe rank 1 whatever your rank: rank 1's number at a higher rank means
-      --  the text isn't for your rank, so the Classic table gives that rank's value)
-      if v and rank > 1 and defaults[1] == v and defaults[rank] and defaults[rank] ~= v then
-        v, check = defaults[rank], "source (description shows rank 1)"
+      -- the buff's own value, seen on you (aura points), else the Classic table for your rank
+      local v, check
+      for _, a in ipairs(profile.buffs and profile.buffs.helpful or {}) do
+        if a.name == e.buffName and type(a.points) == "table" and type(a.points[1]) == "number" and a.points[1] > 0 then
+          v, check = a.points[1], "buff"
+        end
       end
-      if not v then v, check = defaults[rank], "source" end
+      if not v and profile.calc and profile.calc.seenBuffs and profile.calc.seenBuffs[e.buffName or ""] then
+        v, check = profile.calc.seenBuffs[e.buffName], "buff"
+      end
+      if not v then v, check = e.hastePerRankDefault and e.hastePerRankDefault[rank], "source" end
       if v then
         out.flurry = { haste = v / 100, swings = e.swings or 3, talent = e.name, rank = rank, check = check }
-        out.notes[#out.notes + 1] = string.format("%s %d/%s: +%d%% attack speed for %d swings after a crit (%s)",
-          e.name, rank, tostring(n.maxRank), v, e.swings or 3, check == "text" and "from its description" or "from Classic data, not confirmed")
-        if check ~= "text" then out.unchecked = out.unchecked + 1 end
+        out.notes[#out.notes + 1] = string.format("%s %d/%s: +%g%% attack speed for %d swings after a crit (%s)",
+          e.name, rank, tostring(n.maxRank), v, e.swings or 3,
+          check == "buff" and "from the Flurry buff seen on you" or "Classic value for this rank, not confirmed on Forever yet")
+        if check ~= "buff" then out.unchecked = out.unchecked + 1 end
       end
     end
   end

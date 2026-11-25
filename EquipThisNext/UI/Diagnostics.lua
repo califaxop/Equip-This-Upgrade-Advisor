@@ -251,7 +251,7 @@ function Diag.Sheet()
   f("buffs on you now: %s", #buffs > 0 and table.concat(buffs, ", ") or "none")
   local calc = ctx.profile.calc or {}
   local r = {}
-  for cr, x in pairs(calc.ratingPct or {}) do if cr:find("CRIT_MELEE") or cr:find("HIT_MELEE") or cr:find("HASTE_MELEE") or cr:find("DEFENSE") or cr:find("DODGE") then r[#r + 1] = string.format("%s %.3f%%/pt", cr:gsub("CR_", ""), x) end end
+  for cr, x in pairs(calc.ratingPct or {}) do if cr:find("CRIT_MELEE") or cr:find("HIT_MELEE") or cr:find("HASTE_MELEE") or cr:find("DEFENSE") or cr:find("DODGE") then r[#r + 1] = cr == "CR_DEFENSE_SKILL" and string.format("DEFENSE %.3f skill/pt", x) or string.format("%s %.3f%%/pt", (cr:gsub("CR_", "")), x) end end
   table.sort(r)
   f("rating conversions (game): %s", #r > 0 and table.concat(r, ", ") or "none read")
   local g = calc.glancing and calc.glancing[ctx.offset]
