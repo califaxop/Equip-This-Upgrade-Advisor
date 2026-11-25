@@ -316,3 +316,60 @@ T.Test("in game (mock), milestone 3: weapon speed and enchant read from tooltips
   T.Ok(out:find("the weapon itself"), "the weapon's own part is listed")
   T.Eq(ns3.errors.count, 0, "no errors")
 end)
+
+-- 0.3.1: what 0.3.0 got wrong in game (dump of the level 42 Shaman, and the tooltips seen)
+T.Test("0.3.1: a weapon type you haven't trained: % at your current skill, today's % as a note (regression: Flayer -63%)", function()
+  local p = fixture3()
+  p.stats.skillByLine[44] = 180     -- axes 180 of 210 (the dump)
+  local ctx = Ev.Context(p, { targetOffset = 0 })
+  local res = Ev.Compare(ctx, FLAYER)
+  local o = res.best
+  local note
+  for _, n in ipairs(o.notes) do if n:find("trained up") then note = n end end
+  T.Ok(note and note:find("is 180") and note:find("is 209"), "says the skill: " .. tostring(note))
+  local today = tonumber(note:match("DPS ([%+%-]%d+%.%d)%%"))
+  T.Ok(today and o.dps > today, "the main % is at the trained skill (" .. o.dps .. ") above today's (" .. tostring(today) .. ")")
+  p.stats.skillByLine[44] = 209
+  local trained = Ev.Compare(Ev.Context(p, { targetOffset = 0 }), FLAYER).best
+  T.Near(o.dps, trained.dps, 1e-6, "same as an axe already at 209")
+  T.Ok(res.confidence ~= "low", "a skill to train isn't a reason for low confidence: " .. res.confidence)
+end)
+
+T.Test("0.3.1: '+2% block' on non-shield gear counts (regression: Quillord Mail Leggings)", function()
+  local IT = ns.ItemText
+  local lines = { "Equip: Increases your chance to block attacks with a shield by 2%." }
+  local extra, used = IT.ExtraStats(lines, SD.Normalize({ RESISTANCE0_NAME = 300, ITEM_MOD_STAMINA_SHORT = 10 }))
+  T.Eq(extra.BLOCK_PCT, 2, "2% block"); T.Eq(#used, 1, "the line is used")
+  T.Eq(#ns.ItemEffects.Uncounted(lines), 0, "and not an uncounted effect")
+  local e2 = IT.ExtraStats({ "Equip: Improves your chance to get a critical strike by 1%." }, SD.Normalize({ ITEM_MOD_CRIT_RATING_SHORT = 14 }))
+  T.Eq(next(e2), nil, "a % already given by the item's rating isn't counted twice")
+  local s = SE.Apply(SE.Baseline(fixture3()), { BLOCK_PCT = 2 }, nil)
+  T.Near(s.block, SE.Baseline(fixture3()).block + 2, 1e-9, "block + 2")
+end)
+
+T.Test("0.3.1: an active set bonus ('Set:' without its count) is read (regression: Scarlet 2-piece)", function()
+  local tip = { left = { "Scarlet Leggings", "Scarlet Crusade (2/6)", "Set: +10 Shadow Resistance.",
+    "(3) Set: +30 Attack Power against Undead.", "(4) Set: Taking damage has a 15% chance to grant Enraging Light.",
+    "(5) Set: Improves your chance to hit by 1.0%.", "(6) Set: Taking damage while at or below 20% health grants you a shield." } }
+  local b = ns.ItemText.SetBonuses(tip)
+  T.Eq(#b, 5, "five bonuses"); T.Eq(b[1].pieces, 2, "the active one is the 2-piece"); T.Eq(b[1].text, "+10 Shadow Resistance.", "its text")
+  T.Eq(b[5].pieces, 6, "sorted")
+end)
+
+T.Test("0.3.1: enchants written 'Stamina +3 and Armor +24' parse (as Forever writes them)", function()
+  local s = ns.ItemText.ParseStatText("Stamina +3 and Armor +24")
+  T.Ok(s, "parsed")
+  local n = 0; for _ in pairs(s or {}) do n = n + 1 end
+  T.Eq(n, 2, "two stats")
+end)
+
+T.Test("0.3.1: effects that touch neither DPS nor EHP don't lower confidence (regression: Whitemane's Chapeau)", function()
+  local p = fixture3()
+  local hat = { link = "item:7720", itemID = 7720, name = "Whitemane's Chapeau", loaded = true, equipLoc = "INVTYPE_HEAD",
+    classID = 4, subclassID = 1, canUse = true, stats = { ITEM_MOD_STAMINA_SHORT = 9, RESISTANCE0_NAME = 60 },
+    effects = { "Equip: Reduces the cast time of spells and effects that revive targets by 20%." } }
+  local res = Ev.Compare(Ev.Context(p, { targetOffset = 0 }), hat)
+  T.Ok(res.confidence ~= "low", "not low: " .. tostring(res.confidence))
+  hat.effects = { "Chance on hit: Blasts the enemy for 80 Fire damage." }
+  T.Eq(Ev.Compare(Ev.Context(p, { targetOffset = 0 }), hat).confidence, "low", "a damage proc still does")
+end)

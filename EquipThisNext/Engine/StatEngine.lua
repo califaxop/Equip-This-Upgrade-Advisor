@@ -161,6 +161,8 @@ function SE.Apply(state, delta, talents, weapons)
   s.hit = s.hit + g("HIT_PCT")
   s.spellCrit = s.spellCrit + g("SPELLCRIT_PCT") + g("CRIT_PCT")
   s.dodge = s.dodge + g("DODGE_PCT")
+  s.parry = s.parry + g("PARRY_PCT")
+  s.block = s.block + g("BLOCK_PCT")      -- (the survival model counts block only with a shield)
   s.defense = s.defense + g("DEFENSE_SKILL")
   if g("DEFENSE_SKILL") ~= 0 then s.dodge = s.dodge + g("DEFENSE_SKILL") * 0.04 end
   if weapons then

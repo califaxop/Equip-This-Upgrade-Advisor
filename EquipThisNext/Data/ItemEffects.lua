@@ -30,6 +30,14 @@ IE.STAT_LINES = {
   "^Equip: %+%d+ Weapon Damage%.?$",
 }
 
+-- effects that change neither damage nor survivability (listed, but they don't lower confidence)
+IE.IRRELEVANT = { "revive", "resurrect", "mana cost", "[Mm]ovement speed", "mount", "[Ff]ishing", "underwater", "breath",
+  "threat", "Ghost Wolf", "[Ss]tealth detection", "gathering", "[Mm]ining", "[Hh]erbalism", "[Ss]kinning" }
+function IE.IsIrrelevant(line)
+  for _, p in ipairs(IE.IRRELEVANT) do if line:find(p) then return true end end
+  return false
+end
+
 function IE.IsEffect(line)
   if type(line) ~= "string" then return false end
   for _, p in ipairs(IE.PREFIXES) do if line:find(p) then return true end end

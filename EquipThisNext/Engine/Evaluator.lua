@@ -139,6 +139,7 @@ local function statsOf(it)
   local s = ns.StatDefs.Normalize(it.stats)
   s.WEAPON_DPS = nil                     -- (a weapon's damage is handled as the weapon itself)
   if it.shieldBlock then s.BLOCK_VALUE = (s.BLOCK_VALUE or 0) + it.shieldBlock end
+  for k, v in pairs(it.extraStats or {}) do s[k] = (s[k] or 0) + v end   -- "Equip: +2% block"...
   return s
 end
 
@@ -151,6 +152,28 @@ local function isShield(it) return it and it.classID == ns.StatDefs.SHIELD.class
 local function isTwoHand(it) return it and it.equipLoc == "INVTYPE_2HWEAPON" end
 local ONE_HAND = { INVTYPE_WEAPON = true, INVTYPE_WEAPONMAINHAND = true }
 local OFF_HAND = { INVTYPE_SHIELD = true, INVTYPE_HOLDABLE = true, INVTYPE_WEAPONOFFHAND = true }
+-- A weapon whose skill is below your current main-hand's trains up with use: its main % is at that
+-- skill (the % at today's skill is given as a note).
+local function trained(s, state)
+  local base = state.baseSkill
+  if not (base and s.mh) then return nil end
+  local function lineOf(w) return w and w.subclass and ns.StatDefs.WEAPON_SKILL[w.subclass] end
+  local low = {}
+  local mhLine = lineOf(s.mh)
+  if s.weaponSkill and s.weaponSkill < base then low[#low + 1] = { line = mhLine, skill = s.weaponSkill } end
+  local ohLine = lineOf(s.oh)
+  local ohSkill = ohLine and s.skills and s.skills[ohLine]
+  if ohSkill and ohSkill < base and ohLine ~= mhLine then low[#low + 1] = { line = ohLine, skill = ohSkill } end
+  if #low == 0 then return nil end
+  local t = {}
+  for k, x in pairs(s) do t[k] = x end
+  t.skills = {}
+  for k, x in pairs(s.skills or {}) do t.skills[k] = x end
+  for _, l in ipairs(low) do if l.line then t.skills[l.line] = base end end
+  if s.weaponSkill < base then t.weaponSkill = base end
+  return t, low[1].skill, base
+end
+
 local RANGED = { INVTYPE_RANGED = true, INVTYPE_RANGEDRIGHT = true, INVTYPE_THROWN = true, INVTYPE_RELIC = true }
 
 -- One resulting setup: { [slot] = item or false (emptied) } -> option with performance and %.
@@ -185,6 +208,15 @@ function Ev.Evaluate(ctx, changes, label, notes)
   local s = ns.StatEngine.Apply(ctx.state, delta, ctx.talents, weapons)
   if weapons and weapons.mh == nil and changes[16] == false then s.swing, s.speed = nil, nil end
   local p = Ev.Performance(s, ctx)
+  local untrainedNote
+  if weapons and ctx.melee then
+    local t, now, base = trained(s, ctx.state)
+    if t then
+      untrainedNote = string.format("your skill with this weapon type is %d (your current weapon's is %d): DPS %+.1f%% until it's trained up",
+        now, base, pct(p.dps, ctx.base.dps) or 0)
+      s, p = t, Ev.Performance(t, ctx)
+    end
+  end
   local opt = { status = "ok", label = label, changes = changes, removed = removed, added = added, delta = delta, perf = p,
     dps = pct(p.dps, ctx.base.dps), ehp = pct(p.ehp, ctx.base.ehp), notes = notes or {},
     setGained = gained, setLost = lost, setUnknown = setUnknown }
@@ -198,7 +230,9 @@ function Ev.Evaluate(ctx, changes, label, notes)
   end
   table.sort(opt.parts, function(a, b) return math.abs(a.dps or a.ehp or 0) > math.abs(b.dps or b.ehp or 0) end)
   if weapons then
-    local w1 = Ev.Performance(ns.StatEngine.Apply(ctx.state, {}, ctx.talents, weapons), ctx)
+    local ws = ns.StatEngine.Apply(ctx.state, {}, ctx.talents, weapons)
+    ws = untrainedNote and trained(ws, ctx.state) or ws
+    local w1 = Ev.Performance(ws, ctx)
     table.insert(opt.parts, 1, { stat = "WEAPON", amount = 0, dps = pct(w1.dps, ctx.base.dps), ehp = pct(w1.ehp, ctx.base.ehp) })
   end
   -- effects of the removed items that aren't counted; enchants that carry over
@@ -207,6 +241,7 @@ function Ev.Evaluate(ctx, changes, label, notes)
     for _, e in ipairs(it.effects or {}) do opt.lost[#opt.lost + 1] = e end
     if it.enchantText then opt.carry[#opt.carry + 1] = it.enchantText end
   end
+  if untrainedNote then opt.notes[#opt.notes + 1] = untrainedNote end
   if s.assumedSkill then opt.notes[#opt.notes + 1] = "weapon skill for this weapon type unknown: 5 x level assumed" end
   return opt
 end
@@ -300,11 +335,16 @@ function Ev.Compare(ctx, candidate)
   end
   res.metric = key
   res.status = res.best and "ok" or (res.options[1] and res.options[1].status or "none")
-  -- confidence
+  -- confidence (effects that touch neither DPS nor EHP, like a faster revive, don't lower it)
+  local function relevant(list)
+    local n = 0
+    for _, e in ipairs(list or {}) do if not ns.ItemEffects.IsIrrelevant(e) then n = n + 1 end end
+    return n
+  end
   local reasons = {}
-  if candidate.effects and #candidate.effects > 0 then reasons[#reasons + 1] = "the item has effects not counted yet" end
+  if relevant(candidate.effects) > 0 then reasons[#reasons + 1] = "the item has effects not counted yet" end
   local b = res.best
-  if b and b.lost and #b.lost > 0 then reasons[#reasons + 1] = "a replaced item has effects not counted yet" end
+  if b and relevant(b.lost) > 0 then reasons[#reasons + 1] = "a replaced item has effects not counted yet" end
   if b and b.setUnknown and #b.setUnknown > 0 then reasons[#reasons + 1] = "a set bonus that changes isn't a plain stat" end
   if #ctx.state.assumed > 0 then reasons[#reasons + 1] = "assumed: " .. table.concat(ctx.state.assumed, ", ") end
   if ctx.talents.unchecked > 0 then reasons[#reasons + 1] = "a talent's number isn't confirmed" end
@@ -313,7 +353,7 @@ function Ev.Compare(ctx, candidate)
   if ctx.melee then reasons[#reasons + 1] = "abilities, imbues and procs not in DPS yet" end
   if b and b.notes then for _, n in ipairs(b.notes) do if n:find("assumed") or n:find("isn't modelled") then reasons[#reasons + 1] = n end end end
   res.reasons = reasons
-  local serious = (candidate.effects and #candidate.effects > 0) or (b and b.lost and #b.lost > 0) or (b and b.setUnknown and #b.setUnknown > 0)
+  local serious = relevant(candidate.effects) > 0 or (b and relevant(b.lost) > 0) or (b and b.setUnknown and #b.setUnknown > 0)
   res.confidence = serious and "low" or (#reasons > 1 and "medium" or "high")
   return res
 end

@@ -14,7 +14,7 @@ runs alongside the released Equip This! without touching it, on the `next-founda
 |---|---|
 | 1. Foundation: compatibility layer, scanners, diagnostics | **done: 0.1.3 validated in game (level 42 Shaman, build 71091)** |
 | 2. Basic evaluation | **done: validated in game (0.2.1; the tooltip %s look right to the tester)** |
-| 3. Complete gear evaluation | **0.3.0 built, offline tests pass (50), waiting for the in-game test** |
+| 3. Complete gear evaluation | **0.3.0 tested in game; 0.3.1 fixes what it found (55 tests), waiting for the re-test** |
 | 4. Simulation (DPS, healing, tanking, PvP) | not started |
 | 5. All classes and builds | not started |
 | 6. Optimization and validation | not started |
@@ -187,6 +187,23 @@ In-game test (0.3.0):
 3. Hover items of your Scarlet set and other belts or legs: set bonus gained or lost.
 4. `/eqn compare` on a weapon: "the weapon itself" part, then stats.
 5. `/eqn dump` + `/reload`: weapon speeds, enchant texts and set bonuses become test data.
+
+In-game results (0.3.0) and the 0.3.1 fixes (each has a regression test from the dump):
+- Weapon speeds, enchant texts (tooltip with vs without the enchant) and inactive set bonuses read right.
+  Overlinked Chain Armor: DPS -2.0 %, EHP -0.7 %, high confidence.
+- I'lalai Flayer + Savage Boar's Guard read DPS -63 %: the character's Axes skill was 180 of 210, and
+  the game's glancing calculator gives 70 % glancing at -89.5 % for that. True today, misleading as a
+  verdict: a weapon type below your current main-hand's skill is now valued at that skill, with
+  today's % as a note ("... until it's trained up").
+- "Equip: Increases your chance to block attacks with a shield by 2%." (Quillord Mail Leggings) isn't
+  in GetItemStats: Equip lines the stat table lacks are now parsed as stats (IT.ExtraStats); a % line
+  the item already has as a rating isn't counted twice. Block still counts only with a shield.
+- An active set bonus shows as "Set: ..." without its count: the count is inferred (the lowest
+  numbers from 2 no inactive line has, in order).
+- Effects that change neither damage nor survivability (faster revive, mana cost, movement, mounts,
+  threat...) are still listed but no longer make confidence low (IE.IRRELEVANT). Mana cost and
+  threat matter again with the caster and tank models (milestone 4).
+- Forever writes enchants as "Stamina +3 and Armor +24" (name first): parsed.
 
 ## Milestone 2: basic evaluation (0.2.0)
 

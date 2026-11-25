@@ -46,6 +46,18 @@ function EquipmentScanner.ReadItem(link, slot, slotName)
     data.weapon.min, data.weapon.max = IT.Damage(tip)
   end
   if data.equipLoc == "INVTYPE_SHIELD" then data.shieldBlock = IT.ShieldBlock(tip) end
+  -- "Equip:" stats the stat table lacks (+2% block...): counted, and no longer listed as effects
+  local extra, used = IT.ExtraStats(tip and tip.left, ns.StatDefs.Normalize(stats))
+  if next(extra) then
+    data.extraStats = extra
+    local keep = {}
+    for _, e in ipairs(data.effects) do
+      local isUsed = false
+      for _, u in ipairs(used) do if u == e then isUsed = true end end
+      if not isUsed then keep[#keep + 1] = e end
+    end
+    data.effects = keep
+  end
   if data.setID then data.setBonuses = IT.SetBonuses(tip) end
   -- a permanent enchant: the lines its tooltip has that the same item without it hasn't
   if parsed.enchantID and tip then
