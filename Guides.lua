@@ -5,7 +5,7 @@
 -- character: at levels 30 / 40 / 50 / 60, what the character itself brings to its output (base stats,
 -- its spells' own damage, talents, self-buffs), in points of score (calibrated with the site's Sim DPS).
 local _, ns = ...
-ns.GUIDE = { build = "2026-11-24", source = "Forever Upgrades",
+ns.GUIDE = { build = "2026-11-25", source = "Forever Upgrades",
   ["WARRIOR:1"] = { -- Arms Warrior
     unit = "DPS", role = "melee", hitCap = true,
     priority = { "Hit (to cap)", "Strength", "Critical Strike", "Agility", "Weapon DPS", "Stamina" },
@@ -174,7 +174,7 @@ ns.GUIDE = { build = "2026-11-24", source = "Forever Upgrades",
     character = { [30] = 521, [40] = 808, [50] = 1167, [60] = 1778 },
     levels = {
       [30] = { { "Prayer of Healing", 0.556, 5.0 }, { "Penance", 0.228, 5.0 }, { "Power Word: Shield", 0.126, 4.0 }, { "Renew", 0.090, 3.0 } },
-      [50] = { { "Heal", 0.422, 14.0 }, { "Penance", 0.204, 4.0 }, { "Renew", 0.160, 4.0 }, { "Power Word: Shield", 0.124, 4.0 }, { "Greater Heal", 0.091, 1.0 } },
+      [50] = { { "Prayer of Healing", 0.594, 7.0 }, { "Penance", 0.173, 4.0 }, { "Renew", 0.128, 4.0 }, { "Power Word: Shield", 0.105, 4.0 } },
       [60] = { { "Prayer of Healing", 0.501, 3.0 }, { "Penance", 0.247, 4.0 }, { "Renew", 0.171, 3.0 }, { "Power Word: Shield", 0.081, 2.0 } },
     },
   },

@@ -3,7 +3,7 @@
 -- own tables (via wago.tools). Items not listed: about once a minute.
 local _, ns = ...
 ns.PROC_CHANCE = {
-build = "1.60.1.71037",
+build = "1.60.1.71091",
 [867]=15,
 [942]=1,
 [1131]=1,
