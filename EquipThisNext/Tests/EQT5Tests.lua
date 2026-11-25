@@ -58,8 +58,10 @@ T.Test("5.0: Equip This! loads with the engine inside; the tooltip line comes fr
   MOCK.tooltipHook(tt, {})
   local all = table.concat(tt.lines, "\n")
   OUT("    tooltip: " .. all:gsub("\n", " / "))
-  T.Ok(tt.lines[1] and tt.lines[1]:find("Equip This!:") and (tt.lines[1]:find("Upgrade") or tt.lines[1]:find("Downgrade") or tt.lines[1]:find("same")), all)
-  T.Ok(all:find("DPS") and all:find("EHP"), "the separate numbers: " .. all)
+  -- the order: what it's tried with, the numbers apart, the verdict for your build (labelled)
+  T.Ok(tt.lines[1] and tt.lines[1]:find("Equip This!:") and tt.lines[1]:find("vs") and tt.lines[1]:find("Band of Sets"), "1: " .. tostring(tt.lines[1]))
+  T.Ok(tt.lines[2] and tt.lines[2]:find("DPS") and tt.lines[2]:find("EHP"), "2: the numbers: " .. tostring(tt.lines[2]))
+  T.Ok(tt.lines[3] and (tt.lines[3]:find("Upgrade") or tt.lines[3]:find("Downgrade")) and tt.lines[3]:find("for your build %(75%% damage / 25%% survival%)"), "3: " .. tostring(tt.lines[3]))
   IsShiftKeyDown = function() return true end
   local tt2 = MOCK.MakeTooltip("|cff0070dd|Hitem:1008::::::::42|h[Ring of Procs]|h|r"); function tt2:Show() end
   GameTooltip = tt2
@@ -83,6 +85,8 @@ T.Test("5.0: the slider mixes the verdict; the numbers stay apart", function()
   local c = ns.Bridge.Compare(link)
   T.Near(c.pct, 0.6 * c.metrics.dps + 0.4 * c.metrics.ehp, 1e-9, "your mix")
   T.Eq(ns.Display.Unit(), "", "a mix has no single unit")
+  T.Eq(ns.Display.BuildMix(), "60% damage / 40% survival")
+  ns.Bridge.SetBuild("damage"); T.Eq(ns.Display.BuildMix(), "all damage")
 end)
 
 T.Test("5.0: settings window, commands, quest rewards", function()
@@ -134,4 +138,20 @@ end)
 T.Test("5.0: 4.x settings: the old scoring's are dropped, the rest kept", function()
   local ns = loadEQT({ spec = "SHAMAN:2", priorities = { ["SHAMAN:2"] = { build = "leveling" } }, tooltip = false, raids = { ["X-Y"] = "mc" } })
   T.Eq(ns.db.spec, "auto"); T.Eq(ns.db.priorities, nil); T.Eq(ns.db.tooltip, false); T.Eq(ns.db.raids["X-Y"], "mc")
+end)
+
+T.Test("5.0: a one-hander paired with a shield from your bags: the pairing first, no repeated note", function()
+  local ns = loadEQT(nil)
+  MOCK.BAGS = { [1] = "|cff0070dd|Hitem:1011::::::::42|h[Shield of Bags]|h|r" }
+  MOCK.Fire("BAG_UPDATE_DELAYED"); MOCK.RunTimers()
+  ns.Bridge.Sync()
+  local tt = MOCK.MakeTooltip("|cff0070dd|Hitem:1010::::::::42|h[Blade of Bags]|h|r"); function tt:Show() end
+  GameTooltip = tt
+  MOCK.tooltipHook(tt, {})
+  local all = table.concat(tt.lines, " / ")
+  T.Ok(tt.lines[1]:find("paired with") and tt.lines[1]:find("Shield of Bags") and tt.lines[1]:find("%(bags%)"), "1: " .. all)
+  T.Ok(tt.lines[2]:find("DPS") and tt.lines[2]:find("EHP"), "2: " .. all)
+  T.Ok(tt.lines[3]:find("vs") and tt.lines[3]:find("Axe of Testing") and tt.lines[3]:find("for your build"), "3: " .. all)
+  T.Ok(not all:find("from your bags"), "the pairing isn't repeated as a note: " .. all)
+  MOCK.BAGS = {}
 end)

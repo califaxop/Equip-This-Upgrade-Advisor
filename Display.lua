@@ -59,33 +59,57 @@ function D.Parts(c, n)
   return out
 end
 
--- Short: "Downgrade -11.3% DPS vs [Rage of the Storm]" (paired with an off-hand, against your two-hander)
-function D.Verdict(link)
+-- "75% damage / 25% survival", "all damage", "all survival": what your build's verdict weighs
+function D.BuildMix()
+  local t = B.Mix()
+  local _, unit = B.MainMetric()
+  local word = unit == "HPS" and "healing" or (unit == "Threat" and "threat" or "damage")
+  if t <= 0 then return "all " .. word end
+  if t >= 1 then return "all survival" end
+  return format("%d%% %s / %d%% survival", (1 - t) * 100 + 0.5, word, t * 100 + 0.5)
+end
+
+-- The lines for an item, in order (5.0):
+--   1. what it's tried with: "paired with [Savage Boar's Guard] (bags)", else "vs [Rage of the Storm]"
+--   2. the numbers, apart: "DPS -20.3%  ·  EHP +19.0%"
+--   3. the verdict for your build, labelled: "Downgrade -12.4% vs [Rage of the Storm] for your build (75% damage / 25% survival)"
+-- An item that can't be compared gets one line ("Equipped", "Can't use it"...). Returns the lines, the comparison.
+function D.Lines(link)
   local c = B.Compare(link)
   if not c then return nil end
-  if c.kind == "unusable" then return GREY .. "Can't use it|r" end
-  if c.kind == "unique" then return GREY .. "Unique: you already wear one|r" end
-  if c.kind == "equipped" then
-    local what = c.equipLoc == "INVTYPE_TRINKET" and "trinket" or "ring"
-    if c.pair == "weaker" then return GREY .. "Equipped|r " .. ORANGE .. "- your weaker " .. what .. " (replaced first)|r" end
-    if c.pair == "stronger" then return GREY .. "Equipped - your stronger " .. what .. "|r" end
-    if c.pair == "equal" then return GREY .. "Equipped - your " .. what .. "s are equal|r" end
-    return GREY .. "Equipped|r"
-  end
-  if c.kind == "twohand" then return GREY .. "Off-hand: you use a two-hander (no one-hander in your bags to pair it with)|r" end
-  if c.kind == "armortype" then return GREY .. "Not " .. c.best .. " (your setting)|r" end
-  local u = D.Unit()
-  local unit = (u ~= "") and (" " .. u) or ""
-  local tail = c.enchant and (" " .. GREY .. "(with your " .. c.enchant .. " on it)|r") or ""
-  if c.kind == "new" then return format("%sUpgrade %+.1f%%%s|r %s(empty slot)|r%s", GREEN, c.pct or 0, unit, GREY, tail) end
-  if c.kind == "same" then return GREY .. "About the same|r" .. tail, Versus(c) end
-  local col = c.kind == "upgrade" and GREEN or RED
-  local word = c.kind == "upgrade" and "Upgrade" or "Downgrade"
-  local lead = ""
+  local one
+  if c.kind == "unusable" then one = GREY .. "Can't use it|r"
+  elseif c.kind == "unique" then one = GREY .. "Unique: you already wear one|r"
+  elseif c.kind == "equipped" then one = GREY .. "Equipped|r"
+  elseif c.kind == "twohand" then one = GREY .. "Off-hand: you use a two-hander (no one-hander in your bags to pair it with)|r"
+  elseif c.kind == "armortype" then one = GREY .. "Not " .. c.best .. " (your setting)|r" end
+  if one then return { GOLD .. "Equip This!:|r " .. one }, c end
+  local vs = Named(c.vs)
+  local hand = c.hand == "oh" and (" " .. GREY .. "(off-hand)|r") or ""
+  local L = {}
   local partner = Named(c.partner)
-  if partner then lead = GREY .. "paired with|r " .. partner .. " " .. GREY .. "-|r " end
-  if c.hand == "oh" then tail = " " .. GREY .. "(off-hand)|r" .. tail end
-  return format("%s%s%s %+.1f%%%s|r%s", lead, col, word, c.pct, unit, tail), Versus(c)
+  if partner then
+    L[1] = GOLD .. "Equip This!:|r " .. GREY .. "paired with|r " .. partner .. " " .. GREY .. "(bags)|r"
+  elseif c.kind == "new" then
+    L[1] = GOLD .. "Equip This!:|r " .. GREY .. "into your empty slot|r" .. hand
+  else
+    L[1] = GOLD .. "Equip This!:|r " .. GREY .. "vs|r " .. (vs or "?") .. hand
+  end
+  local m = D.Metrics(c)
+  if m ~= "" then L[#L + 1] = m .. (c.confidence == "low" and (GREY .. "  ·  " .. ORANGE .. "rough|r") or "") end
+  local col = (c.kind == "upgrade" or c.kind == "new") and GREEN or (c.kind == "downgrade" and RED or GREY)
+  local word = (c.kind == "upgrade" or c.kind == "new") and "Upgrade" or (c.kind == "downgrade" and "Downgrade" or "About the same")
+  local verdict = col .. word .. (c.kind ~= "same" and format(" %+.1f%%", c.pct or 0) or "") .. "|r"
+  if partner and vs then verdict = verdict .. " " .. GREY .. "vs|r " .. vs end
+  L[#L + 1] = verdict .. " " .. GREY .. "for your build (" .. D.BuildMix() .. ")|r"
+  if c.enchant then L[#L + 1] = GREY .. "with your " .. c.enchant .. " on it|r" end
+  return L, c
+end
+
+-- (one line, for other places: the verdict with its %)
+function D.Verdict(link)
+  local L = D.Lines(link)
+  return L and L[#L] or nil
 end
 
 ---------------------------------------------------------------------------
@@ -107,14 +131,11 @@ local function OnItemTooltip(tip, data)
     end
   end
   if not link then return end
-  local v, vs = D.Verdict(link)
-  if v then
-    -- one line, wrapped at the tooltip's own width (it never makes the tooltip wider)
-    tip:AddLine(GOLD .. "Equip This!:|r " .. v .. (vs and (" " .. vs) or ""), 1, 1, 1, true)
-    local c = B.Compare(link)
+  local L, c = D.Lines(link)
+  if L then
+    -- each line wraps at the tooltip's own width (it never makes the tooltip wider)
+    for _, l in ipairs(L) do tip:AddLine(l, 1, 1, 1, true) end
     if c and c.metrics then
-      local m = D.Metrics(c)
-      if m ~= "" then tip:AddLine(m .. (c.confidence == "low" and (GREY .. "  ·  " .. ORANGE .. "rough|r") or ""), 1, 1, 1, true) end
       if c.pvp then
         local pv = {}
         if c.pvp.burst then pv[#pv + 1] = "burst " .. pct(c.pvp.burst) end
@@ -122,13 +143,14 @@ local function OnItemTooltip(tip, data)
         if c.pvp.ehp then pv[#pv + 1] = "survival " .. pct(c.pvp.ehp) end
         if #pv > 0 then tip:AddLine(GREY .. "PvP:|r " .. table.concat(pv, "  "), 1, 1, 1, true) end
       end
-      for i, n in ipairs(c.notes or {}) do
-        if i > 3 then break end
-        tip:AddLine(GREY .. n .. "|r", 1, 1, 1, true)
+      -- the engine's notes (the pairing is the first line already)
+      local shown = 0
+      for _, n in ipairs(c.notes or {}) do
+        if shown < 3 and not n:find("from your bags") then shown = shown + 1; tip:AddLine(GREY .. n .. "|r", 1, 1, 1, true) end
       end
     end
     -- holding Shift: where it comes from, effects it couldn't count, how sure it is
-    if IsShiftKeyDown and IsShiftKeyDown() and c then
+    if IsShiftKeyDown and IsShiftKeyDown() and c and c.metrics then
       local parts = D.Parts(c, 5)
       if #parts > 0 then tip:AddLine(GREY .. "From:|r " .. table.concat(parts, ", "), 1, 1, 1, true) end
       if c.unread then tip:AddLine(ORANGE .. "Not counted: " .. c.unread .. "|r", 1, 1, 1, true) end
