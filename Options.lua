@@ -80,6 +80,8 @@ function ns.ShowReport()
   local share = ns.Engine.db and ns.Engine.db.share
   w.text = n > 0 and line or (share and "(no fights recorded since your last export: play a few and come back)"
     or "(nothing recorded: tick \"Help improve Equip This!\" in /eqt to start)")
+  w.url:SetText(SUBMIT_URL)   -- (set on every open: the box only fills itself when it loses focus)
+  if w.url.SetCursorPosition then w.url:SetCursorPosition(0) end
   w.line:SetText(w.text)
   local G = "|cffffd200"
   local specs = #sum.specs > 0 and (sum.specs[1] .. (#sum.specs > 1 and format(" +%d more", #sum.specs - 1) or "")) or "-"
