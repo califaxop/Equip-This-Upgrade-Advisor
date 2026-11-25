@@ -168,7 +168,7 @@ local function BuildPanel(panel)
   local raidOpts = {}
   for _, k in ipairs(B.RAID_ORDER) do raidOpts[#raidOpts + 1] = { k, B.RAIDS[k].name } end
   local raid = at(UI.Selector(panel, 260, raidOpts, { function() return B.Raid() end, function(v) B.SetRaid(v) end }, changed,
-    "At the level cap, survivability counts how much of what hits you in the raid you're gearing for is magic (measured on Warcraft Logs). Kept per character. While leveling, a fifth."), 120, -496)
+    "At the level cap, survivability counts how much of what hits you in the raid you're gearing for is magic. Measured on Warcraft Logs from WoW Classic (Era) raids, not Forever's own: Forever's versions of these raids may hit differently. Kept per character. While leveling, a fifth (assumed)."), 120, -496)
   local raidNote = at(UI.Text(panel, "note", ""), 390, -499)
   local function raidRefresh()
     raid.Refresh()
@@ -176,18 +176,20 @@ local function BuildPanel(panel)
     raidNote:SetText(format("%d%% of what hits %s is magic", (B.IsTank() and r.tank or r.other) * 100 + 0.5, B.IsTank() and "a tank" or "you"))
   end
   track({ Refresh = raidRefresh }); rows[#rows + 1] = { Refresh = raidRefresh }
+  local raidSrc = at(UI.Text(panel, "note", "From Warcraft Logs of WoW Classic raids (not Forever's own logs): Forever's raids may differ."), 26, -526)
+  raidSrc:SetWidth(W_)
   local fight = UI.Slider(panel, "Fight length (mana)", 330, 60, 600, 30, S("fightLength"), function(v) return format("%d s", v) end, Changed)
-  fight:SetPoint("TOPLEFT", 26, -540)
+  fight:SetPoint("TOPLEFT", 26, -556)
   fight.tip = "How long a fight lasts, for healers and casters: over it you can spend your mana pool plus what you regain, so Intellect, Spirit and mana regen count when a fight runs you short."
   track(fight)
 
   -- Learning and helping -----------------------------------------------------
-  at(UI.Section(panel, "Learning how you fight", W_), 26, -590)
-  local learn = track(at(UI.Check(panel, "Learn from my fights (the game's damage meter, after each fight)", E("learn"), W_, Changed), 26, -620))
+  at(UI.Section(panel, "Learning how you fight", W_), 26, -606)
+  local learn = track(at(UI.Check(panel, "Learn from my fights (the game's damage meter, after each fight)", E("learn"), W_, Changed), 26, -636))
   learn.tip = "How often you use each ability and spell decides what's worth most to you. Equip This! adds up your damage and healing per spell after each fight and learns from them every few fights. It stays on your computer."
-  local share = track(at(UI.Check(panel, "Help improve Equip This!: keep anonymous fight records I can send", E("share"), W_, Changed), 26, -644))
+  local share = track(at(UI.Check(panel, "Help improve Equip This!: keep anonymous fight records I can send", E("share"), W_, Changed), 26, -660))
   share.tip = "Off unless you tick it. Each fight is kept as: class, spec, level, fight length, damage and healing per spell, and Equip This!'s own estimate. No name, realm or IDs, and nothing leaves the game on its own: \"Show my records\" gives you the text to paste if you'd like to send it. It helps the classes and specs the author can't test."
-  local yEnd = -684
+  local yEnd = -700
   local recs = at(UI.Button(panel, "Show my records", 150, function() ns.ShowReport() end), 26, yEnd)
   recs.tip = "The records to copy and paste (Ctrl+C)."
   local reset = UI.Button(panel, "Reset build", 110, function() B.ResetBuild(); changed() end)

@@ -33,7 +33,7 @@ Equip This! tells you on every item tooltip whether it's an upgrade, by how much
 - A brand-new character starts from a default rotation; it becomes yours after about 8 fights.
 
 ## Credits
-Forever's own game tables (spells, items, enchants, proc rates, threat), via [wago.tools](https://wago.tools). Default rotations, raid damage mixes and server-kept proc rates: [Warcraft Logs](https://www.warcraftlogs.com) (Classic Era 40-player raids).
+Forever's own game tables (spells, items, enchants, proc rates, threat), via [wago.tools](https://wago.tools). Default rotations, raid damage mixes and server-kept proc rates: [Warcraft Logs](https://www.warcraftlogs.com), from WoW Classic (Era) 40-player raids, not Forever's own: Forever's versions may differ, and your own fights replace the rotations.
 
 ## Updates
 New versions come out every **Wednesday at 12:00 UTC** (8 PM Philippine time, 8 AM US Eastern). Urgent fixes ship sooner.
