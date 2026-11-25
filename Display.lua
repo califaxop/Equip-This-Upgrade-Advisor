@@ -1,6 +1,6 @@
 -- Where Equip This! shows up: a line on item tooltips, and a glow on the best quest reward.
 local _, ns = ...
-local S = ns.Score
+local B = ns.Bridge
 local D = {}
 ns.Display = D
 
@@ -23,21 +23,23 @@ local function Versus(c)
   return out
 end
 
--- what the % is of: "DPS" / "HPS" / "EHP" (effective health) when your build is all one of them and has no changes of yours,
--- else nothing (a mix, or your own values)
+-- what the % is of: "DPS" / "HPS" / "Threat" / "EHP" when your build is all one of them, else nothing (a mix)
 function D.Unit()
-  local key = ns.SpecKey()
-  if ns.HasChanges(key) then return "" end
-  local t = ns.SurvivalShare(key)
-  local own = (ns.GUIDE[key] and ns.GUIDE[key].unit) or "DPS"
-  if ns.IsTank(key) then
-    if t >= 1 then return "EHP" end
-    if t <= 0 then return "DPS" end
-  else
-    if t <= 0 then return own end
-    if t >= 1 then return "EHP" end
-  end
+  local t = B.Mix()
+  if t >= 1 then return "EHP" end
+  if t <= 0 then return select(2, B.MainMetric()) end
   return ""
+end
+
+local function pct(x) return x and format("%s%+.1f%%|r", x >= 0 and GREEN or RED, x) or nil end
+-- the separate numbers under the verdict: "DPS +5.1%  EHP -0.3%"
+function D.Metrics(c)
+  local m, out = c.metrics or {}, {}
+  if m.dps and not m.tps then out[#out + 1] = "DPS " .. pct(m.dps) end
+  if m.hps then out[#out + 1] = "HPS " .. pct(m.hps) end
+  if m.tps then out[#out + 1] = "Threat " .. pct(m.tps) end
+  if m.ehp then out[#out + 1] = "EHP " .. pct(m.ehp) end
+  return table.concat(out, GREY .. "  ·  |r")
 end
 
 local STAT_SHORT = { EFFECTS = "Effects" }
@@ -51,7 +53,7 @@ function D.Parts(c, n)
   local out = {}
   for i = 1, math.min(n or 4, #list) do
     local k, v = list[i][1], list[i][2]
-    local name = STAT_SHORT[k] or (ns.STAT_NAMES[k] or k):gsub(" %%$", "")
+    local name = STAT_SHORT[k] or B.StatName(k)
     out[#out + 1] = format("%s %s%+.1f%%|r", name, v > 0 and GREEN or RED, v)
   end
   return out
@@ -59,9 +61,10 @@ end
 
 -- Short: "Downgrade -11.3% DPS vs [Rage of the Storm]" (paired with an off-hand, against your two-hander)
 function D.Verdict(link)
-  local c = S.Compare(link)
+  local c = B.Compare(link)
   if not c then return nil end
   if c.kind == "unusable" then return GREY .. "Can't use it|r" end
+  if c.kind == "unique" then return GREY .. "Unique: you already wear one|r" end
   if c.kind == "equipped" then
     local what = c.equipLoc == "INVTYPE_TRINKET" and "trinket" or "ring"
     if c.pair == "weaker" then return GREY .. "Equipped|r " .. ORANGE .. "- your weaker " .. what .. " (replaced first)|r" end
@@ -108,13 +111,31 @@ local function OnItemTooltip(tip, data)
   if v then
     -- one line, wrapped at the tooltip's own width (it never makes the tooltip wider)
     tip:AddLine(GOLD .. "Equip This!:|r " .. v .. (vs and (" " .. vs) or ""), 1, 1, 1, true)
-    -- holding Shift: where it comes from, and effects it couldn't read
-    if IsShiftKeyDown and IsShiftKeyDown() then
-      local c = S.Compare(link)
-      local parts = c and D.Parts(c, 5) or {}
+    local c = B.Compare(link)
+    if c and c.metrics then
+      local m = D.Metrics(c)
+      if m ~= "" then tip:AddLine(m .. (c.confidence == "low" and (GREY .. "  ·  " .. ORANGE .. "rough|r") or ""), 1, 1, 1, true) end
+      if c.pvp then
+        local pv = {}
+        if c.pvp.burst then pv[#pv + 1] = "burst " .. pct(c.pvp.burst) end
+        if c.pvp.sustained then pv[#pv + 1] = "sustained " .. pct(c.pvp.sustained) end
+        if c.pvp.ehp then pv[#pv + 1] = "survival " .. pct(c.pvp.ehp) end
+        if #pv > 0 then tip:AddLine(GREY .. "PvP:|r " .. table.concat(pv, "  "), 1, 1, 1, true) end
+      end
+      for i, n in ipairs(c.notes or {}) do
+        if i > 3 then break end
+        tip:AddLine(GREY .. n .. "|r", 1, 1, 1, true)
+      end
+    end
+    -- holding Shift: where it comes from, effects it couldn't count, how sure it is
+    if IsShiftKeyDown and IsShiftKeyDown() and c then
+      local parts = D.Parts(c, 5)
       if #parts > 0 then tip:AddLine(GREY .. "From:|r " .. table.concat(parts, ", "), 1, 1, 1, true) end
-      if c and c.unread then tip:AddLine(ORANGE .. "Not counted: " .. c.unread .. "|r", 1, 1, 1, true) end
-      tip:AddLine(GREY .. "For " .. ns.ScoringLabel() .. "|r", 1, 1, 1, true)
+      if c.unread then tip:AddLine(ORANGE .. "Not counted: " .. c.unread .. "|r", 1, 1, 1, true) end
+      if c.confidence then
+        tip:AddLine(GREY .. "Confidence " .. c.confidence .. ((c.reasons and #c.reasons > 0) and (": " .. table.concat(c.reasons, "; ")) or "") .. "|r", 1, 1, 1, true)
+      end
+      tip:AddLine(GREY .. "For " .. B.ScoringLabel() .. "|r", 1, 1, 1, true)
     end
     tip:Show()
   end
@@ -202,8 +223,8 @@ function D.MarkRewards()
   local best, bestDelta, rich, richSell, missing = nil, 0, nil, 0, false
   for i = 1, n do
     local link = GetQuestItemLink and GetQuestItemLink("choice", i)
-    local c = link and S.Compare(link)
-    local f = link and S.Facts(link)
+    local c = link and B.Compare(link)
+    local f = link and B.Facts(link)
     if link and not f then missing = true end
     if c and (c.kind == "upgrade" or c.kind == "new") and (c.pct or 0) > bestDelta then best, bestDelta = i, c.pct end
     if f and f.sell > richSell then rich, richSell = i, f.sell end
@@ -214,7 +235,7 @@ function D.MarkRewards()
   end
   local buttons = ChoiceButtons()
   if best and buttons[best] then
-    Mark(buttons[best], "best", "|cff40ff40Best for " .. ns.ScoringLabel() .. "|r")
+    Mark(buttons[best], "best", "|cff40ff40Best for " .. B.ScoringLabel() .. "|r")
   elseif rich and ns.db.sellFallback and buttons[rich] then
     Mark(buttons[rich], "sell", "|cffffd200Sells for most|r")
   end

@@ -1,23 +1,62 @@
 ## Interface: 16001
 ## Title: Equip This!
-## Notes: Your leveling upgrade advisor: which gear is better for your class and spec, on tooltips and quest rewards.
+## Notes: Your gear advisor: which gear is better for your character, worked out from your own stats, talents and fights, on tooltips and quest rewards.
 ## IconTexture: Interface\AddOns\EquipThis\media\Logo
 ## Author: You
-## Version: 4.4.0
+## Version: 5.0.0
 ## X-Curse-Project-ID: 1819482
-## SavedVariables: EquipThisDB
+## SavedVariables: EquipThisDB, EquipThisEngineDB
 ## OptionalDeps: EllesmereUI, FlareUI
 
 Core.lua
-Guides.lua
-Enchants.lua
-Talents.lua
-Weights.lua
-Procs.lua
-Effects.lua
-Score.lua
-Rotation.lua
 UI.lua
+
+# Engine (tools/next/bundle.py)
+Engine\Init.lua
+Engine\Core\Bootstrap.lua
+Engine\Core\Events.lua
+Engine\Core\Database.lua
+Engine\Core\Cache.lua
+Engine\API\Compatibility.lua
+Engine\API\ItemAPI.lua
+Engine\API\EquipmentAPI.lua
+Engine\API\CharacterAPI.lua
+Engine\API\TalentAPI.lua
+Engine\API\AuraAPI.lua
+Engine\API\SpellAPI.lua
+Engine\API\MeterAPI.lua
+Engine\Data\StatDefinitions.lua
+Engine\Data\Talents.lua
+Engine\Data\ItemEffects.lua
+Engine\Data\ItemText.lua
+Engine\Data\Generated.lua
+Engine\Data\MeasuredProcs.lua
+Engine\Data\Rotations.lua
+Engine\Engine\CharacterProfile.lua
+Engine\Engine\TalentInterpreter.lua
+Engine\Engine\AbilityInterpreter.lua
+Engine\Engine\StatEngine.lua
+Engine\Engine\Models\Melee.lua
+Engine\Engine\Models\Spells.lua
+Engine\Engine\Models\Ranged.lua
+Engine\Engine\Models\Threat.lua
+Engine\Engine\Models\Survival.lua
+Engine\Engine\Evaluator.lua
+Engine\Scanner\StatScanner.lua
+Engine\Scanner\EquipmentScanner.lua
+Engine\Scanner\TalentScanner.lua
+Engine\Scanner\BuffScanner.lua
+Engine\Scanner\SpellScanner.lua
+Engine\Scanner\AbilityScanner.lua
+Engine\Scanner\FightRecorder.lua
+Engine\Scanner\CalcScanner.lua
+Engine\Scanner\BagScanner.lua
+Engine\Scanner\CharacterScanner.lua
+Engine\UI\Tooltip.lua
+Engine\UI\Diagnostics.lua
+# /Engine
+
+Bridge.lua
 Display.lua
 Options.lua
 Init.lua

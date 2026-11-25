@@ -557,6 +557,36 @@ function UI.ShowLink(name, title, url)
   win.edit:HighlightText()
 end
 
+-- A window with text to copy (several lines), selected and ready: Ctrl+C.
+function UI.ShowText(name, title, note, text)
+  local win = _G[name]
+  if not win then
+    win = UI.Popup(name, 560, 330)
+    win.title = UI.Text(win, "title", "")
+    win.title:SetPoint("TOPLEFT", 20, -18)
+    win.note = UI.Text(win, "note", "")
+    win.note:SetPoint("TOPLEFT", 20, -44); win.note:SetWidth(520); win.note:SetJustifyH("LEFT")
+    local scroll = CreateFrame("ScrollFrame", nil, win, "UIPanelScrollFrameTemplate")
+    scroll:SetPoint("TOPLEFT", 20, -92); scroll:SetPoint("BOTTOMRIGHT", -40, 48)
+    local edit = CreateFrame("EditBox", nil, scroll)
+    edit:SetMultiLine(true); edit:SetAutoFocus(false); edit:SetFontObject(ChatFontNormal); edit:SetWidth(490)
+    scroll:SetScrollChild(edit)
+    edit:SetScript("OnEscapePressed", function() win:Hide() end)
+    edit:SetScript("OnTextChanged", function(self, user) if user and self:GetText() ~= win.text then self:SetText(win.text); self:HighlightText() end end)
+    edit:SetScript("OnEditFocusGained", function(self) self:HighlightText() end)
+    win.edit = edit
+    local close = UI.Button(win, "Close", 90, function() win:Hide() end)
+    close:SetPoint("BOTTOMRIGHT", -20, 14)
+  end
+  win.text = text
+  win.title:SetText(title)
+  win.note:SetText(note or "")
+  win.edit:SetText(text)
+  win:Place(); win:Show()
+  win.edit:SetFocus()
+  win.edit:HighlightText()
+end
+
 -- A small window asking for a line of text (a name, or a pasted string), with OK / Cancel.
 -- a small Yes / No box
 function UI.Confirm(name, text, onYes)

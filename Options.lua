@@ -5,12 +5,26 @@ local W_ = 690 -- content width
 local window
 
 local function Changed()
-  ns.Score.ClearCache()
+  ns.Bridge.Sync()
   if ns.Display then pcall(ns.Display.MarkRewards) end
 end
 local function S(key) return { function() return ns.db[key] end, function(v) ns.db[key] = v end } end
+-- a setting of the engine's own (kept in its saved data)
+local function E(key) return { function() return ns.Engine.db and ns.Engine.db[key] end, function(v) if ns.Engine.db then ns.Engine.db[key] = v end end } end
+
+local REPORT_NOTE = "Copy it (Ctrl+C) and paste it into a new issue on the addon's GitHub page, or a comment on CurseForge. " ..
+  "It's your class, spec, level and how your damage and healing split between your spells in each fight: no name, realm or IDs."
+function ns.ShowReport()
+  local FR = ns.Engine.FightRecorder
+  local text, n = FR.ReportText()
+  if n == 0 then
+    text = text .. "\n(no fights recorded yet" .. ((ns.Engine.db and ns.Engine.db.share) and "" or ": tick \"Help improve Equip This!\" in /eqt first") .. ")"
+  end
+  UI.ShowText("EquipThisReportWindow", format("Your fight records (%d)", n), REPORT_NOTE, text)
+end
 
 local function BuildPanel(panel)
+  local B = ns.Bridge
   local refreshers = {}
   local function track(w) refreshers[#refreshers + 1] = w; return w end
   local function at(w, x, y) w:SetPoint("TOPLEFT", x, y); return w end
@@ -20,16 +34,15 @@ local function BuildPanel(panel)
 
   -- Spec ---------------------------------------------------------------------
   at(UI.Section(panel, "Your spec", W_), 26, -54)
-  local class = ns.Class()
   local opts = { { "auto", "Auto: from my talents" } }
-  for i, p in ipairs(ns.PRESETS[class] or {}) do opts[#opts + 1] = { class .. ":" .. i, p[1] } end
+  for _, t in ipairs(B.TREES[ns.Class()] or {}) do opts[#opts + 1] = { t, t } end
   local rows = {}
   local function refreshRows() for _, r in ipairs(rows) do r.Refresh() end end
   local now
   track(at(UI.Selector(panel, 300, opts, S("spec"), function() Changed(); refreshRows(); if now then now.Refresh() end end,
-    "Auto picks the talent tree you've put the most points in (before any talents: the one most players level in)."), 26, -84))
+    "Auto uses the talent tree you've put the most points in."), 26, -84))
   now = at(UI.Text(panel, "note", ""), 26, -112)
-  now.Refresh = function() now:SetText("Scoring gear for: " .. ns.ScoringLabel()) end
+  now.Refresh = function() now:SetText("Comparing gear for: " .. B.ScoringLabel()) end
   track(now)
 
   -- Show ---------------------------------------------------------------------
@@ -39,71 +52,77 @@ local function BuildPanel(panel)
   track(at(UI.Check(panel, "No upgrade among the rewards: mark the one that sells for most", S("sellFallback"), W_, Changed), 26, -218))
   local armor = track(at(UI.Check(panel, "From level 40, only my best armor type (mail or plate) can be an upgrade", S("bestArmorOnly"), W_, Changed), 26, -242))
   armor.tip = "Shamans and hunters: mail; warriors and paladins: plate. Off by default: Forever has no armor specialization, so a lighter piece with better stats really is better."
+  local pvp = track(at(UI.Check(panel, "PvP numbers on tooltips too (burst, sustained damage, survival vs players)", S("pvp"), W_, Changed), 26, -266))
+  pvp.tip = "Against a player of your level armored like you: no glancing blows, half the damage you take is magic. Separate from the PvE numbers."
 
   -- Your build ---------------------------------------------------------------
-  at(UI.Section(panel, "Your build", W_), 26, -278)
-  local n = at(UI.Text(panel, "note", "Slide toward what you want more of. Stat values come from Forever Upgrades' simulator for your spec, adjusted to your level, talents and gear. /eqt guide lists them."), 26, -306)
+  at(UI.Section(panel, "Your build", W_), 26, -302)
+  local n = at(UI.Text(panel, "note", "Each item is worked out on your own character: your stats, talents, abilities, weapon imbue and procs, and how you really fight. Damage (or healing, or threat for tanks) and survivability are shown apart; the slider says how they weigh in the Upgrade / Downgrade verdict."), 26, -330)
   n:SetWidth(W_)
   local function changed() Changed(); refreshRows(); now.Refresh() end
-  -- the build: a preset, or your own mix on the slider
-  at(UI.Text(panel, "line", "Build"), 26, -351)
+  at(UI.Text(panel, "line", "Build"), 26, -375)
   local buildOpts, buildTip = {}, {}
-  for _, b in ipairs(ns.BUILDS) do
-    buildOpts[#buildOpts + 1] = { b[1], ns.BuildName(b[1]) }
-    buildTip[#buildTip + 1] = ns.BuildName(b[1]) .. ": " .. b[5]
+  for _, b in ipairs(B.BUILDS) do
+    buildOpts[#buildOpts + 1] = { b[1], B.BuildName(b[1]) }
+    buildTip[#buildTip + 1] = B.BuildName(b[1]) .. ": " .. b[5]
   end
   local build = at(UI.Selector(panel, 230, buildOpts,
-    { function() return ns.Priorities().build or "auto" end, function(v) ns.SetBuild(v) end }, changed,
-    table.concat(buildTip, "\n") .. "\nMoving the slider makes it your own mix."), 86, -348)
+    { function() local c = ns.db.builds and ns.db.builds[B.SpecKey()]; return c and c.build or "auto" end, function(v) B.SetBuild(v) end }, changed,
+    table.concat(buildTip, "\n") .. "\nMoving the slider makes it your own mix."), 86, -372)
   rows[#rows + 1] = build; track(build)
-  -- More Damage (or Healing) <---> More Survivability
-  local function leftEnd() return (ns.GUIDE[ns.SpecKey()] and ns.GUIDE[ns.SpecKey()].unit == "HPS") and "More Healing" or "More Damage" end
-  local mix = UI.Slider(panel, "", W_, 0, 1, 0.05,
-    { function() return ns.SurvivalShare() end, function(v) ns.SetSurvivalShare(v) end },
+  local function leftEnd() local _, u = B.MainMetric(); return u == "HPS" and "More Healing" or (u == "Threat" and "More Threat" or "More Damage") end
+  local mix = UI.Slider(panel, "", W_, 0, 1, 0.05, { function() return B.Mix() end, function(v) B.SetMix(v) end },
     function() return "More Survivability" end, changed)
-  mix:SetPoint("TOPLEFT", 26, -386)
+  mix:SetPoint("TOPLEFT", 26, -410)
   rows[#rows + 1] = mix; track(mix)
-  local leftLbl = at(UI.Text(panel, "value", ""), 26, -386)
+  local leftLbl = at(UI.Text(panel, "value", ""), 26, -410)
   local mixText = UI.Text(panel, "note", "")
   mixText:SetPoint("TOP", mix, "BOTTOM", 0, -2)
   local mixRefresh = track({ Refresh = function()
     leftLbl:SetText(leftEnd())
-    local t = ns.SurvivalShare()
+    local t = B.Mix()
     mixText:SetText(format("%d%% %s  /  %d%% survivability", (1 - t) * 100 + 0.5, leftEnd():gsub("^More ", ""):lower(), t * 100 + 0.5))
   end })
-  rows[#rows + 1] = mixRefresh -- (moves with the slider and the build)
-  -- "I tank": score survivability as a tank (any class)
-  local tank = at(UI.Check(panel, "I tank: bosses and enemies hit me (score survivability as a tank)",
-    { function() return ns.IsTank() end, function(v) ns.SetTanking(v) end }, W_, changed), 26, -440)
-  tank.tip = "For any class: survivability counts the way it does for a tank (bosses melee you, so armor, Defense, dodge, parry and block count fully; at 60, far less of what comes at you is magic: see Raid at 60), and the build leans to survival (Auto: half and half while leveling, Tanking at 60). Protection warriors and paladins always tank."
-  track({ Refresh = function()
-    tank.Refresh()
-    if tank.SetActive then tank.SetActive(not ns.IsTankSpec()) end
-  end })
-  rows[#rows + 1] = { Refresh = function() tank.Refresh(); if tank.SetActive then tank.SetActive(not ns.IsTankSpec()) end end }
-  -- at the level cap: which raid's damage your survivability is scored against (this character)
-  at(UI.Text(panel, "line", "Raid at 60"), 26, -475)
+  rows[#rows + 1] = mixRefresh
+  local tank = at(UI.Check(panel, "I tank: score threat and survivability as a tank",
+    { function() return B.IsTank() end, function(v) B.SetTank(v) end }, W_, changed), 26, -464)
+  tank.tip = "Threat (your damage times your stance, form or aura's threat, from Forever's own data) takes damage's place, and survivability counts as a tank's. Protection always tanks; a Defensive Stance, Bear Form or Righteous Fury does too."
+  rows[#rows + 1] = { Refresh = function() tank.Refresh(); if tank.SetActive then tank.SetActive(not B.IsTankSpec()) end end }
+  track(rows[#rows])
+  at(UI.Text(panel, "line", "Raid at 60"), 26, -499)
   local raidOpts = {}
-  for _, k in ipairs(ns.Score.RAID_ORDER) do raidOpts[#raidOpts + 1] = { k, ns.Score.RAIDS[k].name } end
-  local raid = at(UI.Selector(panel, 260, raidOpts,
-    { function() return ns.Score.Raid() end, function(v) ns.Score.SetRaid(v) end }, changed,
-    "At the level cap, survivability (EHP) counts the spell damage of the raid you're gearing for: how much of what hits you is magic, and which schools (so the right resistances count). Measured on Warcraft Logs. Kept per character. While leveling it isn't used."), 120, -472)
-  local raidNote = at(UI.Text(panel, "note", ""), 390, -475)
+  for _, k in ipairs(B.RAID_ORDER) do raidOpts[#raidOpts + 1] = { k, B.RAIDS[k].name } end
+  local raid = at(UI.Selector(panel, 260, raidOpts, { function() return B.Raid() end, function(v) B.SetRaid(v) end }, changed,
+    "At the level cap, survivability counts how much of what hits you in the raid you're gearing for is magic (measured on Warcraft Logs). Kept per character. While leveling, a fifth."), 120, -496)
+  local raidNote = at(UI.Text(panel, "note", ""), 390, -499)
   local function raidRefresh()
     raid.Refresh()
-    local r = ns.Score.RAIDS[ns.Score.Raid()]
-    local m = ns.IsTank() and r.tank or r.other
-    raidNote:SetText(format("%d%% of what hits %s is magic", m[1] * 100 + 0.5, ns.IsTank() and "a tank" or "you"))
+    local r = B.RAIDS[B.Raid()]
+    raidNote:SetText(format("%d%% of what hits %s is magic", (B.IsTank() and r.tank or r.other) * 100 + 0.5, B.IsTank() and "a tank" or "you"))
   end
   track({ Refresh = raidRefresh }); rows[#rows + 1] = { Refresh = raidRefresh }
-  local yEnd = -512
-  local reset = at(UI.Button(panel, "Reset build", 110, function() ns.ResetPriorities(); changed() end), 26, yEnd)
+  local fight = UI.Slider(panel, "Fight length (mana)", 330, 60, 600, 30, S("fightLength"), function(v) return format("%d s", v) end, Changed)
+  fight:SetPoint("TOPLEFT", 26, -540)
+  fight.tip = "How long a fight lasts, for healers and casters: over it you can spend your mana pool plus what you regain, so Intellect, Spirit and mana regen count when a fight runs you short."
+  track(fight)
+
+  -- Learning and helping -----------------------------------------------------
+  at(UI.Section(panel, "Learning how you fight", W_), 26, -590)
+  local learn = track(at(UI.Check(panel, "Learn from my fights (the game's damage meter, after each fight)", E("learn"), W_, Changed), 26, -620))
+  learn.tip = "How often you use each ability and spell decides what's worth most to you. Equip This! adds up your damage and healing per spell after each fight and learns from them every few fights. It stays on your computer."
+  local share = track(at(UI.Check(panel, "Help improve Equip This!: keep anonymous fight records I can send", E("share"), W_, Changed), 26, -644))
+  share.tip = "Off unless you tick it. Each fight is kept as: class, spec, level, fight length, damage and healing per spell, and Equip This!'s own estimate. No name, realm or IDs, and nothing leaves the game on its own: \"Show my records\" gives you the text to paste if you'd like to send it. It helps the classes and specs the author can't test."
+  local yEnd = -684
+  local recs = at(UI.Button(panel, "Show my records", 150, function() ns.ShowReport() end), 26, yEnd)
+  recs.tip = "The records to copy and paste (Ctrl+C)."
+  local reset = UI.Button(panel, "Reset build", 110, function() B.ResetBuild(); changed() end)
+  reset:SetPoint("LEFT", recs, "RIGHT", 8, 0)
   reset.tip = "Back to Auto: Leveling until the level cap, then Damage (tanks: Tanking)."
   local fb = UI.Button(panel, "Report a bug / suggest", 170, function()
     UI.ShowLink("EquipThisLinkWindow", "Equip This!: bugs and ideas", "https://github.com/califaxop/Equip-This-Upgrade-Advisor/issues/new/choose")
   end)
   fb:SetPoint("LEFT", reset, "RIGHT", 8, 0)
-  local hint = at(UI.Text(panel, "note", "Hold Shift on an item for where its score comes from.  /eqt item: the full working.  /eqt guide: your spec's priority, rotation and values."), 26, yEnd - 30)
+  local hint = at(UI.Text(panel, "note", "Hold Shift on an item for where its numbers come from.  /eqt item <link>: the full working.  /eqn: the engine's diagnostics (/eqn model, /eqn measure)."), 26, yEnd - 30)
   hint:SetWidth(W_)
 
   panel:HookScript("OnShow", function() for _, w in ipairs(refreshers) do w.Refresh() end end)
@@ -131,12 +150,12 @@ end
 
 function ns.OpenOptions()
   if not window then
-    window = UI.Window("EquipThisOptionsWindow", 742, 640)
+    window = UI.Window("EquipThisOptionsWindow", 742, 790)
     window:SetPoint("CENTER")
     UI.SetHost(window) -- pop-ups (New, Rename, Import, Delete...) sit over this window
     local ok, e = pcall(BuildPanel, window)
     if not ok then window:Hide(); window = nil; ns.Print("settings failed: " .. tostring(e)); return end
-    window:SetHeight(window.height or 640)
+    window:SetHeight(window.height or 790)
     window:Hide()
   end
   UI.Restyle()

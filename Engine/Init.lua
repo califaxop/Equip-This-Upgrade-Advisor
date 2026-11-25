@@ -1,0 +1,3 @@
+-- The engine's own namespace inside Equip This! (bundled by tools/next/bundle.py from EquipThisNext).
+local _, ns = ...
+ns.Engine = ns.Engine or { bundled = true }
