@@ -276,7 +276,8 @@ C_DamageMeter = {
   GetCombatSessionSourceFromID = function(id, kind, guid)
     if MOCK.inCombat then return { combatSpells = { { spellID = 1, totalAmount = SECRET_VALUE } } } end
     local list = {}
-    for sid, a in pairs(MOCK.meter and MOCK.meter.spells or {}) do list[#list + 1] = { spellID = sid, totalAmount = a } end
+    local src = kind == 2 and (MOCK.meter and MOCK.meter.heal) or (kind ~= 2 and MOCK.meter and MOCK.meter.spells) or {}
+    for sid, a in pairs(src) do list[#list + 1] = { spellID = sid, totalAmount = a } end
     return { combatSpells = list, totalAmount = 0 }
   end,
 }

@@ -123,3 +123,39 @@ T.Test("5.0: after each fight the rotation is learned from the damage meter; opt
   T.Ok(not text:find(tostring(UnitName and UnitName("player") or "Mocky")) and not text:find("Player%-"), "no name or GUID")
   T.Eq(n5.errors.count, 0)
 end)
+
+T.Test("5.0: sharing: a summary, one line to copy, 'I reported this' clears, a reminder once a session", function()
+  MOCK.Reset()
+  local n6 = LoadAddon()
+  for id in pairs(MOCK.ITEMS) do MOCK.cached[id] = true end
+  MOCK.Fire("ADDON_LOADED", "EquipThisNext"); MOCK.Fire("PLAYER_LOGIN"); MOCK.Fire("PLAYER_ENTERING_WORLD"); MOCK.RunTimers()
+  n6.db.share = true
+  local FR = n6.FightRecorder
+  local reminded = 0
+  FR.OnRemind = function() reminded = reminded + 1 end
+  for i = 1, FR.REMIND_AT + 2 do
+    MOCK.meter = { id = 600 + i, duration = 30, spells = { [6603] = 3000, [17364] = 1200, [403] = 500 } }
+    MOCK.Fire("PLAYER_REGEN_ENABLED"); MOCK.RunTimers()
+  end
+  T.Eq(reminded, 1, "reminded once")
+  local sum = FR.Summary()
+  T.Eq(sum.fights, FR.REMIND_AT + 2); T.Near(sum.seconds, 30 * (FR.REMIND_AT + 2), 1e-9)
+  T.Eq(sum.specs[1], "Enhancement Shaman"); T.Eq(sum.spells, 3); T.Eq(sum.levels[1], 42)
+  local line, n = FR.ExportString()
+  T.Eq(n, FR.REMIND_AT + 2)
+  T.Ok(line:find("^EquipThis:Fights:1!") and line:find("!End:EquipThis:Fights:1$"), line:sub(1, 80))
+  T.Ok(not line:find("\n") and not line:find("|", 1, true), "one line, nothing the game would read as a code")
+  T.Ok(line:find("c=SHAMAN,t=Enhancement,l=42,d=30,dmg=Auto Attack:3000;Lightning Bolt:500;Stormstrike:1200,heal=,mdl=", 1, true), line:sub(1, 200))
+  -- not again for a week, even with more waiting (a new session)
+  FR.reminded = nil
+  for i = 1, 3 do
+    MOCK.meter = { id = 700 + i, duration = 30, spells = { [6603] = 3000 } }
+    MOCK.Fire("PLAYER_REGEN_ENABLED"); MOCK.RunTimers()
+  end
+  T.Eq(reminded, 1, "at most once a week")
+  n6.db.lastReminded = n6.db.lastReminded - 8 * 24 * 3600
+  FR.MaybeRemind()
+  T.Eq(reminded, 2, "a week later")
+  T.Eq(FR.MarkReported(), FR.REMIND_AT + 5)
+  T.Eq(FR.Summary().fights, 0); T.Eq(FR.Summary().sentBefore, FR.REMIND_AT + 5)
+end)
