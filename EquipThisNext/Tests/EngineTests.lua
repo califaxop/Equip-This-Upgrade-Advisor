@@ -324,9 +324,13 @@ T.Test("0.3.1: a weapon type you haven't trained: % at your current skill, today
   local ctx = Ev.Context(p, { targetOffset = 0 })
   local res = Ev.Compare(ctx, FLAYER)
   local o = res.best
-  local note
-  for _, n in ipairs(o.notes) do if n:find("trained up") then note = n end end
-  T.Ok(note and note:find("is 180") and note:find("is 209"), "says the skill: " .. tostring(note))
+  local note, skillNote
+  for _, n in ipairs(o.notes) do
+    if n:find("trained up") then note = n end
+    if n:find("weapon type is") then skillNote = n end
+    T.Ok(#n <= 60, "short enough not to widen the tooltip: " .. n)
+  end
+  T.Ok(skillNote and skillNote:find("is 180") and skillNote:find("vs 209"), "says the skill: " .. tostring(skillNote))
   local today = tonumber(note:match("DPS ([%+%-]%d+%.%d)%%"))
   T.Ok(today and o.dps > today, "the main % is at the trained skill (" .. o.dps .. ") above today's (" .. tostring(today) .. ")")
   p.stats.skillByLine[44] = 209

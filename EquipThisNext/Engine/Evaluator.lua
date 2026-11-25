@@ -212,8 +212,9 @@ function Ev.Evaluate(ctx, changes, label, notes)
   if weapons and ctx.melee then
     local t, now, base = trained(s, ctx.state)
     if t then
-      untrainedNote = string.format("your skill with this weapon type is %d (your current weapon's is %d): DPS %+.1f%% until it's trained up",
-        now, base, pct(p.dps, ctx.base.dps) or 0)
+      -- (two short lines: one long one widens the tooltip)
+      untrainedNote = { string.format("your skill with this weapon type is %d (vs %d)", now, base),
+        string.format("until it's trained up: DPS %+.1f%%", pct(p.dps, ctx.base.dps) or 0) }
       s, p = t, Ev.Performance(t, ctx)
     end
   end
@@ -241,7 +242,7 @@ function Ev.Evaluate(ctx, changes, label, notes)
     for _, e in ipairs(it.effects or {}) do opt.lost[#opt.lost + 1] = e end
     if it.enchantText then opt.carry[#opt.carry + 1] = it.enchantText end
   end
-  if untrainedNote then opt.notes[#opt.notes + 1] = untrainedNote end
+  if untrainedNote then for _, n in ipairs(untrainedNote) do opt.notes[#opt.notes + 1] = n end end
   if s.assumedSkill then opt.notes[#opt.notes + 1] = "weapon skill for this weapon type unknown: 5 x level assumed" end
   return opt
 end
