@@ -23,7 +23,7 @@ local function Versus(c)
   return out
 end
 
--- what the % is of: "DPS" / "HPS" / "EH" when your build is all one of them and has no changes of yours,
+-- what the % is of: "DPS" / "HPS" / "EHP" (effective health) when your build is all one of them and has no changes of yours,
 -- else nothing (a mix, or your own values)
 function D.Unit()
   local key = ns.SpecKey()
@@ -31,11 +31,11 @@ function D.Unit()
   local t = ns.SurvivalShare(key)
   local own = (ns.GUIDE[key] and ns.GUIDE[key].unit) or "DPS"
   if ns.IsTank(key) then
-    if t >= 1 then return "EH" end
+    if t >= 1 then return "EHP" end
     if t <= 0 then return "DPS" end
   else
     if t <= 0 then return own end
-    if t >= 1 then return "EH" end
+    if t >= 1 then return "EHP" end
   end
   return ""
 end

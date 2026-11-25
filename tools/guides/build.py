@@ -368,7 +368,7 @@ def main():
                 weights[m[0]] = max(weights.get(m[0], 0), float(w["value"]) * m[1])
         rot = [r["ability"] for r in g.get("rotation") or []]
         lines = [f'  ["{key}"] = {{ -- {g["spec"]} {g["class"]}']
-        unit = "HPS" if role == "healer" else ("EH" if role == "tank" else "DPS")
+        unit = "HPS" if role == "healer" else ("EHP" if role == "tank" else "DPS")
         lines.append(f'    unit = "{unit}", role = "{role}", hitCap = {"true" if g.get("hit_cap") else "false"},')
         if role == "tank":
             # the damage side of a tank's build: the class's damage spec (melee first)

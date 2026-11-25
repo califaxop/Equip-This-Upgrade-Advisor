@@ -391,15 +391,111 @@ local function Points(f, w, slot, other, caps)
   return pts, parts
 end
 
--- survival: % more effective health per unit of each stat, from your health and armor now
--- (effective health = health / (1 - armor's cut); 1 Stamina = 10 health, 1 Agility = 2 armor)
-local function EHPer()
-  local level = UnitLevel and UnitLevel("player") or 60
-  local h = math.max(1, Num(Call(UnitHealthMax, "player")))
-  local a = Num(select(2, Call(UnitArmor, "player")))
-  local k = 400 + 85 * level
-  return { STA = 1000 / h, HEALTH = 100 / h, ARMOR = 100 / (a + k), AGI = 200 / (a + k) }
+---------------------------------------------------------------------------
+-- Effective health (EHP), the way Forever Upgrades works it out for tanks: your health divided by the
+-- share of an enemy's raw melee damage you actually take. Each swing rolls once on Classic's table, in
+-- order: miss (5% + 0.04% per Defense point over the enemy's weapon skill), dodge, parry, block (with a
+-- shield; Shield Block / Holy Shield add to it), crit (5% + 0.04% per point of skill over your Defense:
+-- double damage), crushing blow (bosses: 15%, +50%), else a normal hit. Armor cuts all of it
+-- (armor / (armor + K), K from the enemy's level), and a block takes your block value off the hit.
+-- The enemy: at the level cap a boss three levels up (as the site's sim), below it one of your level.
+-- Checked against the site's sim: health, armor's cut, miss and crit chance match its numbers.
+---------------------------------------------------------------------------
+local function ArmorK(a) if a > 59 then return 467.5 * a - 22167.5 end return 400 + 85 * a end
+
+local function Known(name)
+  if not (C_Spell and C_Spell.GetSpellInfo) then return false end
+  local ok, info = pcall(C_Spell.GetSpellInfo, name)
+  if not (ok and type(info) == "table" and Readable(info.spellID)) then return false end
+  if IsPlayerSpell then local ok2, k = pcall(IsPlayerSpell, info.spellID); if ok2 and Readable(k) then return k and true or false end end
+  return true
 end
+
+-- you now, for the EHP formula
+function S.EHPState()
+  local L = UnitLevel and UnitLevel("player") or 60
+  local atMax = L >= ns.MaxLevel()
+  local base, mod = Call(UnitDefense, "player")
+  local st = {
+    L = L, a = atMax and L + 3 or L, boss = atMax,
+    H = math.max(1, Num(Call(UnitHealthMax, "player"))),
+    A = Num(select(2, Call(UnitArmor, "player"))),
+    D = Num(base) + Num(mod),
+    dodge = Num(Call(GetDodgeChance)), parry = Num(Call(GetParryChance)),
+    block = Num(Call(GetBlockChance)), bv = Num(Call(GetShieldBlock)),
+  }
+  if st.D <= 0 then st.D = 5 * L end
+  st.shield = st.block > 0
+  st.extraBlock, st.uptime = 0, 0
+  if st.shield then
+    -- (Forever: Shield Block +75% block for 6 s or two blocks, every 5 s: up for about 83% of a boss's
+    -- swings in the site's sim; Holy Shield +30%, most of the time)
+    if ns.Class() == "WARRIOR" and Known("Shield Block") then st.extraBlock, st.uptime = 75, 0.83
+    elseif ns.Class() == "PALADIN" and Known("Holy Shield") then st.extraBlock, st.uptime = 30, 0.8 end
+  end
+  -- a Protection warrior tanks in Defensive Stance: 10% less damage taken
+  st.cut = (ns.SpecKey() == "WARRIOR:3" and Known("Defensive Stance")) and 0.9 or 1
+  -- an enemy's raw swing: a level 63 boss about 2,000 (the site's sim), a normal enemy about 2 x its level
+  st.swing = atMax and 32 * st.a or 2 * st.a
+  return st
+end
+
+-- EHP for a state, and the share of the enemy's raw damage you take
+function S.EHP(st)
+  local dr = math.min(st.A / (st.A + ArmorK(st.a)), 0.75)
+  local skill = 5 * st.a
+  local hit = st.swing * (1 - dr)
+  local blocked = math.max(0, 1 - st.bv / math.max(hit, 1)) -- (a block takes your block value off the hit)
+  -- one swing's damage, as a share of its raw damage, with a given block chance
+  local function swing(blockPct)
+    local left = 1
+    local function take(p) p = math.max(0, math.min(p, left)); left = left - p; return p end
+    take((5 + (st.D - skill) * 0.04) / 100)                -- miss
+    take(st.dodge / 100); take(st.parry / 100)              -- dodge, parry
+    local block = st.shield and take(blockPct / 100) or 0
+    local crit = take((5 + (skill - st.D) * 0.04) / 100)
+    local crush = st.boss and take(0.15) or 0
+    return (1 - dr) * (left + 2 * crit + 1.5 * crush + block * blocked)
+  end
+  -- (Shield Block / Holy Shield: up for some swings, down for the rest)
+  local taken = swing(st.block) * (1 - st.uptime) + swing(st.block + st.extraBlock) * st.uptime
+  taken = taken * (st.cut or 1)
+  return st.H / math.max(taken, 0.001), taken, dr
+end
+
+-- what a stat on an item changes in that state (per unit: 1 Stamina = 10 health, 1 Agility = 2 armor and
+-- about 1% dodge per level/3, 1 Defense = +0.04% dodge, parry and block)
+local function AddStat(st, k, n)
+  if k == "STA" then st.H = st.H + 10 * n
+  elseif k == "HEALTH" then st.H = st.H + n
+  elseif k == "ARMOR" then st.A = st.A + n
+  elseif k == "AGI" then st.A = st.A + 2 * n; st.dodge = st.dodge + n / math.max(1, st.L / 3)
+  elseif k == "DEF" then
+    st.D = st.D + n
+    st.dodge, st.parry = st.dodge + 0.04 * n, st.parry + 0.04 * n
+    if st.shield then st.block = st.block + 0.04 * n end
+  elseif k == "DODGE" then st.dodge = st.dodge + n
+  elseif k == "PARRY" then st.parry = st.parry + n
+  elseif k == "BLOCK" then st.block = st.block + n
+  elseif k == "BLOCKVALUE" then st.bv = st.bv + n
+  end
+end
+local EHP_STATS = { STA = 10, HEALTH = 100, ARMOR = 100, AGI = 10, DEF = 5, DODGE = 1, PARRY = 1, BLOCK = 1, BLOCKVALUE = 10 }
+
+-- survival: % more EHP per unit of each stat, from you now
+local function EHPer()
+  local st = S.EHPState()
+  local now = S.EHP(st)
+  local per = {}
+  for k, d in pairs(EHP_STATS) do
+    local t = {}
+    for x, v in pairs(st) do t[x] = v end
+    AddStat(t, k, d)
+    per[k] = (S.EHP(t) / now - 1) * 100 / d
+  end
+  return per
+end
+S.EHPer = EHPer
 
 local function WornEach(fn)
   for slot = 1, 18 do
@@ -484,16 +580,15 @@ function S.Sides()
   local own = ns.Weights(key)
   local list = {}
   if ns.IsTank(key) then
-    list[1] = { kind = "points", w = own, share = t, label = "survival", own = true }
+    -- a tank: survival is your EHP (the site's own measure for tanks); damage from the class's damage
+    -- spec's values (and its calibration)
+    list[1] = { kind = "eh", w = EHPer(), share = t, label = "survival" }
     local dk = ns.GUIDE and ns.GUIDE[key] and ns.GUIDE[key].damageSpec
     local dw = dk and ns.SiteWeights(dk) or own
-    for stat in pairs(dw) do if ns.Ignored(stat, key) then dw[stat] = 0 end end
-    list[2] = { kind = "points", w = dw, share = 1 - t, label = "damage" }
+    list[2] = { kind = "points", w = dw, share = 1 - t, label = "damage", calKey = dk }
   else
     list[1] = { kind = "points", w = own, share = 1 - t, label = (ns.GUIDE[key] and ns.GUIDE[key].unit == "HPS") and "healing" or "damage", own = true }
-    local per = EHPer()
-    for stat in pairs(per) do if ns.Ignored(stat, key) then per[stat] = 0 end end
-    list[2] = { kind = "eh", w = per, share = t, label = "survival" }
+    list[2] = { kind = "eh", w = EHPer(), share = t, label = "survival" }
   end
   -- what you score on each points side: your character, your gear's stats, then its effects (with 1%
   -- of you and your gear as +1% output)
@@ -504,7 +599,7 @@ function S.Sides()
       side.gear = stats
       -- your character: calibrated against Forever Upgrades' Sim DPS (your spec's own side), else
       -- worked out from your base stats
-      local cal = side.own and S.Character(key)
+      local cal = (side.own and S.Character(key)) or (side.calKey and S.Character(side.calKey))
       if cal then side.base, side.baseParts, side.calibrated = cal, {}, true
       else side.base, side.baseParts = S.Base(side.w) end
       stats = stats + side.base
