@@ -129,3 +129,11 @@ build = "1.60.1.71091",
 [280032]=15,
 [284262]=10,
 }
+-- Procs a minute for items whose rate the game keeps on its server, measured on Warcraft Logs
+-- (Warcraft Logs, Classic Era 40-player raids (MC, BWL, AQ40, Naxxramas), recent public fights, Nov 2026: procs per minute of fight for players wearing the item).
+ns.PROC_PPM = {
+[13040]=2.26,
+[19287]=3.25,
+[19289]=2.24,
+[23221]=3.27,
+}

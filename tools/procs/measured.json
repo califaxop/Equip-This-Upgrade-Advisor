@@ -1,0 +1,31 @@
+{
+ "source": "Warcraft Logs, Classic Era 40-player raids (MC, BWL, AQ40, Naxxramas), recent public fights, Nov 2026: procs per minute of fight for players wearing the item",
+ "ppm": {
+  "23221": 3.27,
+  "19287": 3.25,
+  "13040": 2.26,
+  "19289": 2.24
+ },
+ "samples": {
+  "23221": {
+   "players": 12,
+   "minutes": 30.8,
+   "procs": 101
+  },
+  "19287": {
+   "players": 9,
+   "minutes": 12.9,
+   "procs": 42
+  },
+  "13040": {
+   "players": 12,
+   "minutes": 12.4,
+   "procs": 28
+  },
+  "19289": {
+   "players": 7,
+   "minutes": 12.1,
+   "procs": 27
+  }
+ }
+}
