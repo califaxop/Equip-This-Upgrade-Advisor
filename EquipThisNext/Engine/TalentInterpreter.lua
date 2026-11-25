@@ -53,13 +53,15 @@ function TI.Interpret(profile, sheetMinusGear)
       if not v and profile.calc and profile.calc.seenBuffs and profile.calc.seenBuffs[e.buffName or ""] then
         v, check = profile.calc.seenBuffs[e.buffName], "buff"
       end
+      if not v and e.forever and e.forever[rank] then v, check = e.forever[rank], "forever" end
       if not v then v, check = e.hastePerRankDefault and e.hastePerRankDefault[rank], "source" end
       if v then
         out.flurry = { haste = v / 100, swings = e.swings or 3, talent = e.name, rank = rank, check = check }
         out.notes[#out.notes + 1] = string.format("%s %d/%s: +%g%% attack speed for %d swings after a crit (%s)",
           e.name, rank, tostring(n.maxRank), v, e.swings or 3,
-          check == "buff" and "from the Flurry buff seen on you" or "Classic value for this rank, not confirmed on Forever yet")
-        if check ~= "buff" then out.unchecked = out.unchecked + 1 end
+          check == "buff" and "from the Flurry buff seen on you" or check == "forever" and "Forever's value for this rank"
+            or "Classic value for this rank, not confirmed on Forever yet")
+        if check == "source" then out.unchecked = out.unchecked + 1 end
       end
     end
   end

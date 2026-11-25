@@ -235,6 +235,10 @@ In-game test of 0.2.0 (level 42 Shaman, build 71091):
 - **Gear vs sheet:** Strength and attack power match exactly. Stamina: gear 105, sheet +108. Armor:
   gear 1132, sheet bonus 1118. Enchants (chest 8484, boots 8485) aren't in `GetItemStats`; they come in
   milestone 3.
+- **Flurry confirmed in game (0.2.1):** the Flurry buff (16257, 3 charges) carries its value; 2/5 =
+  **12 %** on Forever, not Classic's 15 %. `Data/Talents.lua` now has Forever's rank 1 (10, data) and
+  rank 2 (12, seen); ranks 3-5 stay Classic until seen. A seen buff value always wins and is remembered.
+  With it, same-level white DPS is 75.5 (Flurry up 27 %).
 - **With the fix, on the 0.2.0 dump** (glancing and armor from the game):
   - Same level: 76.1 white DPS; 10 crit rating ≈ 9.2 AP; hit ≈ 0.
   - +3: 59.1 DPS; 10 crit rating ≈ 11.2 AP; 10 hit rating ≈ 12.1 AP.

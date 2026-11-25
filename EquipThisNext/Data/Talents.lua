@@ -21,6 +21,9 @@ TD.BY_SPELL = {
     note = "Intellect as spell damage and healing. Its share is measured from the sheet (sheet value minus gear) at run time." },
   [16256] = { name = "Flurry", class = "SHAMAN", kind = "flurry", hastePerRankDefault = { 10, 15, 20, 25, 30 }, swings = 3,
     buffName = "Flurry",
+    -- Forever's own values where known: rank 1 from its data (buff spell 16257: 10), rank 2 seen on the
+    -- buff in game (12, not Classic's 15). Ranks 3-5: Classic's, until seen.
+    forever = { [1] = 10, [2] = 12 },
     note = "Attack speed after a critical strike, for the next 3 swings. The talent's description can't be used: on " ..
       "Forever its spell (16256) is a marker whose value is 1 (the in-game text says 1%), and the haste is on the buff " ..
       "spell (16257: 10% at rank 1 in Forever's data). So: the Flurry buff's own value when it's seen on you, else " ..
