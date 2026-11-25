@@ -77,10 +77,10 @@ local function Guide()
   end
   -- your effective health, as Forever Upgrades works it out
   local st = ns.Score.EHPState()
-  local ehp, taken, dr = ns.Score.EHP(st)
-  ns.Print(format("EHP (effective health): %d - %d health, and you take %d%% of the melee damage of %s (armor cuts %d%%, then misses, dodges, parries%s and crits)",
-    ehp + 0.5, st.H, taken * 100 + 0.5, st.boss and format("a level %d boss", st.a) or "an enemy your level", dr * 100 + 0.5,
-    st.shield and ", blocks" or ""))
+  local ehp, taken, dr, melee, spell = ns.Score.EHP(st)
+  ns.Print(format("EHP (effective health): %d - %d health, and you take %d%% of the damage of %s: %d%% of its melee (armor cuts %d%%, then misses, dodges, parries%s and crits) and %d%% of its spells (your resistances; spells counted as %d%% of what hits you)",
+    ehp + 0.5, st.H, taken * 100 + 0.5, st.boss and format("a level %d boss", st.a) or "an enemy your level", melee * 100 + 0.5,
+    dr * 100 + 0.5, st.shield and ", blocks" or "", spell * 100 + 0.5, st.magic * 100 + 0.5))
   local _, why = ns.Talents.Factors(key)
   for _, t in ipairs(why) do
     ns.Print(format("talent: %s %d/%d - %s counts less until you have it", t[2], t[3], t[4], ns.STAT_NAMES[t[1]] or t[1]))

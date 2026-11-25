@@ -13,9 +13,12 @@ ns.STAT_NAMES = {
   CRIT = "Crit %", HIT = "Hit %", HASTE = "Haste %", EXPERTISE = "Expertise %", SPELLPEN = "Spell Penetration",
   HP5 = "Health per 5 sec", SPELLCRIT = "Spell Crit %", SPELLHIT = "Spell Hit %",
   DPS = "Weapon DPS", DEF = "Defense", DODGE = "Dodge %", PARRY = "Parry %", BLOCK = "Block %", BLOCKVALUE = "Block Value",
+  RES_FIRE = "Fire Resistance", RES_FROST = "Frost Resistance", RES_NATURE = "Nature Resistance",
+  RES_SHADOW = "Shadow Resistance", RES_ARCANE = "Arcane Resistance", RES_HOLY = "Holy Resistance",
 }
 ns.STAT_ORDER = { "STR", "AGI", "STA", "HEALTH", "INT", "SPI", "AP", "RAP", "SP", "HEAL", "MP5", "HP5", "CRIT", "HIT", "HASTE", "EXPERTISE",
-  "SPELLCRIT", "SPELLHIT", "SPELLPEN", "DPS", "ARMOR", "DEF", "DODGE", "PARRY", "BLOCK", "BLOCKVALUE" }
+  "SPELLCRIT", "SPELLHIT", "SPELLPEN", "DPS", "ARMOR", "DEF", "DODGE", "PARRY", "BLOCK", "BLOCKVALUE",
+  "RES_FIRE", "RES_FROST", "RES_NATURE", "RES_SHADOW", "RES_ARCANE" }
 
 local MELEE    = { STR = 1, AGI = 0.75, STA = 0.2, AP = 0.5, CRIT = 14, HIT = 12, DPS = 4, ARMOR = 0.01 }
 local AGILE    = { AGI = 1, STR = 0.5, STA = 0.2, AP = 0.5, CRIT = 14, HIT = 14, DPS = 4, ARMOR = 0.01 }

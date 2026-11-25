@@ -6,6 +6,8 @@ local Readable = ns.Readable
 
 -- the game's stat keys -> ours
 local KEYS = {
+  RESISTANCE1_NAME = "RES_HOLY", RESISTANCE2_NAME = "RES_FIRE", RESISTANCE3_NAME = "RES_NATURE",
+  RESISTANCE4_NAME = "RES_FROST", RESISTANCE5_NAME = "RES_SHADOW", RESISTANCE6_NAME = "RES_ARCANE",
   ITEM_MOD_STRENGTH_SHORT = "STR", ITEM_MOD_AGILITY_SHORT = "AGI", ITEM_MOD_STAMINA_SHORT = "STA",
   ITEM_MOD_INTELLECT_SHORT = "INT", ITEM_MOD_SPIRIT_SHORT = "SPI", RESISTANCE0_NAME = "ARMOR",
   ITEM_MOD_ATTACK_POWER_SHORT = "AP", ITEM_MOD_RANGED_ATTACK_POWER_SHORT = "RAP",
@@ -103,6 +105,10 @@ local TIMED = { "chance on", "chance when", "chance per", "have a chance", "has 
   "chance to gain", "chance to strike", "chance to deal", "chance to restore", "chance to increase", "chance to grant",
   "for %d+%.?%d* sec", "for %d+ min", "when struck", "when hit" }
 
+local RES_KEY = { holy = "RES_HOLY", fire = "RES_FIRE", nature = "RES_NATURE", frost = "RES_FROST",
+  shadow = "RES_SHADOW", arcane = "RES_ARCANE" }
+S.RES_KEY = RES_KEY
+
 local function IsRed(c)
   return type(c) == "table" and Readable(c.r) and c.r > 0.9 and c.g < 0.3 and c.b < 0.3
 end
@@ -132,6 +138,11 @@ local function TooltipFacts(link)
       if lt:find(w) then timed = true end
     end
     perSpell = perSpell or timed
+    -- resistances ("+10 Fire Resistance", "+5 All Resistances"): when the stat list doesn't have them
+    local rn, school = t:match("^%+(%d+) (%a+) Resistance$")
+    local all = t:match("^%+(%d+) [Aa]ll [Rr]esistances$")
+    if rn and RES_KEY[school:lower()] then extra[RES_KEY[school:lower()]] = (extra[RES_KEY[school:lower()]] or 0) + tonumber(rn) end
+    if all then for _, k in pairs(RES_KEY) do extra[k] = (extra[k] or 0) + tonumber(all) end end
     if (t:find("^Equip:") and not perSpell) or t:find("^%+%d+ [Aa]ttack") then
       local lower = t:lower()
       local situational = false
@@ -400,6 +411,14 @@ end
 -- (armor / (armor + K), K from the enemy's level), and a block takes your block value off the hit.
 -- The enemy: at the level cap a boss three levels up (as the site's sim), below it one of your level.
 -- Checked against the site's sim: health, armor's cut, miss and crit chance match its numbers.
+-- On top of the site's model (melee only), Equip This! counts magic damage too: a share of what you
+-- take is spells (while leveling 20%: casters and elementals among the enemies; at the level cap 10%:
+-- bosses mostly hit in melee), split evenly over Fire, Frost, Nature, Shadow and Arcane. Spells can't be dodged,
+-- parried or blocked and armor doesn't touch them; your resistance to the school cuts them by 75% x
+-- resistance / (5 x the enemy's level) on average (Classic), at most 75%.
+S.MAGIC_LEVELING, S.MAGIC_BOSS = 0.2, 0.1
+local SCHOOLS = { "RES_FIRE", "RES_FROST", "RES_NATURE", "RES_SHADOW", "RES_ARCANE" }
+local RES_INDEX = { RES_HOLY = 1, RES_FIRE = 2, RES_NATURE = 3, RES_FROST = 4, RES_SHADOW = 5, RES_ARCANE = 6 }
 ---------------------------------------------------------------------------
 local function ArmorK(a) if a > 59 then return 467.5 * a - 22167.5 end return 400 + 85 * a end
 
@@ -425,6 +444,9 @@ function S.EHPState()
     block = Num(Call(GetBlockChance)), bv = Num(Call(GetShieldBlock)),
   }
   if st.D <= 0 then st.D = 5 * L end
+  st.res = {}
+  for k, i in pairs(RES_INDEX) do st.res[k] = Num(select(2, Call(UnitResistance, "player", i))) end
+  st.magic = atMax and S.MAGIC_BOSS or S.MAGIC_LEVELING
   st.shield = st.block > 0
   st.extraBlock, st.uptime = 0, 0
   if st.shield then
@@ -458,9 +480,15 @@ function S.EHP(st)
     return (1 - dr) * (left + 2 * crit + 1.5 * crush + block * blocked)
   end
   -- (Shield Block / Holy Shield: up for some swings, down for the rest)
-  local taken = swing(st.block) * (1 - st.uptime) + swing(st.block + st.extraBlock) * st.uptime
-  taken = taken * (st.cut or 1)
-  return st.H / math.max(taken, 0.001), taken, dr
+  local melee = swing(st.block) * (1 - st.uptime) + swing(st.block + st.extraBlock) * st.uptime
+  -- spells: each school's share, less your resistance's cut
+  local spell = 0
+  for _, k in ipairs(SCHOOLS) do
+    spell = spell + (1 - math.min(0.75, 0.75 * math.max(0, (st.res and st.res[k]) or 0) / (5 * st.a))) / #SCHOOLS
+  end
+  local m = st.magic or 0
+  local taken = ((1 - m) * melee + m * spell) * (st.cut or 1)
+  return st.H / math.max(taken, 0.001), taken, dr, melee, spell
 end
 
 -- what a stat on an item changes in that state (per unit: 1 Stamina = 10 health, 1 Agility = 2 armor and
@@ -478,9 +506,11 @@ local function AddStat(st, k, n)
   elseif k == "PARRY" then st.parry = st.parry + n
   elseif k == "BLOCK" then st.block = st.block + n
   elseif k == "BLOCKVALUE" then st.bv = st.bv + n
+  elseif RES_INDEX[k] then st.res = st.res or {}; st.res[k] = (st.res[k] or 0) + n
   end
 end
-local EHP_STATS = { STA = 10, HEALTH = 100, ARMOR = 100, AGI = 10, DEF = 5, DODGE = 1, PARRY = 1, BLOCK = 1, BLOCKVALUE = 10 }
+local EHP_STATS = { STA = 10, HEALTH = 100, ARMOR = 100, AGI = 10, DEF = 5, DODGE = 1, PARRY = 1, BLOCK = 1, BLOCKVALUE = 10,
+  RES_FIRE = 10, RES_FROST = 10, RES_NATURE = 10, RES_SHADOW = 10, RES_ARCANE = 10 }
 
 -- survival: % more EHP per unit of each stat, from you now
 local function EHPer()
@@ -490,6 +520,8 @@ local function EHPer()
   for k, d in pairs(EHP_STATS) do
     local t = {}
     for x, v in pairs(st) do t[x] = v end
+    t.res = {}
+    for x, v in pairs(st.res or {}) do t.res[x] = v end
     AddStat(t, k, d)
     per[k] = (S.EHP(t) / now - 1) * 100 / d
   end
