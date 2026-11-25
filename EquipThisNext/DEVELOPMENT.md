@@ -12,8 +12,8 @@ runs alongside the released Equip This! without touching it, on the `next-founda
 
 | Milestone | State |
 |---|---|
-| 1. Foundation: compatibility layer, scanners, diagnostics | **0.1.0 and 0.1.1 tested in game (see below); 0.1.3 waiting for the talent re-test** |
-| 2. Basic evaluation | not started (waits for milestone 1's in-game test) |
+| 1. Foundation: compatibility layer, scanners, diagnostics | **done: 0.1.3 validated in game (level 42 Shaman, build 71091)** |
+| 2. Basic evaluation | next |
 | 3. Complete gear evaluation | not started |
 | 4. Simulation (DPS, healing, tanking, PvP) | not started |
 | 5. All classes and builds | not started |
@@ -178,6 +178,9 @@ Found and fixed in 0.1.1 and 0.1.2:
 
 Still to check: `CR_WEAPON_SKILL` doesn't exist on Forever (reported, fine). Mana isn't read (hidden).
 
+**0.1.3 in game: validated.** Talents: Elemental Combat 0, Enhancement 26, Restoration 7, the same as
+the game's own count for each tree; 0 errors, no issues, all slots and events fine.
+
 ## Testing
 
 Offline (no game): `python3 tools/run_next_tests.py` (needs `pip install lupa`), or
@@ -215,8 +218,7 @@ In game (milestone 1 check):
 
 ## Outstanding
 
-- Milestone 1: the in-game test (above). Fix anything it shows, and add the `/eqn dump` snapshots as
-  fixtures.
+- Milestone 1: done. A second class's `/eqn dump` (e.g. a rogue or warrior) would widen the fixtures.
 - Milestone 2 (after that): talent interpreter, gear-vs-buff stat separation, stat conversions from
   the game's functions, first performance models and marginal stat values, single-slot, ring and
   trinket comparisons.
