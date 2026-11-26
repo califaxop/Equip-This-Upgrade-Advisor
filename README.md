@@ -1,6 +1,8 @@
 # Equip This!: Build Your Character, Your Way
 
-**Gear advice worked out from how *you* play, for the character *you* want to build.**
+**Build your character the way you want to play it!**
+
+Gear advice worked out from how *you* play, for the character *you* want to build.
 
 Equip This! isn't a list of stat weights. It tries every item on your own character (your stats, your talents, your abilities, and the way you actually fight) and tells you what it does for the character you're building: a hard hitter, a healer who never runs dry, a tank, someone who survives every pull, or a mix. Then it marks the upgrades on tooltips and glows the best quest reward.
 
