@@ -25,7 +25,8 @@ Equip This! gets better with real fights from every class. Tick "Help improve Eq
 
 ## Quick start
 1. Install and play: Equip This! works out of the box.
-2. Type `/eqt` to check your spec and set your build.
+2. Type `/eqt` to pick your spec and slide toward the character you want to build.
+3. Play: after about 8 fights, the numbers follow how you play.
 
 ## Commands
 | Command | Does |
