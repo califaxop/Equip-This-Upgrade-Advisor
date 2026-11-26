@@ -16,7 +16,8 @@ DB.DEFAULTS = {
   learn = true,      -- learn how you fight from the game's damage meter after each fight (stays on your computer)
   share = false,     -- opt in: keep anonymous fight records to share (/eqn report): class, spec, level, damage per spell
   fightLog = {},     -- ["CLASS:Tree"] = { duration, fights, spells = { [name] = damage }, healing = { ... } }
-  shared = {},       -- the opt-in records (at most 100)
+  shared = {},       -- the opt-in records (at most 200)
+  -- (also kept: lastSession, the damage meter session recorded last, so it is never recorded twice)
   tree = "auto",     -- the spec to evaluate for: "auto" (your talents) or a tree name
   magicShare = nil,  -- share of incoming damage that's magic (Equip This!'s raid choice at 60); nil: the model's   -- [model part] = true: a measurement (/eqn measure) agreed with the model
   measurements = {},

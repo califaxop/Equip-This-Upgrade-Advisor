@@ -103,7 +103,7 @@ T.Test("5.0: after each fight the rotation is learned from the damage meter; opt
   local key = n5.Evaluator.RotationKey(n5.profile)
   local function fight(id)
     MOCK.meter = { id = id, duration = 20, spells = { [6603] = by["auto attack"] * 18, [17364] = by["Stormstrike"] * 12, [403] = 400 } }
-    MOCK.Fire("PLAYER_REGEN_ENABLED"); MOCK.RunTimers()
+    MOCK.Fight(); MOCK.RunTimers()
   end
   for i = 1, 7 do fight(100 + i) end
   T.Eq(n5.db.rotation[key], nil, "not yet: fewer than 8 fights")
@@ -135,7 +135,7 @@ T.Test("5.0: sharing: a summary, one line to copy, 'I reported this' clears, a r
   FR.OnRemind = function() reminded = reminded + 1 end
   for i = 1, FR.REMIND_AT + 2 do
     MOCK.meter = { id = 600 + i, duration = 30, spells = { [6603] = 3000, [17364] = 1200, [403] = 500 } }
-    MOCK.Fire("PLAYER_REGEN_ENABLED"); MOCK.RunTimers()
+    MOCK.Fight(); MOCK.RunTimers()
   end
   T.Eq(reminded, 1, "reminded once")
   local sum = FR.Summary()
@@ -150,7 +150,7 @@ T.Test("5.0: sharing: a summary, one line to copy, 'I reported this' clears, a r
   FR.reminded = nil
   for i = 1, 3 do
     MOCK.meter = { id = 700 + i, duration = 30, spells = { [6603] = 3000 } }
-    MOCK.Fire("PLAYER_REGEN_ENABLED"); MOCK.RunTimers()
+    MOCK.Fight(); MOCK.RunTimers()
   end
   T.Eq(reminded, 1, "once per window")
   -- the next window opens: a reminder again (once)
@@ -174,4 +174,41 @@ T.Test("5.0: reminder windows: Wednesday 12:00 UTC (after maintenance) and Sunda
   T.Eq(FR.WindowStart(at(2026, 11, 28, 20)), at(2026, 11, 25, 12), "Saturday: Wednesday's")
   T.Eq(FR.WindowStart(at(2026, 11, 29, 9)), at(2026, 11, 29, 0), "Sunday: Sunday's")
   T.Eq(FR.WindowStart(at(2026, 12, 1, 9)), at(2026, 11, 29, 0), "Tuesday: Sunday's")
+end)
+
+T.Test("5.0.3: a meter session longer than the fight is left out (the 4,277,495 s glitch); old bad records repaired", function()
+  MOCK.Reset()
+  local n6 = LoadAddon()
+  for id in pairs(MOCK.ITEMS) do MOCK.cached[id] = true end
+  MOCK.Fire("ADDON_LOADED", "EquipThisNext"); MOCK.Fire("PLAYER_LOGIN"); MOCK.Fire("PLAYER_ENTERING_WORLD"); MOCK.RunTimers()
+  n6.db.share = true
+  local FR = n6.FightRecorder
+  local n0 = #n6.db.shared
+  -- a 30 s fight, but the meter hands back a session 4,277,495 s long: not recorded
+  MOCK.meter = { id = 801, duration = 4277495, spells = { [6603] = 1911 } }
+  MOCK.Fight(30); MOCK.RunTimers()
+  T.Eq(#n6.db.shared, n0, "the glitched session is left out")
+  T.Ok((FR.rejected or 0) >= 1, "counted as rejected")
+  -- a real one is recorded; the same session again (also after a /reload) isn't
+  MOCK.meter = { id = 802, duration = 25, spells = { [6603] = 900 } }
+  MOCK.Fight(26); MOCK.RunTimers()
+  T.Eq(#n6.db.shared, n0 + 1, "a real fight")
+  FR.lastID = nil -- (a /reload forgets this; the saved lastSession doesn't)
+  MOCK.Fight(26); MOCK.RunTimers()
+  T.Eq(#n6.db.shared, n0 + 1, "the same session isn't recorded twice")
+  -- after a /reload in combat Holdfast's own timer has no start: not recorded
+  MOCK.meter = { id = 803, duration = 20, spells = { [6603] = 800 } }
+  MOCK.Fire("PLAYER_REGEN_ENABLED"); MOCK.RunTimers()
+  T.Eq(#n6.db.shared, n0 + 1, "no start time: left out")
+  -- saved data from before the fix: the bad record goes, the corrupted learned rotation is forgotten
+  n6.db.shared[#n6.db.shared + 1] = { v = "0.9.0", c = "SHAMAN", t = "Enhancement", l = 43, d = 4277495, dmg = {}, heal = {}, mdl = {} }
+  n6.db.fightLog["SHAMAN:Enhancement"] = { duration = 4277495 + 600, fights = 40, spells = { Attack = 50000 }, healing = {}, learnedAt = 39 }
+  n6.db.rotation = n6.db.rotation or {}
+  n6.db.rotation["SHAMAN:Enhancement"] = { source = "measured", auto = true }
+  PRINTS = {}; MOCK.Fire("PLAYER_LOGIN")
+  T.Eq(#n6.db.shared, n0 + 1, "the bad record dropped")
+  T.Eq(n6.db.fightLog["SHAMAN:Enhancement"], nil, "the corrupted totals forgotten")
+  T.Eq(n6.db.rotation["SHAMAN:Enhancement"], nil, "and the rotation learned from them")
+  T.Ok(table.concat(PRINTS, " "):find("impossible length"), table.concat(PRINTS, " "))
+  PRINTS = {}; MOCK.Fire("PLAYER_LOGIN"); T.Ok(not table.concat(PRINTS, " "):find("impossible length"), "nothing to repair the next time: no message")
 end)

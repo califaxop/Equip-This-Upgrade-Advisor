@@ -12,6 +12,8 @@ local _, ns = ...; ns = ns.Engine
 local FR = ns.Module("FightRecorder")
 local Events, Compat = ns.Events, ns.Compat
 FR.MIN_FIGHT = 6        -- seconds: shorter fights are left out
+FR.SLACK = 5            -- seconds the meter's session may run past your own combat timer
+FR.MAX_FIGHT = 3600     -- seconds: no single fight is longer (anything above is a meter glitch)
 FR.LEARN_AFTER = 8      -- fights before the first learning
 FR.RELEARN_EVERY = 3    -- fights between learnings
 FR.HALVE_AFTER = 60     -- fights: then the totals halve
@@ -84,8 +86,17 @@ function FR.OnCombatEnd()
   local Meter = ns.MeterAPI
   if not Meter.Available() or Compat.InCombat() then return end
   local sess = Meter.LastSession()
-  if not sess or not sess.duration or sess.duration < FR.MIN_FIGHT or sess.id == FR.lastID then return end
-  FR.lastID = sess.id
+  local own = FR.combatLength -- (this combat, by Equip This!'s own timer; nil after a /reload in combat)
+  FR.combatLength = nil
+  if not sess or type(sess.duration) ~= "number" or sess.duration < FR.MIN_FIGHT then return end
+  if sess.id == FR.lastID or sess.id == db.lastSession then return end -- (recorded already, also before a /reload)
+  -- The meter can hand back a session that isn't this fight (seen on Forever: one 4,277,495 s
+  -- long, which then wrecked the learned rotation): it must fit inside the combat that just ended.
+  if not own or sess.duration > own + FR.SLACK or sess.duration > FR.MAX_FIGHT then
+    FR.rejected = (FR.rejected or 0) + 1
+    return
+  end
+  FR.lastID, db.lastSession = sess.id, sess.id
   local guid = Compat.Value("UnitGUID", "player")
   local m = Meter.MySpells(sess.id, guid)
   if not m or m.total <= 0 then return end
@@ -118,9 +129,47 @@ function FR.ReportText()
   return table.concat(out, "\n"), #out - 1
 end
 
+-- your own combat timer: a meter session longer than the combat that just ended isn't that fight
+local combatStart
+Events.On("PLAYER_REGEN_DISABLED", "fights", function() combatStart = GetTime() end)
 Events.On("PLAYER_REGEN_ENABLED", "fights", function()
+  FR.combatLength = combatStart and (GetTime() - combatStart) or nil
+  combatStart = nil
   -- (the meter's session closes a moment after combat ends)
   Events.Debounce("fightRecord", 2, function() ns.Safe("fight recorder", FR.OnCombatEnd) end)
+end)
+
+-- Saved records and learned totals from before 5.0.3 may hold a fight with an impossible length
+-- (the meter glitch above): those records are dropped, and a learned rotation built on them is
+-- forgotten, to be learned again from new fights. Returns how many records and rotations went.
+function FR.Repair()
+  local db = ns.db
+  if not db then return 0, 0 end
+  local recs, rots = 0, 0
+  local kept = {}
+  for _, r in ipairs(db.shared or {}) do
+    if type(r.d) == "number" and r.d > 0 and r.d <= FR.MAX_FIGHT then kept[#kept + 1] = r else recs = recs + 1 end
+  end
+  db.shared = kept
+  for key, log in pairs(db.fightLog or {}) do
+    if type(log.duration) ~= "number" or (log.fights or 0) <= 0 or log.duration / log.fights > FR.MAX_FIGHT then
+      db.fightLog[key] = nil
+      if db.rotation and db.rotation[key] and db.rotation[key].auto then db.rotation[key] = nil end
+      rots = rots + 1
+    end
+  end
+  if recs + rots > 0 then
+    ns.evalContext = nil
+    ns.Cache.Invalidate("evaluation")
+  end
+  return recs, rots
+end
+Events.On("PLAYER_LOGIN", "fightRepair", function()
+  local recs, rots = FR.Repair()
+  if recs + rots > 0 then
+    ns.Print(string.format("fixed %d fight record(s) with an impossible length (a damage meter glitch)%s.", recs,
+      rots > 0 and "; your rotation will be learned again from your next fights" or ""))
+  end
 end)
 
 ---------------------------------------------------------------------------

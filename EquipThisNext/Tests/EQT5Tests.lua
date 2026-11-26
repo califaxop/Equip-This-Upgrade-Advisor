@@ -125,7 +125,7 @@ T.Test("5.0: opt-in fight records: off by default; on, anonymous lines to copy",
   T.Eq(ns.Engine.db.share, false); T.Eq(ns.Engine.db.learn, true)
   ns.Engine.db.share = true
   MOCK.meter = { id = 500, duration = 30, spells = { [6603] = 3000, [17364] = 1200, [403] = 500 } }
-  MOCK.Fire("PLAYER_REGEN_ENABLED"); MOCK.RunTimers()
+  MOCK.Fight(); MOCK.RunTimers()
   local text, n = ns.Engine.FightRecorder.ReportText()
   T.Eq(n, 1)
   T.Ok(text:find("EQT5|") and text:find("SHAMAN"), text)
@@ -145,7 +145,7 @@ T.Test("5.0: opt-in fight records: off by default; on, anonymous lines to copy",
   T.Ok(opened, "clicking it opens the export window")
   ns2.Engine.db.share = true
   MOCK.meter = { id = 900, duration = 30, spells = { [6603] = 3000 } }
-  MOCK.Fire("PLAYER_REGEN_ENABLED"); MOCK.RunTimers()
+  MOCK.Fight(); MOCK.RunTimers()
   T.Eq(ns2.Engine.FightRecorder.MarkReported(), 1, "I reported this")
   EventRegistry = nil
 end)

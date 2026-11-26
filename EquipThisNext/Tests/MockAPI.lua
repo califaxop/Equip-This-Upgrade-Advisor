@@ -34,6 +34,14 @@ function MOCK.Fire(event, ...)
 end
 local timers = {}
 C_Timer = { After = function(_, fn) timers[#timers + 1] = fn end }
+MOCK.clock = 1000 -- (GetTime; MOCK.now is the clock time() reads)
+GetTime = function() return MOCK.clock end
+-- a fight: combat starts, lasts as long as the meter's session (or `length`), and ends
+function MOCK.Fight(length)
+  MOCK.Fire("PLAYER_REGEN_DISABLED")
+  MOCK.clock = MOCK.clock + (length or (MOCK.meter and MOCK.meter.duration) or 10) + 1
+  MOCK.Fire("PLAYER_REGEN_ENABLED")
+end
 -- a fresh start for the next LoadAddon(): no old frames, timers or prints
 function MOCK.Reset()
   for i = #frames, 1, -1 do frames[i] = nil end
