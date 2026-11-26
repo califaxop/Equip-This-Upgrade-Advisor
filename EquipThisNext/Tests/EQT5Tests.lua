@@ -72,6 +72,22 @@ T.Test("5.0: Equip This! loads with the engine inside; the tooltip line comes fr
   T.Eq(ns.Engine.errors.count, 0, "no engine errors")
 end)
 
+T.Test("5.0: consumables and trade goods get no Equip This! lines; an off-hand with a two-hander still says why", function()
+  MOCK.ITEMS[1020] = { "Bread of Testing", "", 0, 5, 1, 45, nil, {} }      -- a consumable
+  MOCK.ITEMS[1021] = { "Silk of Testing", "", 7, 5, 1, 30, nil, {} }       -- a trade good
+  MOCK.ITEMS[1022] = { "Bag of Testing", "INVTYPE_BAG", 1, 0, 1, 30, nil, {} }
+  local ns = loadEQT(nil)
+  for _, id in ipairs({ 1020, 1021, 1022 }) do
+    local link = "|cffffffff|Hitem:" .. id .. "::::::::42|h[x]|h|r"
+    T.Eq(ns.Bridge.Compare(link), nil, "item " .. id)
+    T.Eq(ns.Display.Lines(link), nil, "no lines: item " .. id)
+  end
+  -- a shield, while you wield a two-hander with no one-hander in your bags: the one line that explains
+  local c = ns.Bridge.Compare("|cff0070dd|Hitem:1011::::::::42|h[Shield of Bags]|h|r")
+  if c and c.kind ~= "twohand" then OUT("    (shield compared with a one-hander from the bags: " .. tostring(c.kind) .. ")") end
+  MOCK.ITEMS[1020], MOCK.ITEMS[1021], MOCK.ITEMS[1022] = nil, nil, nil
+end)
+
 T.Test("5.0: the slider mixes the verdict; the numbers stay apart", function()
   local ns = loadEQT(nil)
   local link = "|cff0070dd|Hitem:1008::::::::42|h[Ring of Procs]|h|r"

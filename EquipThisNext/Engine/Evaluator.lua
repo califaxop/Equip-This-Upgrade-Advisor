@@ -755,7 +755,7 @@ function Ev.Compare(ctx, candidate)
       if partner then
         add({ [16] = partner, [17] = candidate }, "Off hand", { "with " .. tostring(partner.name) .. " from your bags instead of your two-hander" })
       else
-        res.status = "none"; res.why = "needs a one-hander (you wield a two-hander and have none in your bags)"; return res
+        res.status = "none"; res.code = "needsOneHander"; res.why = "needs a one-hander (you wield a two-hander and have none in your bags)"; return res
       end
     else
       add({ [17] = candidate }, "Off hand")

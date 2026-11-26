@@ -175,7 +175,12 @@ function B.Compare(link)
   if st == "cantuse" then return { kind = "unusable" } end
   if st == "equipped" then return { kind = "equipped", equipLoc = item and item.equipLoc } end
   if st == "unique" then return { kind = "unique" } end
-  if st == "none" then return { kind = "twohand", why = res.why } end
+  -- "none": only an off-hand that needs a one-hander you don't have says so; anything else the
+  -- engine doesn't evaluate (consumables, trade goods, bags...) shows no Equip This! lines
+  if st == "none" then
+    if res.code == "needsOneHander" then return { kind = "twohand", why = res.why } end
+    return nil
+  end
   local b = res.best
   if not b then return nil end
   -- your best armor type only (setting, from level 40)
