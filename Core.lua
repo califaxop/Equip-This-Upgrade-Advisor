@@ -18,8 +18,6 @@ ns.DEFAULTS = {
   fightLength = 180,      -- seconds a fight lasts, for mana
   raids = {},             -- per character: the raid its level-cap EHP is for ("mc", "bwl", "aq40"; none: Naxxramas)
   builds = {},            -- per spec ("CLASS:Tree"): { build = "auto" | "damage" | ..., survival = 0-1, tank = true }
-  flareStyle = true,
-  euiStyle = true,       -- EllesmereUI look when EllesmereUI is installed (its skinning API)
 }
 
 local function Copy(v)
@@ -42,6 +40,8 @@ function ns.LoadDB()
   for k, v in pairs(ns.DEFAULTS) do
     if EquipThisDB[k] == nil then EquipThisDB[k] = Copy(v) end
   end
+  -- no window-style settings any more: the window follows EllesmereUI / FlareUI when installed
+  EquipThisDB.flareStyle, EquipThisDB.euiStyle = nil, nil
   ns.db = EquipThisDB
   -- (5.0: the old scoring's settings are gone: Forever Upgrades' values, stat priorities)
   for _, k in ipairs({ "priorities", "skills", "scaleSkills", "model", "learn", "learned", "learnSeen", "split",
