@@ -40,8 +40,6 @@ function ns.LoadDB()
   for k, v in pairs(ns.DEFAULTS) do
     if EquipThisDB[k] == nil then EquipThisDB[k] = Copy(v) end
   end
-  -- no window-style settings any more: the window follows EllesmereUI / FlareUI when installed
-  EquipThisDB.flareStyle, EquipThisDB.euiStyle = nil, nil
   ns.db = EquipThisDB
   -- (5.0: the old scoring's settings are gone: Forever Upgrades' values, stat priorities)
   for _, k in ipairs({ "priorities", "skills", "scaleSkills", "model", "learn", "learned", "learnSeen", "split",
