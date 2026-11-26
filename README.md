@@ -1,4 +1,4 @@
-# Equip This!: Build Your Character, Your Way
+# Equip This!: Upgrade Advisor
 
 **Build your character the way you want to play it!**
 
