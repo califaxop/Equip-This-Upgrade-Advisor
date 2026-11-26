@@ -1,19 +1,27 @@
-# Equip This!: Upgrade Advisor
+# Equip This!: Build Your Character, Your Way
 
-**Which gear is better for you, worked out on your own character.**
+**Gear advice worked out from how *you* play, for the character *you* want to build.**
 
-Equip This! tells you on every item tooltip whether it's an upgrade, by how much, and why. It glows the best quest reward so you never have to guess.
+Equip This! isn't a list of stat weights. It tries every item on your own character (your stats, your talents, your abilities, and the way you actually fight) and tells you what it does for the character you're building: a hard hitter, a healer who never runs dry, a tank, someone who survives every pull, or a mix. Then it marks the upgrades on tooltips and glows the best quest reward.
 
-## Highlights
-- **Worked out on you:** each item is tried on your own character: your stats from the character sheet, your talents, your abilities (Stormstrike, Mortal Strike, Frostbolt...), your weapon imbue (Windfury...), your procs and set bonuses, against the item you'd replace. Using Forever's own numbers: its spell coefficients, cooldowns, proc rates and threat values from the game's data, its glancing-blow and armor calculators from the game itself.
-- **Learns how you fight:** after each fight, Equip This! reads the game's damage meter (your damage and healing per spell) and learns how often you use each ability, so the value of spell power, attack power or crit follows your own play. It stays on your computer. Until it has learned, a default from real raid logs (Warcraft Logs) or a stated assumption is used.
-- **Every number apart:** each tooltip says what the item is tried with ("vs [your item]", or "paired with [the shield in your bags]"), then the numbers: DPS (or healing; threat for tanks) and survivability (effective health), then the verdict for your build, labelled: "Downgrade -12.4% for your build (75% damage / 25% survival)". The slider (More Damage <-> More Survivability) sets that mix; presets: Damage, Leveling (the default while you level), Balanced, Survival / Tanking.
-- **All classes and specs:** melee, ranged (hunters), casters, healers (with mana: a fight's length decides how much Intellect, Spirit and mana regen are worth) and tanks (threat from your stance, form or aura, from Forever's data).
+## Build the character you want
+- **You decide what "better" means.** One slider, from More Damage (or More Healing; More Threat for tanks) to More Survivability, with presets: Damage, Leveling (the default while you level), Balanced, Survival / Tanking. Every tooltip says what its verdict is for: "Upgrade +4.2% for your build (75% damage / 25% survival)".
+- **Tank, heal or fight players.** Tick "I tank" with any class for threat and a tank's survivability (your stance, form or aura's threat, from Forever's own data). Healers get healing and mana. Optional PvP numbers (burst, sustained damage and survival against players) use PvP's own assumptions, not PvE's.
+- **Gear for where you're going.** Pick a spec other than the one your talents say, and the raid you're gearing for at 60 (how much of what hits you is magic). Set how long your fights last, and Intellect, Spirit and mana regen are worth what they're worth over that fight.
+
+## Numbers from how you play
+- **It learns your rotation.** After each fight, Equip This! reads the game's damage meter and learns how often you use each ability and spell. Weave shocks between Stormstrikes, and spell power counts for you; don't, and it won't. A new character starts from a default (real raid logs) and becomes yours after about 8 fights. It all stays on your computer.
+- **Your character, not a template.** Your stats come straight from your character sheet; your talents, weapon skill, weapon imbue (Windfury...), procs, set bonuses and enchants all count, with Forever's own spell coefficients, cooldowns, proc rates and threat values from the game's data.
+- **Every number apart, and honest.** Each tooltip says what the item is tried with ("vs [your item]" or "paired with [the shield in your bags]"), then damage (or healing, or threat) and survivability (effective health) separately, then the verdict for your build. Hold Shift for where the numbers come from and how sure they are. Effects it can't count are named, never quietly treated as nothing.
+
+## Gear advice where you look
+- **Every tooltip:** upgrade or downgrade, by how much, and why.
 - **Smart comparisons:** both ring and trinket slots, two-handers against main hand + off hand, a one-hander paired with your best off-hand or shield from your bags, set bonuses gained and lost, your enchant carried over, unique items, and "your Axes skill is 180: until it's trained up" for a weapon type you haven't trained.
-- **Honest:** effects it can't count are listed, never treated as nothing; hold Shift for where the numbers come from and how sure they are.
-- **PvP too (optional):** burst, sustained damage and survival against players, with PvP's own assumptions.
-- **Quest rewards:** the best upgrade among the choices glows. No upgrade? The one that sells for most gets a coin.
-- **Help improve it (optional, off by default):** tick "Help improve Equip This!" in `/eqt` to keep anonymous fight records. The export window (Show my records, or `/eqt report`) shows exactly what's in them: fights recorded, time in combat, specs, spells, levels. It has a link to a short form to paste them into. It holds your class, spec, level, each fight's length, your damage and healing per spell, and Equip This!'s estimate; never your name, realm, guild, other players or IDs. Nothing leaves the game on its own. With 25 or more new fights waiting, a line in chat reminds you (with a link to the window), at most twice a week: after the weekly maintenance (Wednesday) and on Sunday. After sending, "I reported this" clears them, so the next export holds only new fights.
+- **Quest rewards:** the best choice for your build glows. No upgrade among them? The one that sells for most gets a coin.
+- **All classes and specs:** melee, hunters (ranged), casters, healers and tanks.
+
+## Help make it better (optional)
+Equip This! gets better with real fights from every class. Tick "Help improve Equip This!" in `/eqt` to keep anonymous fight records: your class, spec, level, each fight's length, your damage and healing per spell, and Equip This!'s own estimate. Never your name, realm, guild, other players or IDs, and nothing leaves the game on its own. The export window (Show my records, or `/eqt report`) shows exactly what's in them and links to a short form to paste them into; at most twice a week (after Wednesday's maintenance and on Sunday), with 25 or more new fights waiting, a line in chat reminds you. "I reported this" clears them, so the next export holds only new fights.
 
 ## Quick start
 1. Install and play: Equip This! works out of the box.
