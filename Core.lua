@@ -5,7 +5,6 @@ local ADDON, ns = ...
 ns.name = ADDON
 
 ns.isSecret = issecretvalue or function() return false end
-function ns.Readable(v) return v ~= nil and not ns.isSecret(v) end
 function ns.Print(...) print("|cff7fd6ffEquip This!:|r", ...) end
 
 ns.DEFAULTS = {

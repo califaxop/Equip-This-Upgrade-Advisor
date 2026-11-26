@@ -14,22 +14,6 @@ local function Named(link)
   if not name then return nil end
   return (link:match("^(|c%x%x%x%x%x%x%x%x)") or "|cffffffff") .. name .. "|r"
 end
--- " vs [Item]" (+ the off-hand it'd be paired with; "(bags)" when your best is in your bags)
-local function Versus(c)
-  local vs = Named(c.vs)
-  if not vs then return nil end
-  local out = GREY .. "vs|r " .. vs
-  if c.inBags then out = out .. " " .. GREY .. "(bags)|r" end
-  return out
-end
-
--- what the % is of: "DPS" / "HPS" / "Threat" / "EHP" when your build is all one of them, else nothing (a mix)
-function D.Unit()
-  local t = B.Mix()
-  if t >= 1 then return "EHP" end
-  if t <= 0 then return select(2, B.MainMetric()) end
-  return ""
-end
 
 local function pct(x) return x and format("%s%+.1f%%|r", x >= 0 and GREEN or RED, x) or nil end
 -- the separate numbers under the verdict: "DPS +5.1%  EHP -0.3%"
@@ -104,12 +88,6 @@ function D.Lines(link)
   L[#L + 1] = verdict .. " " .. GREY .. "for your build (" .. D.BuildMix() .. ")|r"
   if c.enchant then L[#L + 1] = GREY .. "with your " .. c.enchant .. " on it|r" end
   return L, c
-end
-
--- (one line, for other places: the verdict with its %)
-function D.Verdict(link)
-  local L = D.Lines(link)
-  return L and L[#L] or nil
 end
 
 ---------------------------------------------------------------------------

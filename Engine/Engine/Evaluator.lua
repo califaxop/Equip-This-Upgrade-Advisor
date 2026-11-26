@@ -602,7 +602,7 @@ function Ev.Evaluate(ctx, changes, label, notes)
   local eq = ctx.profile.equipment.slots
   local removed, added = {}, {}
   local delta = {}
-  local weaponsChange, newMH, newOH = nil, nil, nil
+  local weaponsChange = nil
   for slot, new in pairs(changes) do
     local old = eq[slot]
     if old and not old.empty then
@@ -730,7 +730,7 @@ function Ev.Compare(ctx, candidate)
   local canDW = ctx.profile.stats.values["dualWield"] == 1 or ctx.canDualWield
   local configs = {}   -- { changes, label, notes }
   local function add(changes, label, notes) configs[#configs + 1] = { changes, label, notes } end
-  local mh, oh = eq[16], eq[17]
+  local mh = eq[16]
   if Ev.SLOTS[loc] then
     for _, slot in ipairs(Ev.SLOTS[loc]) do add({ [slot] = candidate }, eq[slot] and eq[slot].slotName or tostring(slot)) end
   elseif loc == "INVTYPE_2HWEAPON" then

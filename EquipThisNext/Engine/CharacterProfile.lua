@@ -65,7 +65,7 @@ end
 -- out side by side: x positions of the nodes known to be in each tree). Sets node.groupID (the tree's
 -- group) and node.treeBy ("group" or "position"). Pure: tested with a real Forever layout.
 function P.AssignTrees(talents)
-  local isTree, byGroup = {}, {}
+  local isTree = {}
   for _, t in ipairs(talents.trees or {}) do
     if t.groupID then isTree[t.groupID] = true end
   end

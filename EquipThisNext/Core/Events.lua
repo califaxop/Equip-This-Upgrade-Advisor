@@ -21,11 +21,6 @@ function Events.On(event, key, fn)
   return true
 end
 
-function Events.Off(event, key)
-  local l = listeners[event]
-  if l then l[key] = nil end
-end
-
 frame:SetScript("OnEvent", function(_, event, ...)
   Events.seen[event] = (Events.seen[event] or 0) + 1
   for key, fn in pairs(listeners[event] or {}) do

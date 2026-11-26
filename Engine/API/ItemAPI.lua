@@ -39,7 +39,7 @@ end
 
 -- Always available (no server data needed): id, equip location, class and subclass.
 function Item.Instant(linkOrID)
-  local ok, itemID, itemType, itemSubType, equipLoc, icon, classID, subclassID = Compat.Call("C_Item.GetItemInfoInstant", linkOrID)
+  local ok, itemID, itemType, itemSubType, equipLoc, _, classID, subclassID = Compat.Call("C_Item.GetItemInfoInstant", linkOrID)
   if not ok or not itemID or itemID == Compat.SECRET then return nil end
   return {
     itemID = itemID, itemType = Compat.Plain(itemType), itemSubType = Compat.Plain(itemSubType),
@@ -49,8 +49,8 @@ end
 
 -- Full item info, or nil, "pending" while the client is still loading it.
 function Item.Info(linkOrID)
-  local ok, name, link, quality, itemLevel, minLevel, itemType, itemSubType, stackCount, equipLoc, texture,
-    sellPrice, classID, subclassID, bindType, expansionID, setID = Compat.Call("C_Item.GetItemInfo", linkOrID)
+  local ok, name, link, quality, itemLevel, minLevel, itemType, itemSubType, _, equipLoc, _,
+    sellPrice, classID, subclassID, bindType, _, setID = Compat.Call("C_Item.GetItemInfo", linkOrID)
   if not ok then return nil, "error" end
   if name == nil or name == Compat.SECRET then return nil, "pending" end
   return {
@@ -88,11 +88,6 @@ function Item.Tooltip(link)
     end
   end
   return out
-end
--- (left lines only)
-function Item.TooltipLines(link)
-  local t = Item.Tooltip(link)
-  return t and t.left or nil
 end
 
 -- the same link without its permanent enchant (item:ID:enchant: -> item:ID::)

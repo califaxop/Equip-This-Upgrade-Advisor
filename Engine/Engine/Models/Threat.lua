@@ -25,8 +25,6 @@ function T.Sources(profile)
     seen[id] = true
     for _, m in ipairs(t.mods) do out[#out + 1] = { name = t.name, pct = m[1] * (scale or 1), mask = m[2], source = source } end
   end
-  local byName = {}
-  for id, t in pairs(G) do byName[t.name] = id end
   -- your auras (stances and forms by their passive: "Defensive Stance" -> "Defensive Stance Passive")
   for _, a in ipairs(profile.buffs and profile.buffs.helpful or {}) do
     if a.spellId then add(a.spellId, "aura") end

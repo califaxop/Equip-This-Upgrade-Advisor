@@ -21,7 +21,6 @@ end
 
 local PREFIX = "|cff7fd6ffEquip This!:|r"
 function ns.Print(...) print(PREFIX, ...) end
-function ns.Printf(fmt, ...) ns.Print(string.format(fmt, ...)) end
 
 -- Lua errors inside our own code are caught, counted and kept for /eqn status instead of
 -- surfacing as game errors. ns.Safe(label, fn, ...) returns ok, results...

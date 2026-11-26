@@ -13,14 +13,6 @@ local function find(class, n)
   return (n.spellID and TD.BY_SPELL[n.spellID]) or TD.BY_NAME[tostring(class) .. ":" .. tostring(n.name)]
 end
 
--- the number in a talent's description (calc.talentText[spellID]) or nil
-local function fromText(calc, n, pattern)
-  local text = calc and calc.talentText and n.spellID and calc.talentText[n.spellID]
-  if type(text) ~= "string" or not pattern then return nil end
-  local v = tonumber(text:match(pattern))
-  return v
-end
-
 -- sheetMinusGear: { SP = x, HEAL = y, AP = z } what the sheet has beyond gear and buffs (for measured conversions)
 function TI.Interpret(profile, sheetMinusGear)
   local out = { conversions = {}, notes = {}, unchecked = 0 }

@@ -107,5 +107,3 @@ function StatScanner.Scan(profile)
   last = ns.Database.Copy(stats)
   return stats
 end
-
-function StatScanner.Forget() last = nil end
