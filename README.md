@@ -23,7 +23,7 @@ Equip This! isn't a list of stat weights. It tries every item on your own charac
 - **All classes and specs:** melee, hunters (ranged), casters, healers and tanks.
 
 ## Help make it better (optional)
-Equip This! gets better with real fights from every class. Tick "Help improve Equip This!" in `/eqt` to keep anonymous fight records: your class, spec, level, each fight's length, your damage and healing per spell, and Equip This!'s own estimate. Never your name, realm, guild, other players or IDs, and nothing leaves the game on its own. The export window (Show my records, or `/eqt report`) shows exactly what's in them and links to a short form to paste them into; at most twice a week (after Wednesday's maintenance and on Sunday), with 25 or more new fights waiting, a line in chat reminds you. "I reported this" clears them, so the next export holds only new fights; records you don't send are cleared when you log in again, so they never pile up.
+Equip This! gets better with real fights from every class. Tick "Help improve Equip This!" in `/eqt` to keep anonymous fight records: your class, spec, level, each fight's length, your damage and healing per spell, and Equip This!'s own estimate. Never your name, realm, guild, other players or IDs, and nothing leaves the game on its own. "Submit fight logs" (or `/eqt report`) gives you the form's link and your logs to paste into it, and shows exactly what's in them; at most twice a week (after Wednesday's maintenance and on Sunday), with 25 or more new fights waiting, a line in chat reminds you. "I reported this" clears them, so the next export holds only new fights; records you don't send are cleared when you log in again, so they never pile up.
 
 ## Quick start
 1. Install and play: Equip This! works out of the box.
@@ -36,7 +36,8 @@ Equip This! gets better with real fights from every class. Tick "Help improve Eq
 | `/eqt` (or `/equipthis`) | Open settings |
 | `/eqt item <item>` | The full working for an item (shift-click it into the command) |
 | `/eqt model` | Your character as Equip This! sees it: damage parts, rotation, threat, PvP, effective health |
-| `/eqt report` | The fight records export window (with "Help improve Equip This!" ticked) |
+| `/eqt report` | Submit your fight logs (with "Help improve Equip This!" ticked) |
+| `/eqt bug` | Bugs & feedback: the form's link and a line to paste into it |
 | `/eqn` | The engine's diagnostics (`/eqn measure`, `/eqn abilities`, `/eqn weights`...) |
 
 ## Good to know
@@ -53,7 +54,7 @@ New versions come out every **Wednesday at 12:00 UTC** (8 PM Philippine time, 8 
 Found a bug or have an idea? [Open an issue](https://github.com/califaxop/Equip-This-Upgrade-Advisor/issues/new/choose): there's a short form for each. The settings window has a "Report a bug / suggest" button with this link too.
 
 ## Recent changes
-- **5.1.0:** "Report a bug" now sits at the top right of the settings window, next to the ×, and opens a bug report window (like Questie's trace export): the form's link to copy at the top, then one line to paste into the form with your version, the game client, your spec and build, the settings and what its engine saw; never your name, realm or guild. Also `/eqt bug`. (/eqt report is still the fight records.) The settings window is now solid and comes to the front when opened or clicked: with several addons' settings open, they no longer show through each other.
+- **5.1.0:** "Bugs & Feedback" now sits at the top right of the settings window, next to the ×. It opens a window (like Questie's trace export) with the form's link to copy at the top, for bug reports, feedback and feature requests, and for a bug, one line to paste into the form with your version, the game client, your spec and build, the settings and what its engine saw; never your name, realm or guild. Also `/eqt bug`. (/eqt report is still the fight logs.) "Show my records" is now "Submit fight logs": it opens the form's link and your logs to paste into it. The settings window is now solid and comes to the front when opened or clicked: with several addons' settings open, they no longer show through each other.
 - **5.0.4:** Fight records waiting to be shared now last for the session they were recorded in: logging in again clears any you didn't send (a /reload keeps them), so they don't pile up and a report always holds your latest fights. The export window and the reminder say so.
 - **5.0.3:** Fixed: the game's damage meter sometimes hands back a "fight" that isn't one (seen: 4,277,495 seconds long). Equip This! took it as a real fight, which showed as over a thousand hours in the fight records window, and threw off the rotation it learns from your fights: your spells counted for almost nothing in comparisons. Now each fight is timed by Equip This! itself and a session that doesn't fit is left out. On your first login with 5.0.3, records with impossible lengths are removed and a learned rotation built on them is learned again from your next fights (until then, the default rotation for your spec is used).
 - **5.0.2:** Fixed: consumables, trade goods and other items you can't wear no longer get Equip This! lines (they showed the two-hander note). Fixed: the settings window's text is readable with EllesmereUI installed (EllesmereUI's quest tracker shrinks the game's tracker fonts to 1 px, and the window used them). No style settings any more: the look follows EllesmereUI or FlareUI on its own whenever one is installed.

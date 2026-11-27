@@ -138,7 +138,7 @@ T.Test("5.0: opt-in fight records: off by default; on, anonymous lines to copy",
   T.Ok(cb, "the link handler")
   PRINTS = {}; ns2.RemindToShare(30)
   local msg = table.concat(PRINTS, " ")
-  T.Ok(msg:find("30 new fight records") and msg:find("|Haddon:EquipThis:records|h", 1, true), msg)
+  T.Ok(msg:find("30 new fight logs to submit") and msg:find("|Haddon:EquipThis:records|h", 1, true), msg)
   local opened = false
   ns2.ShowReport = function() opened = true end
   cb(nil, "addon:EquipThis:records")

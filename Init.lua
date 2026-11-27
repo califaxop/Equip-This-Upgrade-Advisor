@@ -46,7 +46,7 @@ end)
 local HELP = {
   "/eqt - settings",
   "/eqt item <shift-click an item> - the full working: each slot, each stat's part, effects, confidence",
-  "/eqt report - your fight records to copy (if you've ticked \"Help improve Equip This!\")",
+  "/eqt report - submit your fight logs (if you've ticked \"Help improve Equip This!\")",
   "/eqt bug - the bug report: the form's link and a line to paste into it",
   "/eqt model - your character as Equip This! sees it: damage parts, rotation, threat, PvP, effective health",
   "/eqn - the engine's diagnostics (/eqn measure, /eqn abilities, /eqn weights, /eqn dump...)",

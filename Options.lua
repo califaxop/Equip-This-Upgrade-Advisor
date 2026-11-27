@@ -36,7 +36,7 @@ function ns.ShowReport()
   if not w then
     w = UI.Popup("EquipThisExportWindow", 640, 392)
     exportWin = w
-    local title = UI.Text(w, "title", "Equip This! Fight Records")
+    local title = UI.Text(w, "title", "Submit Your Fight Logs")
     title:SetPoint("TOP", 0, -16)
     w.url = UI.Edit(w, 580, { function() return SUBMIT_URL end, function() end })
     w.url:SetPoint("TOP", 0, -44)
@@ -105,8 +105,8 @@ end
 
 -- the reminder in chat (twice a week at most: after Wednesday's maintenance and on Sunday, with 25+ new records; the engine decides when)
 function ns.RemindToShare(n)
-  ns.Print(format("You have %d new fight records to share (optional). They're kept for this session only (cleared when you log in again), so please share them before you log out. "
-    .. "|cff40ff40|Haddon:EquipThis:records|h[Click here to open the export window]|h|r", n))
+  ns.Print(format("You have %d new fight logs to submit (optional). They're kept for this session only (cleared when you log in again), so please submit them before you log out. "
+    .. "|cff40ff40|Haddon:EquipThis:records|h[Click here to submit them]|h|r", n))
 end
 
 local function BuildPanel(panel)
@@ -201,11 +201,11 @@ local function BuildPanel(panel)
   at(UI.Section(panel, "Learning how you fight", W_), 26, -606)
   local learn = track(at(UI.Check(panel, "Learn from my fights (the game's damage meter, after each fight)", E("learn"), W_, Changed), 26, -636))
   learn.tip = "How often you use each ability and spell decides what's worth most to you. Equip This! adds up your damage and healing per spell after each fight and learns from them every few fights. It stays on your computer."
-  local share = track(at(UI.Check(panel, "Help improve Equip This!: keep anonymous fight records I can send", E("share"), W_, Changed), 26, -660))
-  share.tip = "Off unless you tick it. Each fight is kept as: class, spec, level, fight length, damage and healing per spell, and Equip This!'s own estimate. No name, realm or IDs, and nothing leaves the game on its own: \"Show my records\" gives you the text to paste if you'd like to send it. It helps the classes and specs the author can't test."
+  local share = track(at(UI.Check(panel, "Help improve Equip This!: keep anonymous fight logs I can submit", E("share"), W_, Changed), 26, -660))
+  share.tip = "Off unless you tick it. Each fight is kept as: class, spec, level, fight length, damage and healing per spell, and Equip This!'s own estimate. No name, realm or IDs, and nothing leaves the game on its own: \"Submit fight logs\" gives you the form's link and the text to paste into it. It helps the classes and specs the author can't test."
   local yEnd = -700
-  local recs = at(UI.Button(panel, "Show my records", 150, function() ns.ShowReport() end), 26, yEnd)
-  recs.tip = "The records to copy and paste (Ctrl+C)."
+  local recs = at(UI.Button(panel, "Submit fight logs", 150, function() ns.ShowReport() end), 26, yEnd)
+  recs.tip = "Send your fight logs to help improve Equip This! for your class and spec: opens the form's link and your logs, ready to copy and paste (Ctrl+C)."
   local reset = UI.Button(panel, "Reset build", 110, function() B.ResetBuild(); changed() end)
   reset:SetPoint("LEFT", recs, "RIGHT", 8, 0)
   reset.tip = "Back to Auto: Leveling until the level cap, then Damage (tanks: Tanking)."
@@ -256,10 +256,10 @@ local function BugReport()
     { "Interface\\Icons\\INV_Sword_04", "Scoring for", B.ScoringLabel() },
     { "Interface\\Icons\\INV_Misc_Note_01", "Errors caught", errs },
     { "Interface\\Icons\\INV_Misc_Book_09", "Learning from fights", yes(E.db and E.db.learn) },
-    { "Interface\\Icons\\Ability_DualWield", "Fight records waiting", sum and sum.fights or 0 },
+    { "Interface\\Icons\\Ability_DualWield", "Fight logs to submit", sum and sum.fights or 0 },
   }
 end
-local BUG = { name = "EquipThisBugWindow", title = "Equip This! Bug Report",
+local BUG = { name = "EquipThisBugWindow", title = "Equip This! Bugs & Feedback",
   repo = "https://github.com/califaxop/Equip-This-Upgrade-Advisor/issues/new",
   included = "Included: Equip This!'s version, the game client, your class, level and spec, its settings and what its engine saw (scans, hidden stats, errors caught). Never: your name, realm, guild or other players.",
   build = BugReport }
@@ -273,7 +273,7 @@ function ns.OpenOptions()
     window = UI.Window("EquipThisOptionsWindow", 742, 790)
     window:SetPoint("CENTER")
     UI.SetHost(window) -- pop-ups (New, Rename, Import, Delete...) sit over this window
-    UI.HeaderButton(window, "Report a bug", 110, function() ns.ShowBugReport() end)
+    UI.HeaderButton(window, "Bugs & Feedback", 130, function() ns.ShowBugReport() end)
     local ok, e = pcall(BuildPanel, window)
     if not ok then window:Hide(); window = nil; ns.Print("settings failed: " .. tostring(e)); return end
     window:SetHeight(window.height or 790)
