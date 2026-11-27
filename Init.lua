@@ -47,6 +47,7 @@ local HELP = {
   "/eqt - settings",
   "/eqt item <shift-click an item> - the full working: each slot, each stat's part, effects, confidence",
   "/eqt report - your fight records to copy (if you've ticked \"Help improve Equip This!\")",
+  "/eqt bug - the bug report: the form's link and a line to paste into it",
   "/eqt model - your character as Equip This! sees it: damage parts, rotation, threat, PvP, effective health",
   "/eqn - the engine's diagnostics (/eqn measure, /eqn abilities, /eqn weights, /eqn dump...)",
 }
@@ -63,6 +64,8 @@ SlashCmdList.EQUIPTHIS = function(msg)
     if Diag then Diag.Compare(rest) end
   elseif cmd == "report" then
     ns.ShowReport()
+  elseif cmd == "bug" then
+    ns.ShowBugReport()
   elseif cmd == "model" then
     if Diag then Diag.Model() end
   elseif cmd == "help" then

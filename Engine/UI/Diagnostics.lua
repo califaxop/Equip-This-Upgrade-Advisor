@@ -6,7 +6,11 @@ local Diag = ns.Module("Diagnostics")
 local Compat = ns.Compat
 
 local P = ns.Print
-local function f(fmt, ...) P(string.format(fmt, ...)) end
+local out -- a list while Diag.StatusLines collects (the bug report), else printed
+local function f(fmt, ...)
+  local s = string.format(fmt, ...)
+  if out then out[#out + 1] = (s:gsub("|c%x%x%x%x%x%x%x%x", ""):gsub("|r", "")) else P(s) end
+end
 local GOOD, BAD, NOTE, DIM = "|cff60ff60", "|cffff6060", "|cffffd200", "|cff9d9d9d"
 
 local function profile(force)
@@ -43,6 +47,15 @@ function Diag.Status()
   f("errors caught: %d%s", ns.errors.count, ns.errors.recent[1] and (" - last: " .. ns.errors.recent[1]) or "")
   if #p.issues == 0 then f("issues: %snone|r", GOOD) end
   for _, i in ipairs(p.issues) do f("%s%s|r [%s] %s", i.level == "warn" and BAD or NOTE, i.level, i.code, i.text) end
+end
+
+-- /eqn status as lines (no colours), for the bug report
+function Diag.StatusLines()
+  out = {}
+  local ok, e = pcall(Diag.Status)
+  local L = out; out = nil
+  if not ok then L[#L + 1] = "status failed: " .. tostring(e) end
+  return L
 end
 
 function Diag.Char()

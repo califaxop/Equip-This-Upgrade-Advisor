@@ -209,10 +209,6 @@ local function BuildPanel(panel)
   local reset = UI.Button(panel, "Reset build", 110, function() B.ResetBuild(); changed() end)
   reset:SetPoint("LEFT", recs, "RIGHT", 8, 0)
   reset.tip = "Back to Auto: Leveling until the level cap, then Damage (tanks: Tanking)."
-  local fb = UI.Button(panel, "Report a bug / suggest", 170, function()
-    UI.ShowLink("EquipThisLinkWindow", "Equip This!: bugs and ideas", "https://github.com/califaxop/Equip-This-Upgrade-Advisor/issues/new/choose")
-  end)
-  fb:SetPoint("LEFT", reset, "RIGHT", 8, 0)
   local hint = at(UI.Text(panel, "note", "Hold Shift on an item for where its numbers come from.  /eqt item <link>: the full working.  /eqn: the engine's diagnostics (/eqn model, /eqn measure)."), 26, yEnd - 30)
   hint:SetWidth(W_)
 
@@ -239,11 +235,45 @@ function ns.CreateOptions()
   end)
 end
 
+-- Report a bug (the title bar's button, /eqt bug): the line to paste and its counters. (/eqt report is
+-- the fight records above.)
+local function yes(v) return v and "yes" or "no" end
+local function BugReport()
+  local B, E, db = ns.Bridge, ns.Engine, ns.db
+  local _, class = UnitClass("player")
+  local build, auto = B.Build()
+  local L = { format("Equip This! %s; %s %d; scoring for %s (%s%s, %d%% survival)", tostring(AddonVersion() or "?"), tostring(class), UnitLevel("player"),
+    tostring(B.Tree() or "?"), B.BuildName(build), auto and ", auto" or "", B.Mix() * 100 + 0.5) }
+  L[#L + 1] = format("settings: spec %s, tooltip %s, rewards %s, sell fallback %s, best armor only %s, PvP %s, fight %ds, learn %s, share %s",
+    tostring(db.spec), yes(db.tooltip), yes(db.rewards), yes(db.sellFallback), yes(db.bestArmorOnly), yes(db.pvp), db.fightLength or 0,
+    yes(E.db and E.db.learn), yes(E.db and E.db.share))
+  L[#L + 1] = format("FlareUI: %s; EllesmereUI: %s", yes(type(FlareUI) == "table"), yes(UI.HasEllesmere()))
+  local Diag = E.Diagnostics
+  for _, l in ipairs(Diag and Diag.StatusLines and Diag.StatusLines() or { "engine diagnostics not loaded" }) do L[#L + 1] = l end
+  local errs = E.errors and E.errors.count or 0
+  local sum = E.FightRecorder and E.FightRecorder.Summary()
+  return table.concat(L, " // "), {
+    { "Interface\\Icons\\INV_Sword_04", "Scoring for", B.ScoringLabel() },
+    { "Interface\\Icons\\INV_Misc_Note_01", "Errors caught", errs },
+    { "Interface\\Icons\\INV_Misc_Book_09", "Learning from fights", yes(E.db and E.db.learn) },
+    { "Interface\\Icons\\Ability_DualWield", "Fight records waiting", sum and sum.fights or 0 },
+  }
+end
+local BUG = { name = "EquipThisBugWindow", title = "Equip This! Bug Report",
+  repo = "https://github.com/califaxop/Equip-This-Upgrade-Advisor/issues/new",
+  included = "Included: Equip This!'s version, the game client, your class, level and spec, its settings and what its engine saw (scans, hidden stats, errors caught). Never: your name, realm, guild or other players.",
+  build = BugReport }
+function ns.ShowBugReport(kind)
+  BUG.version = AddonVersion()
+  return UI.ShowBugReport(BUG, kind)
+end
+
 function ns.OpenOptions()
   if not window then
     window = UI.Window("EquipThisOptionsWindow", 742, 790)
     window:SetPoint("CENTER")
     UI.SetHost(window) -- pop-ups (New, Rename, Import, Delete...) sit over this window
+    UI.HeaderButton(window, "Report a bug", 110, function() ns.ShowBugReport() end)
     local ok, e = pcall(BuildPanel, window)
     if not ok then window:Hide(); window = nil; ns.Print("settings failed: " .. tostring(e)); return end
     window:SetHeight(window.height or 790)
