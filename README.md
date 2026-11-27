@@ -23,7 +23,7 @@ Equip This! isn't a list of stat weights. It tries every item on your own charac
 - **All classes and specs:** melee, hunters (ranged), casters, healers and tanks.
 
 ## Help make it better (optional)
-Equip This! gets better with real fights from every class. Tick "Help improve Equip This!" in `/eqt` to keep anonymous fight records: your class, spec, level, each fight's length, your damage and healing per spell, and Equip This!'s own estimate. Never your name, realm, guild, other players or IDs, and nothing leaves the game on its own. "Submit fight logs" (or `/eqt report`) gives you the form's link and your logs to paste into it, and shows exactly what's in them; at most twice a week (after Wednesday's maintenance and on Sunday), with 25 or more new fights waiting, a line in chat reminds you. "I reported this" clears them, so the next export holds only new fights; records you don't send are cleared when you log in again, so they never pile up.
+Equip This! gets better with real fights from every class. Tick "Help improve Equip This!" in `/eqt` to keep anonymous fight logs: your class, spec, level, each fight's length, your damage and healing per spell, and Equip This!'s own estimate. Never your name, realm, guild, other players or IDs, and nothing leaves the game on its own. "Submit fight logs" (or `/eqt report`) gives you the form's link and your logs to paste into it, and shows exactly what's in them; at most twice a week (after Wednesday's maintenance and on Sunday), with 25 or more new fights waiting, a line in chat reminds you. "I reported this" clears them, so the next export holds only new fights; logs you don't submit are cleared when you log in again, so they never pile up.
 
 ## Quick start
 1. Install and play: Equip This! works out of the box.
@@ -51,7 +51,7 @@ Forever's own game tables (spells, items, enchants, proc rates, threat), via [wa
 New versions come out every **Wednesday at 12:00 UTC** (8 PM Philippine time, 8 AM US Eastern). Urgent fixes ship sooner.
 
 ## Feedback
-Found a bug or have an idea? [Open an issue](https://github.com/califaxop/Equip-This-Upgrade-Advisor/issues/new/choose): there's a short form for each. The settings window has a "Report a bug / suggest" button with this link too.
+Found a bug, have feedback or want a feature? Click **Bugs & Feedback** at the top right of the settings window (or type `/eqt bug`): it gives you the form's link and, for a bug, a line to paste into it with everything we need. Or [open an issue](https://github.com/califaxop/Equip-This-Upgrade-Advisor/issues/new/choose) directly: there's a short form for each.
 
 ## Recent changes
 - **5.1.0:** "Bugs & Feedback" now sits at the top right of the settings window, next to the ×. It opens a window (like Questie's trace export) with the form's link to copy at the top, for bug reports, feedback and feature requests, and for a bug, one line to paste into the form with your version, the game client, your spec and build, the settings and what its engine saw; never your name, realm or guild. Also `/eqt bug`. (/eqt report is still the fight logs.) "Show my records" is now "Submit fight logs": it opens the form's link and your logs to paste into it. The settings window is now solid and comes to the front when opened or clicked: with several addons' settings open, they no longer show through each other.
