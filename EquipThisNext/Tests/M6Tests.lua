@@ -212,3 +212,31 @@ T.Test("5.0.3: a meter session longer than the fight is left out (the 4,277,495 
   T.Ok(table.concat(PRINTS, " "):find("impossible length"), table.concat(PRINTS, " "))
   PRINTS = {}; MOCK.Fire("PLAYER_LOGIN"); T.Ok(not table.concat(PRINTS, " "):find("impossible length"), "nothing to repair the next time: no message")
 end)
+
+T.Test("5.0.4: unsent records last for their session: a new login clears them, a /reload keeps them", function()
+  MOCK.Reset()
+  local n8 = LoadAddon()
+  for id in pairs(MOCK.ITEMS) do MOCK.cached[id] = true end
+  MOCK.Fire("ADDON_LOADED", "EquipThisNext"); MOCK.Fire("PLAYER_LOGIN"); MOCK.Fire("PLAYER_ENTERING_WORLD", true, false); MOCK.RunTimers()
+  n8.db.share = true
+  for i = 1, 3 do
+    MOCK.meter = { id = 900 + i, duration = 30, spells = { [6603] = 3000 } }
+    MOCK.Fight(); MOCK.RunTimers()
+  end
+  T.Eq(#n8.db.shared, 3)
+  n8.db.reported = 7
+  PRINTS = {}
+  MOCK.Fire("PLAYER_ENTERING_WORLD", false, true)   -- a /reload
+  MOCK.Fire("PLAYER_ENTERING_WORLD", false, false)  -- a loading screen
+  T.Eq(#n8.db.shared, 3, "kept through a /reload and a loading screen")
+  MOCK.Fire("PLAYER_ENTERING_WORLD", true, false)   -- logging in again
+  T.Eq(#n8.db.shared, 0, "cleared on a new login")
+  T.Eq(n8.FightRecorder.Summary().sentBefore, 7, "the sent count stays")
+  T.Ok(table.concat(PRINTS, " "):find("3 fight record%(s%) from your last session"), table.concat(PRINTS, " "))
+  PRINTS = {}; MOCK.Fire("PLAYER_ENTERING_WORLD", true, false)
+  T.Eq(#PRINTS, 0, "nothing waiting: no message")
+  -- the next fight is recorded as usual
+  MOCK.meter = { id = 950, duration = 30, spells = { [6603] = 3000 } }
+  MOCK.Fight(); MOCK.RunTimers()
+  T.Eq(#n8.db.shared, 1)
+end)

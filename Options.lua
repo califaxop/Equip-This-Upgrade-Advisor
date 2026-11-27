@@ -43,7 +43,7 @@ function ns.ShowReport()
     w.url:HookScript("OnTextChanged", function(self, user) if user and self:GetText() ~= SUBMIT_URL then self:SetText(SUBMIT_URL); self:HighlightText() end end)
     w.url:HookScript("OnEditFocusGained", function(self) self:HighlightText() end)
     local note = UI.Text(w, "note", "Copy the line below and paste it into the form at the link above (needs a GitHub account), or into a comment on Equip This!'s CurseForge page. "
-      .. "Please send it again now and then: each export only holds what's been recorded since the last one you sent. It helps the classes and specs the author can't play.")
+      .. "It holds this session's fights (unsent ones are cleared when you log in again), so please send it before you log out. It helps the classes and specs the author can't play.")
     note:SetPoint("TOP", 0, -74); note:SetWidth(580); note:SetJustifyH("CENTER")
     w.line = UI.Edit(w, 580, { function() return w.text or "" end, function() end })
     w.line:SetPoint("TOP", 0, -134)
@@ -105,7 +105,7 @@ end
 
 -- the reminder in chat (twice a week at most: after Wednesday's maintenance and on Sunday, with 25+ new records; the engine decides when)
 function ns.RemindToShare(n)
-  ns.Print(format("You have %d new fight records to share (optional). Each export only covers what's been recorded so far, so please share again now and then. "
+  ns.Print(format("You have %d new fight records to share (optional). They're kept for this session only (cleared when you log in again), so please share them before you log out. "
     .. "|cff40ff40|Haddon:EquipThis:records|h[Click here to open the export window]|h|r", n))
 end
 

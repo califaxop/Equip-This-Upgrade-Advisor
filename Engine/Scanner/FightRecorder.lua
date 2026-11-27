@@ -7,7 +7,8 @@
 --   share (opt in, off by default): each fight is also kept as an anonymous record (no name, realm
 --     or IDs: class, spec, level, fight length, damage and healing per spell, the model's split) for
 --     /eqt report, to paste to the author. Nothing leaves the game on its own: addons can't send
---     anything.
+--     anything. The records last for the session they were recorded in (5.0.4): logging in again
+--     clears what wasn't sent, so they never pile up and an export always holds your latest fights.
 local _, ns = ...; ns = ns.Engine
 local FR = ns.Module("FightRecorder")
 local Events, Compat = ns.Events, ns.Compat
@@ -169,6 +170,23 @@ Events.On("PLAYER_LOGIN", "fightRepair", function()
   if recs + rots > 0 then
     ns.Print(string.format("fixed %d fight record(s) with an impossible length (a damage meter glitch)%s.", recs,
       rots > 0 and "; your rotation will be learned again from your next fights" or ""))
+  end
+end)
+
+-- A new session: the records not sent last session are cleared (5.0.4). Only on a real login
+-- (PLAYER_ENTERING_WORLD's isInitialLogin): a /reload or a loading screen keeps them. Returns how
+-- many went.
+function FR.NewSession()
+  local db = ns.db
+  local n = #(db and db.shared or {})
+  if n > 0 then db.shared = {}; FR.reminded = nil end
+  return n
+end
+Events.On("PLAYER_ENTERING_WORLD", "fightSession", function(_, isInitialLogin)
+  if isInitialLogin ~= true then return end
+  local n = FR.NewSession()
+  if n > 0 then
+    ns.Print(string.format("%d fight record(s) from your last session weren't shared and were cleared: records are kept for the session they're recorded in.", n))
   end
 end)
 
