@@ -3,13 +3,14 @@
 ## Notes: Your gear advisor: which gear is better for your character, worked out from your own stats, talents and fights, on tooltips and quest rewards.
 ## IconTexture: Interface\AddOns\EquipThis\media\Logo
 ## Author: You
-## Version: 5.1.0
+## Version: 5.2.0
 ## X-Curse-Project-ID: 1819482
 ## SavedVariables: EquipThisDB, EquipThisEngineDB
 ## OptionalDeps: EllesmereUI, FlareUI
 
 Core.lua
 UI.lua
+Settings.lua
 
 # Engine (tools/next/bundle.py)
 Engine\Init.lua
