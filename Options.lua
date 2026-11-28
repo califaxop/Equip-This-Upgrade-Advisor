@@ -187,8 +187,8 @@ end
 
 local function BuildWindow()
   B = ns.Bridge
-  window = UI.Settings({ name = "EquipThisOptionsWindow", title = "Equip This!", logo = "Interface\\AddOns\\EquipThis\\media\\Logo",
-    tagline = "Which gear is better for you.", bug = function() ns.ShowBugReport() end,
+  window = UI.Settings({ name = "EquipThisOptionsWindow", title = "Equip This!",
+    bug = function() ns.ShowBugReport() end,
     pages = {
       { "Spec", "The talent tree gear is compared for.", PageSpec },
       { "Show", "Upgrades on tooltips, PvP numbers, and quest rewards.", PageShow },
@@ -251,11 +251,18 @@ function ns.ShowBugReport(kind)
   return UI.ShowBugReport(BUG, kind)
 end
 
-function ns.OpenOptions()
+-- the settings window, built the first time it's asked for
+local function GetWindow()
   if not window then
     local ok, e = pcall(BuildWindow)
     if not ok then if window then window:Hide() end; window = nil; ns.Print("settings failed: " .. tostring(e)); return end
   end
-  UI.ToggleWindow(window)
   return window
 end
+function ns.OpenOptions()
+  local w = GetWindow()
+  if w then UI.ToggleWindow(w) end
+  return w
+end
+UI.JoinSuite("Equip This!", "Which gear is better for you.",
+  "Interface\\AddOns\\EquipThis\\media\\Logo", 3, GetWindow)

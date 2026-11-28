@@ -10,6 +10,7 @@
 
 Core.lua
 UI.lua
+Suite.lua
 Settings.lua
 
 # Engine (tools/next/bundle.py)
